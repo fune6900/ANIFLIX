@@ -11,12 +11,12 @@ const src = (path: string | null, size = "w342") =>
 
 /** season-number → accent color (cycles every 6) */
 const ACCENTS = [
-  { hex: "#54b9c5", shadow: "rgba(84,185,197,0.45)"  },
-  { hex: "#E50914", shadow: "rgba(229,9,20,0.45)"    },
-  { hex: "#f59e0b", shadow: "rgba(245,158,11,0.45)"  },
-  { hex: "#8b5cf6", shadow: "rgba(139,92,246,0.45)"  },
-  { hex: "#10b981", shadow: "rgba(16,185,129,0.45)"  },
-  { hex: "#f43f5e", shadow: "rgba(244,63,94,0.45)"   },
+  { hex: "#54b9c5", shadow: "rgba(84,185,197,0.45)" },
+  { hex: "#E50914", shadow: "rgba(229,9,20,0.45)" },
+  { hex: "#f59e0b", shadow: "rgba(245,158,11,0.45)" },
+  { hex: "#8b5cf6", shadow: "rgba(139,92,246,0.45)" },
+  { hex: "#10b981", shadow: "rgba(16,185,129,0.45)" },
+  { hex: "#f43f5e", shadow: "rgba(244,63,94,0.45)" },
 ] as const;
 
 type AccentColor = (typeof ACCENTS)[number];
@@ -25,34 +25,46 @@ type Status = "aired" | "upcoming";
 const getStatus = (d: string | null): Status =>
   !d || new Date(d) > new Date() ? "upcoming" : "aired";
 
-const STATUS_LABEL: Record<Status, string> = { aired: "放送済み", upcoming: "放送予定" };
-const STATUS_CLS:   Record<Status, string> = {
-  aired:    "bg-gray-700/70 text-gray-300",
+const STATUS_LABEL: Record<Status, string> = {
+  aired: "放送済み",
+  upcoming: "放送予定",
+};
+const STATUS_CLS: Record<Status, string> = {
+  aired: "bg-gray-700/70 text-gray-300",
   upcoming: "bg-amber-900/60 text-amber-300 border border-amber-700/50",
 };
 
 /* ─── scroll reveal hook ─────────────────────────────── */
 function useInView(threshold = 0.18) {
-  const ref  = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const [on, set] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { set(true); io.disconnect(); } },
-      { threshold }
+      ([e]) => {
+        if (e.isIntersecting) {
+          set(true);
+          io.disconnect();
+        }
+      },
+      { threshold },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [threshold]);
   return { ref, on };
 }
 
 /* ─── spine dot ──────────────────────────────────────── */
 function SpineDot({
-  accent, upcoming, on,
+  accent,
+  upcoming,
+  on,
 }: {
-  accent: AccentColor; upcoming: boolean; on: boolean;
+  accent: AccentColor;
+  upcoming: boolean;
+  on: boolean;
 }) {
   return (
     <div className="relative flex items-center justify-center w-5 h-5 flex-shrink-0">
@@ -83,37 +95,45 @@ function SpineDot({
 
 /* ─── season card ────────────────────────────────────── */
 interface CardProps {
-  season:   TMDbSeason;
-  accent:   AccentColor;
-  status:   Status;
+  season: TMDbSeason;
+  accent: AccentColor;
+  status: Status;
   isLatest: boolean;
-  isNext:   boolean;          // next upcoming
-  on:       boolean;
+  isNext: boolean; // next upcoming
+  on: boolean;
   slideDir: "left" | "right";
 }
 
-function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: CardProps) {
-  const upcoming   = status === "upcoming";
-  const posterSrc  = src(season.poster_path);
-  const year       = season.air_date?.split("-")[0];
-  const dateDisp   = season.air_date
+function SeasonCard({
+  season,
+  accent,
+  status,
+  isLatest,
+  isNext,
+  on,
+  slideDir,
+}: CardProps) {
+  const upcoming = status === "upcoming";
+  const posterSrc = src(season.poster_path);
+  const year = season.air_date?.split("-")[0];
+  const dateDisp = season.air_date
     ? season.air_date.replace(/-/g, "/")
     : "放送日未定";
 
   const slide = on
     ? "opacity-100 translate-x-0"
     : slideDir === "left"
-    ? "opacity-0 -translate-x-10"
-    : "opacity-0 translate-x-10";
+      ? "opacity-0 -translate-x-10"
+      : "opacity-0 translate-x-10";
 
   return (
-    <div
-      className={`transition-all duration-700 ease-out delay-100 ${slide}`}
-    >
+    <div className={`transition-all duration-700 ease-out delay-100 ${slide}`}>
       <div
         className={`relative rounded-xl overflow-hidden border bg-[#1a1a1a] transition-all duration-300 group
           ${upcoming ? "border-dashed border-gray-600" : "border-gray-700/50 hover:border-gray-500/60"}`}
-        style={on && !upcoming ? { boxShadow: `0 4px 28px ${accent.shadow}` } : {}}
+        style={
+          on && !upcoming ? { boxShadow: `0 4px 28px ${accent.shadow}` } : {}
+        }
       >
         {/* large watermark season number */}
         <div
@@ -138,7 +158,9 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-1">
-                  <span className="text-gray-600 text-[10px] text-center">{season.name}</span>
+                  <span className="text-gray-600 text-[10px] text-center">
+                    {season.name}
+                  </span>
                 </div>
               )}
             </div>
@@ -148,7 +170,9 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
           <div className="flex-1 min-w-0">
             {/* badges */}
             <div className="flex flex-wrap gap-1 mb-1.5">
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_CLS[status]}`}>
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_CLS[status]}`}
+              >
                 {STATUS_LABEL[status]}
               </span>
               {isLatest && !upcoming && (
@@ -171,7 +195,10 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
             {/* meta row */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1.5">
               {year && (
-                <span className="text-xs font-semibold" style={{ color: accent.hex }}>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: accent.hex }}
+                >
                   {year}
                 </span>
               )}
@@ -179,7 +206,9 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
                 <span className="text-xs text-gray-500">{dateDisp}</span>
               )}
               {season.episode_count > 0 && (
-                <span className="text-gray-500 text-xs">{season.episode_count}話</span>
+                <span className="text-gray-500 text-xs">
+                  {season.episode_count}話
+                </span>
               )}
             </div>
 
@@ -190,7 +219,9 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
               </p>
             ) : (
               upcoming && (
-                <p className="text-gray-600 text-[11px] italic">続報をお待ちください…</p>
+                <p className="text-gray-600 text-[11px] italic">
+                  続報をお待ちください…
+                </p>
               )
             )}
           </div>
@@ -202,25 +233,32 @@ function SeasonCard({ season, accent, status, isLatest, isNext, on, slideDir }: 
 
 /* ─── timeline item (one row) ───────────────────────── */
 interface ItemProps {
-  season:   TMDbSeason;
-  index:    number;
-  accent:   AccentColor;
-  status:   Status;
+  season: TMDbSeason;
+  index: number;
+  accent: AccentColor;
+  status: Status;
   isLatest: boolean;
-  isNext:   boolean;
-  isLast:   boolean;
+  isNext: boolean;
+  isLast: boolean;
   prevYear: string | null;
 }
 
 function TimelineItem({
-  season, index, accent, status, isLatest, isNext, isLast, prevYear,
+  season,
+  index,
+  accent,
+  status,
+  isLatest,
+  isNext,
+  isLast,
+  prevYear,
 }: ItemProps) {
   const { ref, on } = useInView();
-  const upcoming    = status === "upcoming";
-  const year        = season.air_date?.split("-")[0] ?? null;
-  const showYear    = !!year && year !== prevYear;
+  const upcoming = status === "upcoming";
+  const year = season.air_date?.split("-")[0] ?? null;
+  const showYear = !!year && year !== prevYear;
   // even → card on LEFT desktop side; odd → RIGHT
-  const leftSide    = index % 2 === 0;
+  const leftSide = index % 2 === 0;
 
   return (
     <div ref={ref} className="relative">
@@ -237,14 +275,20 @@ function TimelineItem({
       )}
 
       {/* ── row ── */}
-      <div className={`flex items-start ${leftSide ? "" : "md:flex-row-reverse"}`}>
-
+      <div
+        className={`flex items-start ${leftSide ? "" : "md:flex-row-reverse"}`}
+      >
         {/* desktop: left card slot */}
         <div className="hidden md:flex md:w-[calc(50%-2rem)] justify-end pr-5 pt-2">
           {leftSide && (
             <SeasonCard
-              season={season} accent={accent} status={status}
-              isLatest={isLatest} isNext={isNext} on={on} slideDir="left"
+              season={season}
+              accent={accent}
+              status={status}
+              isLatest={isLatest}
+              isNext={isNext}
+              on={on}
+              slideDir="left"
             />
           )}
         </div>
@@ -262,9 +306,7 @@ function TimelineItem({
           />
           <SpineDot accent={accent} upcoming={upcoming} on={on} />
           {/* line below dot */}
-          {!isLast && (
-            <div className="w-px flex-1 min-h-8 bg-gray-800" />
-          )}
+          {!isLast && <div className="w-px flex-1 min-h-8 bg-gray-800" />}
         </div>
 
         {/* right card slot (mobile: always; desktop: only for right-side items) */}
@@ -272,16 +314,26 @@ function TimelineItem({
           {/* mobile: always render */}
           <div className="md:hidden">
             <SeasonCard
-              season={season} accent={accent} status={status}
-              isLatest={isLatest} isNext={isNext} on={on} slideDir="right"
+              season={season}
+              accent={accent}
+              status={status}
+              isLatest={isLatest}
+              isNext={isNext}
+              on={on}
+              slideDir="right"
             />
           </div>
           {/* desktop: only for right-side items */}
           {!leftSide && (
             <div className="hidden md:block">
               <SeasonCard
-                season={season} accent={accent} status={status}
-                isLatest={isLatest} isNext={isNext} on={on} slideDir="right"
+                season={season}
+                accent={accent}
+                status={status}
+                isLatest={isLatest}
+                isNext={isNext}
+                on={on}
+                slideDir="right"
               />
             </div>
           )}
@@ -309,9 +361,13 @@ export default function SeasonTimeline({ seasons }: SeasonTimelineProps) {
   if (sorted.length < 2) return null; // 1シーズンのみなら年表不要
 
   // latest aired & next upcoming
-  const lastAiredIdx = [...sorted].reverse().findIndex((s) => getStatus(s.air_date) === "aired");
-  const latestAired  = lastAiredIdx >= 0 ? sorted[sorted.length - 1 - lastAiredIdx] : null;
-  const nextUpcoming = sorted.find((s) => getStatus(s.air_date) === "upcoming") ?? null;
+  const lastAiredIdx = [...sorted]
+    .reverse()
+    .findIndex((s) => getStatus(s.air_date) === "aired");
+  const latestAired =
+    lastAiredIdx >= 0 ? sorted[sorted.length - 1 - lastAiredIdx] : null;
+  const nextUpcoming =
+    sorted.find((s) => getStatus(s.air_date) === "upcoming") ?? null;
 
   return (
     <section className="mt-10">
@@ -331,7 +387,8 @@ export default function SeasonTimeline({ seasons }: SeasonTimelineProps) {
 
         <div className="space-y-4 md:space-y-6">
           {sorted.map((season, i) => {
-            const prevYear = i > 0 ? (sorted[i - 1].air_date?.split("-")[0] ?? null) : null;
+            const prevYear =
+              i > 0 ? (sorted[i - 1].air_date?.split("-")[0] ?? null) : null;
             return (
               <TimelineItem
                 key={season.id}
