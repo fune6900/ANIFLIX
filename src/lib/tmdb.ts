@@ -142,6 +142,18 @@ export async function searchAnime(
   );
 }
 
+/** TV番組をページ指定で検索（年代内絞り込み等に利用） */
+export async function searchTVByPage(
+  query: string,
+  page = 1
+): Promise<TMDbSearchResponse<TMDbAnime>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/search/tv",
+    { query, include_adult: "false", page: String(page) },
+    0
+  );
+}
+
 // アニメ詳細取得
 export async function getAnimeDetail(id: number): Promise<TMDbTVDetail> {
   return fetchTMDb<TMDbTVDetail>(`/tv/${id}`, {
