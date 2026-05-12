@@ -66,6 +66,10 @@ export default async function ErasPage({ searchParams }: ErasPageProps) {
   let results: TMDbAnime[] = [];
   let error: string | null = null;
 
+  // 検索モードはページネーション無しのため、ジャンル絞り込み後の歩留まりを踏まえて
+  // 通常ページの倍量を一画面でまとめて表示する
+  const searchResultsLimit = limit * 2;
+
   if (isSearchMode) {
     try {
       const [r1, r2] = await Promise.allSettled([
@@ -82,7 +86,7 @@ export default async function ErasPage({ searchParams }: ErasPageProps) {
             (a.genre_ids?.includes(16) || a.origin_country?.includes("JP")) &&
             !!a.first_air_date,
         )
-        .slice(0, limit * 2);
+        .slice(0, searchResultsLimit);
     } catch {
       error = "検索結果の取得に失敗した";
     }

@@ -311,7 +311,7 @@ function StepMood({
               onClick={() => onSelect(option.id)}
               aria-pressed={isSelected}
               style={{ animationDelay: `${i * 60}ms` }}
-              className={`animate-pop-in relative overflow-hidden rounded-xl p-4 md:p-5 text-left transition-all duration-300 bg-gradient-to-br ${option.color} ${
+              className={`group animate-pop-in relative overflow-hidden rounded-xl p-4 md:p-5 text-left transition-all duration-300 bg-gradient-to-br ${option.color} ${
                 isSelected
                   ? "ring-2 ring-[#E50914] scale-[1.03] shadow-2xl shadow-[#E50914]/30"
                   : "ring-1 ring-white/10 hover:ring-white/40 hover:scale-[1.02] opacity-90 hover:opacity-100"
