@@ -111,7 +111,7 @@ export default async function DiagnosisPage({
 
             {/* 結果ヘッダー */}
             {!error && results.length > 0 && (
-              <div className="mb-5">
+              <div className="mb-5 animate-fade-in">
                 <h2 className="text-white text-xl md:text-2xl font-black">
                   あなたへのおすすめ
                 </h2>
@@ -125,11 +125,13 @@ export default async function DiagnosisPage({
             {!error && results.length > 0 && (
               <div className="space-y-3 md:space-y-4">
                 {results.map((item, idx) => (
-                  <DiagnosisResultCard
+                  <div
                     key={item.anime.id}
-                    item={item}
-                    rank={idx + 1}
-                  />
+                    className="animate-card-in"
+                    style={{ animationDelay: `${idx * 120}ms` }}
+                  >
+                    <DiagnosisResultCard item={item} rank={idx + 1} />
+                  </div>
                 ))}
               </div>
             )}
