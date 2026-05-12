@@ -313,7 +313,7 @@ export default async function AnimeDetailPage({
 
               {/* アクションボタン */}
               <div className="flex flex-wrap items-center gap-3 mb-6">
-                {mainVideo ? (
+                {mainVideo && (
                   <a
                     href={`https://www.youtube.com/watch?v=${mainVideo.key}`}
                     target="_blank"
@@ -329,17 +329,6 @@ export default async function AnimeDetailPage({
                     </svg>
                     トレーラーを見る
                   </a>
-                ) : (
-                  <button className="flex items-center gap-2 bg-white text-black font-bold px-6 py-2.5 rounded hover:bg-gray-200 transition text-sm">
-                    <svg
-                      className="w-5 h-5"
-                      fill="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    再生
-                  </button>
                 )}
                 <button className="flex items-center gap-2 bg-gray-600/70 text-white font-semibold px-6 py-2.5 rounded hover:bg-gray-500/70 transition text-sm">
                   <svg

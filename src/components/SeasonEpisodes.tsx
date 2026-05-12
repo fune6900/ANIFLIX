@@ -16,7 +16,9 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
     <div className="flex gap-3 md:gap-4 py-4 border-b border-gray-800 last:border-0 group">
       {/* エピソード番号 */}
       <div className="flex-shrink-0 w-8 text-center pt-1">
-        <span className="text-gray-500 text-lg font-bold">{ep.episode_number}</span>
+        <span className="text-gray-500 text-lg font-bold">
+          {ep.episode_number}
+        </span>
       </div>
 
       {/* スチル画像 */}
@@ -32,7 +34,11 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-8 h-8 text-gray-700"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
@@ -43,9 +49,13 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
       {/* テキスト情報 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 mb-1">
-          <p className="text-white text-sm font-semibold leading-snug line-clamp-2">{ep.name}</p>
+          <p className="text-white text-sm font-semibold leading-snug line-clamp-2">
+            {ep.name}
+          </p>
           {ep.runtime && (
-            <span className="flex-shrink-0 text-gray-500 text-xs mt-0.5">{ep.runtime}分</span>
+            <span className="flex-shrink-0 text-gray-500 text-xs mt-0.5">
+              {ep.runtime}分
+            </span>
           )}
         </div>
 
@@ -62,17 +72,18 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
 
         {ep.overview && (
           <>
-            <p className={`text-gray-400 text-xs leading-relaxed ${expanded ? "" : "line-clamp-2"}`}>
+            <p
+              className={`text-gray-400 text-xs leading-relaxed ${expanded ? "" : "line-clamp-2"}`}
+            >
               {ep.overview}
             </p>
-            {ep.overview.length > 120 && (
-              <button
-                onClick={() => setExpanded((v) => !v)}
-                className="text-gray-500 hover:text-gray-300 text-xs mt-1 transition-colors"
-              >
-                {expanded ? "閉じる" : "続きを見る"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-gray-500 hover:text-gray-300 text-xs mt-1 transition-colors"
+            >
+              {expanded ? "閉じる" : "続きを読む"}
+            </button>
           </>
         )}
       </div>
@@ -87,10 +98,13 @@ interface SeasonEpisodesProps {
 
 const PAGE_SIZE = 30;
 
-export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps) {
+export default function SeasonEpisodes({
+  animeId,
+  seasons,
+}: SeasonEpisodesProps) {
   const mainSeasons = seasons.filter((s) => s.season_number > 0);
   const [selectedSeason, setSelectedSeason] = useState<number>(
-    mainSeasons[0]?.season_number ?? 1
+    mainSeasons[0]?.season_number ?? 1,
   );
   const [episodes, setEpisodes] = useState<TMDbEpisode[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,7 +118,7 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
       setEpisodes([]);
       try {
         const res = await fetch(
-          `/api/season-episodes?animeId=${animeId}&season=${seasonNumber}`
+          `/api/season-episodes?animeId=${animeId}&season=${seasonNumber}`,
         );
         if (!res.ok) throw new Error("fetch failed");
         const data = await res.json();
@@ -115,7 +129,7 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
         setLoading(false);
       }
     },
-    [animeId]
+    [animeId],
   );
 
   useEffect(() => {
@@ -126,7 +140,10 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
   if (mainSeasons.length === 0) return null;
 
   const totalPages = Math.ceil(episodes.length / PAGE_SIZE);
-  const pagedEpisodes = episodes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedEpisodes = episodes.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
 
   return (
     <section className="mt-10">
@@ -145,7 +162,9 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
             }`}
           >
             {s.name}
-            <span className="ml-1.5 text-xs opacity-60">({s.episode_count}話)</span>
+            <span className="ml-1.5 text-xs opacity-60">
+              ({s.episode_count}話)
+            </span>
           </button>
         ))}
       </div>
@@ -154,9 +173,24 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
       <div className="bg-[#1a1a1a] rounded-md px-3 md:px-5 min-h-[120px]">
         {loading && (
           <div className="flex items-center justify-center py-12 gap-2 text-gray-500">
-            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            <svg
+              className="w-5 h-5 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              />
             </svg>
             読み込み中…
           </div>
@@ -174,9 +208,8 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
           </div>
         )}
 
-        {!loading && pagedEpisodes.map((ep) => (
-          <EpisodeCard key={ep.id} ep={ep} />
-        ))}
+        {!loading &&
+          pagedEpisodes.map((ep) => <EpisodeCard key={ep.id} ep={ep} />)}
       </div>
 
       {/* ページネーション */}
@@ -196,7 +229,11 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
             const isNear = Math.abs(p - page) <= 1;
             if (!isEdge && !isNear) {
               if (p === 2 || p === totalPages - 1) {
-                return <span key={p} className="text-gray-600 px-1 text-sm">…</span>;
+                return (
+                  <span key={p} className="text-gray-600 px-1 text-sm">
+                    …
+                  </span>
+                );
               }
               return null;
             }
@@ -225,7 +262,8 @@ export default function SeasonEpisodes({ animeId, seasons }: SeasonEpisodesProps
           </button>
 
           <span className="text-gray-600 text-xs ml-2">
-            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, episodes.length)} / {episodes.length}話
+            {(page - 1) * PAGE_SIZE + 1}–
+            {Math.min(page * PAGE_SIZE, episodes.length)} / {episodes.length}話
           </span>
         </div>
       )}
