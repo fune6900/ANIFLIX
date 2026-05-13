@@ -16,15 +16,19 @@ function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
   const month = anime.first_air_date
     ? `${anime.first_air_date.split("-")[0]}年${parseInt(anime.first_air_date.split("-")[1], 10)}月`
     : null;
+  const posterImg = anime.poster_path ?? anime.backdrop_path;
+  const backdropImg = anime.backdrop_path ?? anime.poster_path;
+
   return (
     <Link href={`/anime/${anime.id}`} className="group block">
-      <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
-        {anime.poster_path ? (
+      {/* SP: 縦長ポスター */}
+      <div className="md:hidden relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
+        {posterImg ? (
           <Image
-            src={getImageUrl(anime.poster_path, "w342")}
+            src={getImageUrl(posterImg, "w342")}
             alt={anime.name}
             fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            sizes="50vw"
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
@@ -34,7 +38,6 @@ function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
             </span>
           </div>
         )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
         {anime.vote_average > 0 && (
           <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
@@ -44,8 +47,44 @@ function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
           </div>
         )}
         <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-xs font-semibold truncate leading-tight">{anime.name}</p>
+          <p className="text-white text-xs font-semibold truncate leading-tight">
+            {anime.name}
+          </p>
           {month && <p className="text-gray-400 text-[11px] mt-0.5">{month}</p>}
+        </div>
+      </div>
+
+      {/* PC: 横長バックドロップ */}
+      <div className="hidden md:block relative aspect-video rounded-md overflow-hidden bg-gray-900">
+        {backdropImg ? (
+          <Image
+            src={getImageUrl(backdropImg, "w780")}
+            alt={anime.name}
+            fill
+            sizes="(max-width: 1024px) 30vw, (max-width: 1536px) 20vw, 16vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
+            <span className="text-white text-base font-bold text-center leading-tight">
+              {anime.name}
+            </span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
+        {anime.vote_average > 0 && (
+          <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
+            <span className="text-green-400 text-xs font-bold">
+              ★ {anime.vote_average.toFixed(1)}
+            </span>
+          </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5">
+          <p className="text-white text-sm font-bold truncate drop-shadow-md">
+            {anime.name}
+          </p>
+          {month && <p className="text-gray-300 text-[11px] mt-0.5">{month}</p>}
         </div>
       </div>
     </Link>
@@ -118,7 +157,9 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   return (
     <div className="min-h-screen bg-[#141414]">
       {/* ヘッダー */}
-      <div className={`relative bg-gradient-to-b ${era.color} to-[#141414] pt-24 pb-14 overflow-hidden`}>
+      <div
+        className={`relative bg-gradient-to-b ${era.color} to-[#141414] pt-24 pb-14 overflow-hidden`}
+      >
         {/* 大きな年代テキスト（装飾） */}
         <div className="absolute right-4 md:right-16 top-1/2 -translate-y-1/2 text-white/5 font-black text-[120px] md:text-[180px] leading-none select-none pointer-events-none">
           {era.shortLabel}
@@ -128,8 +169,18 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           href="/"
           className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6 relative"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           ホームに戻る
         </Link>
@@ -138,17 +189,23 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           <span className="text-5xl md:text-6xl select-none">{era.emoji}</span>
           <div>
             <p className="text-gray-400 text-sm font-medium mb-1">年代</p>
-            <h1 className="text-white text-3xl md:text-4xl font-black">{era.label}</h1>
+            <h1 className="text-white text-3xl md:text-4xl font-black">
+              {era.label}
+            </h1>
             <p className="text-gray-400 text-sm mt-1">{era.description}</p>
             {totalResults > 0 && !isSearchMode && (
-              <p className="text-gray-500 text-xs mt-1">{totalResults.toLocaleString()}件</p>
+              <p className="text-gray-500 text-xs mt-1">
+                {totalResults.toLocaleString()}件
+              </p>
             )}
           </div>
         </div>
 
         {/* 年代タイムライン */}
-        <div className="relative mt-8 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide"
-          style={{ scrollbarWidth: "none" }}>
+        <div
+          className="relative mt-8 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide"
+          style={{ scrollbarWidth: "none" }}
+        >
           {ANIME_ERAS.map((e) => (
             <Link
               key={e.decade}
@@ -167,7 +224,6 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
 
       <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-20">
         <div className="max-w-[1920px] mx-auto">
-
           {/* ────── 検索フォーム ────── */}
           <form
             method="GET"
@@ -181,10 +237,16 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
               {/* 虫眼鏡アイコン */}
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+                />
               </svg>
               <input
                 type="text"
@@ -216,9 +278,11 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           {/* 検索結果件数 / 絞り込み中バッジ */}
           {isSearchMode && (
             <p className="text-sm text-gray-400 mb-4">
-              <span className="text-white font-semibold">「{query}」</span>
-              {" "}の検索結果：{era.label}のアニメ
-              <span className="ml-2 font-bold text-white">{results.length}件</span>
+              <span className="text-white font-semibold">「{query}」</span>{" "}
+              の検索結果：{era.label}のアニメ
+              <span className="ml-2 font-bold text-white">
+                {results.length}件
+              </span>
             </p>
           )}
 
@@ -273,8 +337,13 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
                 </>
               ) : (
                 <>
-                  <p className="text-gray-500 text-lg">この年代の作品が見つかりませんでした</p>
-                  <Link href="/" className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline">
+                  <p className="text-gray-500 text-lg">
+                    この年代の作品が見つかりませんでした
+                  </p>
+                  <Link
+                    href="/"
+                    className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
+                  >
                     ホームに戻る
                   </Link>
                 </>
@@ -284,7 +353,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
 
           {/* グリッド */}
           {results.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
               {results.map((anime) => (
                 <AnimeGridCard key={anime.id} anime={anime} />
               ))}
@@ -299,35 +368,77 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
                   href={`${pageBase}&page=${prevPage}`}
                   className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
                   </svg>
                   前のページ
                 </Link>
               ) : (
                 <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
                   </svg>
                   前のページ
                 </span>
               )}
-              <span className="text-gray-400 text-sm">{currentPage} / {totalPages}</span>
+              <span className="text-gray-400 text-sm">
+                {currentPage} / {totalPages}
+              </span>
               {nextPage ? (
                 <Link
                   href={`${pageBase}&page=${nextPage}`}
                   className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
                 >
                   次のページ
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </Link>
               ) : (
                 <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
                   次のページ
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </span>
               )}

@@ -11,6 +11,7 @@ export default async function MoviesPage() {
     id: m.id,
     title: m.title,
     posterPath: m.poster_path,
+    backdropPath: m.backdrop_path,
     year: m.release_date?.split("-")[0] ?? "",
     score: m.vote_average ?? 0,
     href: `/movie/${m.id}`,
@@ -40,7 +41,9 @@ export default async function MoviesPage() {
           fetchUrl="/api/browse?type=movies"
         />
       ) : (
-        <div className="text-center py-20 text-gray-500">データを取得できませんでした</div>
+        <div className="text-center py-20 text-gray-500">
+          データを取得できませんでした
+        </div>
       )}
     </div>
   );
