@@ -11,6 +11,7 @@ import type {
   TMDbSeasonDetail,
   TMDbTVDetail,
   TMDbVideo,
+  TMDbWatchProvidersResponse,
 } from "@/types/tmdb";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
@@ -23,7 +24,10 @@ const ANIMATION_GENRE_ID = 16;
 // TMDB_ACCESS_TOKEN があれば Bearer（優先）
 // TMDB_API_KEY が JWT (eyJ...) ならそれも Bearer として扱う
 // それ以外は api_key クエリパラメータ
-function resolveAuth(): { headers: Record<string, string>; apiKeyParam?: string } {
+function resolveAuth(): {
+  headers: Record<string, string>;
+  apiKeyParam?: string;
+} {
   const bearerToken = process.env.TMDB_ACCESS_TOKEN;
   const apiKey = process.env.TMDB_API_KEY;
 
@@ -39,13 +43,13 @@ function resolveAuth(): { headers: Record<string, string>; apiKeyParam?: string 
     return { headers: {}, apiKeyParam: apiKey };
   }
   throw new Error(
-    "TMDb認証情報が未設定です。TMDB_ACCESS_TOKEN または TMDB_API_KEY を .env.local に設定してください。"
+    "TMDb認証情報が未設定です。TMDB_ACCESS_TOKEN または TMDB_API_KEY を .env.local に設定してください。",
   );
 }
 
 export function getImageUrl(
   path: string | null,
-  size: "w185" | "w342" | "w500" | "w780" | "original" = "w342"
+  size: "w185" | "w342" | "w500" | "w780" | "original" = "w342",
 ): string {
   if (!path) return "";
   return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
@@ -54,7 +58,7 @@ export function getImageUrl(
 export async function fetchTMDb<T>(
   endpoint: string,
   params: Record<string, string> = {},
-  cacheTime: number = 0
+  cacheTime: number = 0,
 ): Promise<T> {
   const { headers: authHeaders, apiKeyParam } = resolveAuth();
   const url = new URL(`${TMDB_BASE_URL}${endpoint}`);
@@ -80,7 +84,9 @@ export async function fetchTMDb<T>(
   const response = await fetch(url.toString(), fetchOptions);
 
   if (!response.ok) {
-    throw new Error(`TMDb API error: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `TMDb API error: ${response.status} ${response.statusText}`,
+    );
   }
 
   return response.json() as Promise<T>;
@@ -102,7 +108,7 @@ export interface DiscoverAnimeParams {
 
 /** 詳細条件でアニメを検索（キーワード非対応・フィルターのみ） */
 export async function discoverAnime(
-  params: DiscoverAnimeParams
+  params: DiscoverAnimeParams,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const query: Record<string, string> = {
     with_genres: String(ANIMATION_GENRE_ID),
@@ -133,24 +139,24 @@ export async function discoverAnime(
 
 // アニメ検索（サーバーサイド用）
 export async function searchAnime(
-  query: string
+  query: string,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/search/tv",
     { query, include_adult: "false" },
-    0
+    0,
   );
 }
 
 /** TV番組をページ指定で検索（年代内絞り込み等に利用） */
 export async function searchTVByPage(
   query: string,
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/search/tv",
     { query, include_adult: "false", page: String(page) },
-    0
+    0,
   );
 }
 
@@ -164,13 +170,18 @@ export async function getAnimeDetail(id: number): Promise<TMDbTVDetail> {
 /** シーズンのエピソード一覧を取得 */
 export async function getAnimeSeasonEpisodes(
   animeId: number,
-  seasonNumber: number
+  seasonNumber: number,
 ): Promise<TMDbSeasonDetail> {
-  return fetchTMDb<TMDbSeasonDetail>(`/tv/${animeId}/season/${seasonNumber}`, {});
+  return fetchTMDb<TMDbSeasonDetail>(
+    `/tv/${animeId}/season/${seasonNumber}`,
+    {},
+  );
 }
 
 // 人気アニメ（日本アニメーション）
-export async function getPopularAnime(page = 1): Promise<TMDbSearchResponse<TMDbAnime>> {
+export async function getPopularAnime(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
@@ -181,7 +192,9 @@ export async function getPopularAnime(page = 1): Promise<TMDbSearchResponse<TMDb
 }
 
 // 新着アニメ（直近3ヶ月）
-export async function getNewAnime(page = 1): Promise<TMDbSearchResponse<TMDbAnime>> {
+export async function getNewAnime(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbAnime>> {
   const now = new Date();
   const threeMonthsAgo = new Date(now);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -198,8 +211,12 @@ export async function getNewAnime(page = 1): Promise<TMDbSearchResponse<TMDbAnim
 }
 
 // トレンドアニメ（週間・日本アニメフィルタ）
-export async function getTrendingAnime(page = 1): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/trending/tv/week", { page: String(page) });
+export async function getTrendingAnime(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbAnime>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/trending/tv/week", {
+    page: String(page),
+  });
 }
 
 // ──────────────────────────────────────────
@@ -209,12 +226,12 @@ export async function getTrendingAnime(page = 1): Promise<TMDbSearchResponse<TMD
 // 声優検索
 export async function searchPerson(
   query: string,
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbPerson>> {
   return fetchTMDb<TMDbSearchResponse<TMDbPerson>>(
     "/search/person",
     { query, include_adult: "false", page: String(page) },
-    0
+    0,
   );
 }
 
@@ -226,19 +243,25 @@ export async function getPersonDetail(id: number): Promise<TMDbPersonDetail> {
 }
 
 /// トップページ用: 人気声優（週間トレンド人物からActing部門を抽出）
-export async function getPopularVoiceActors(): Promise<TMDbSearchResponse<TMDbPerson>> {
+export async function getPopularVoiceActors(): Promise<
+  TMDbSearchResponse<TMDbPerson>
+> {
   return fetchTMDb<TMDbSearchResponse<TMDbPerson>>("/trending/person/week", {});
 }
 
 /** 日本の声優一覧（language=ja-JP で人気人物を取得） */
-export async function getJapaneseVoiceActors(page = 1): Promise<TMDbSearchResponse<TMDbPerson>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbPerson>>("/person/popular", { page: String(page) });
+export async function getJapaneseVoiceActors(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbPerson>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbPerson>>("/person/popular", {
+    page: String(page),
+  });
 }
 
 // ジャンル別アニメ（日本アニメ + 指定ジャンル）
 export async function getAnimeByGenre(
   genreId: number,
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     // アニメーション(16) AND 指定ジャンル を組み合わせ
@@ -268,7 +291,7 @@ export async function resolveKeywordId(query: string): Promise<number | null> {
   const data = await fetchTMDb<TMDbKeywordSearchResponse>(
     "/search/keyword",
     { query },
-    86400
+    86400,
   );
   return data.results[0]?.id ?? null;
 }
@@ -276,7 +299,7 @@ export async function resolveKeywordId(query: string): Promise<number | null> {
 /** キーワード ID（複数可・OR 検索）で日本アニメを取得 */
 export async function getAnimeByKeyword(
   keywordIds: number | number[],
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
@@ -292,7 +315,7 @@ export async function getAnimeByKeyword(
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */
 export async function getAnimeByKeywords(
   keywords: string[],
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = (
     await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
@@ -314,10 +337,10 @@ export async function getAnimeByKeywords(
 export async function getAnimeByEra(
   decade: number,
   page = 1,
-  sortBy: "popularity.desc" | "first_air_date.asc" = "popularity.desc"
+  sortBy: "popularity.desc" | "first_air_date.asc" = "popularity.desc",
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const startDate = `${decade}-01-01`;
-  const endDate   = `${decade + 9}-12-31`;
+  const endDate = `${decade + 9}-12-31`;
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
@@ -333,7 +356,9 @@ export async function getAnimeByEra(
 // ──────────────────────────────────────────
 
 /** 日本のアニメ映画を取得 */
-export async function getAnimeMovies(page = 1): Promise<TMDbSearchResponse<TMDbMovie>> {
+export async function getAnimeMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
   return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", {
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
@@ -351,7 +376,7 @@ export async function getAnimeMovies(page = 1): Promise<TMDbSearchResponse<TMDbM
 export async function getAnimeBySeason(
   dateFrom: string,
   dateTo: string,
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     with_genres: String(ANIMATION_GENRE_ID),
@@ -368,7 +393,9 @@ export async function getAnimeBySeason(
 // ──────────────────────────────────────────
 
 /** 現在放送中の日本アニメを取得 */
-export async function getAiringAnime(page = 1): Promise<TMDbSearchResponse<TMDbAnime>> {
+export async function getAiringAnime(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
@@ -386,7 +413,7 @@ export async function getAiringAnime(page = 1): Promise<TMDbSearchResponse<TMDbA
 /** 指定スタジオ（制作会社ID）の日本アニメを取得 */
 export async function getAnimeByStudio(
   companyId: number,
-  page = 1
+  page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
     with_companies: String(companyId),
@@ -413,12 +440,12 @@ export async function getMovieDetail(id: number): Promise<TMDbMovieDetail> {
 
 /** 映画タイトル検索 */
 export async function searchMovie(
-  query: string
+  query: string,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
   return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
     "/search/movie",
     { query, include_adult: "false" },
-    0
+    0,
   );
 }
 
@@ -427,7 +454,9 @@ export async function searchMovie(
 // ──────────────────────────────────────────
 
 /** アニメの外部ID（SNS連携）を取得 */
-export async function getAnimeExternalIds(animeId: number): Promise<TMDbExternalIds> {
+export async function getAnimeExternalIds(
+  animeId: number,
+): Promise<TMDbExternalIds> {
   return fetchTMDb<TMDbExternalIds>(`/tv/${animeId}/external_ids`, {}, 86400);
 }
 
@@ -436,12 +465,35 @@ interface TMDbVideosResponse {
   results: TMDbVideo[];
 }
 
+// ──────────────────────────────────────────
+// 配信プラットフォーム（Watch Providers）
+// ──────────────────────────────────────────
+
+/** アニメの配信プラットフォーム情報を取得（24時間キャッシュ） */
+export async function getAnimeWatchProviders(
+  animeId: number,
+): Promise<TMDbWatchProvidersResponse> {
+  return fetchTMDb<TMDbWatchProvidersResponse>(
+    `/tv/${animeId}/watch/providers`,
+    {},
+    86400,
+  );
+}
+
+/** 映画の配信プラットフォーム情報を取得（24時間キャッシュ） */
+export async function getMovieWatchProviders(
+  movieId: number,
+): Promise<TMDbWatchProvidersResponse> {
+  return fetchTMDb<TMDbWatchProvidersResponse>(
+    `/movie/${movieId}/watch/providers`,
+    {},
+    86400,
+  );
+}
+
 /** アニメの YouTube 動画一覧を取得し優先度順にソートして返す */
 export async function getAnimeVideos(animeId: number): Promise<TMDbVideo[]> {
-  const data = await fetchTMDb<TMDbVideosResponse>(
-    `/tv/${animeId}/videos`,
-    {}
-  );
+  const data = await fetchTMDb<TMDbVideosResponse>(`/tv/${animeId}/videos`, {});
   const yt = data.results.filter((v) => v.site === "YouTube");
   // 優先度: 公式Trailer > 公式Teaser > Trailer > Opening Credits > その他
   const order = ["Trailer", "Teaser", "Opening Credits", "Clip", "Featurette"];

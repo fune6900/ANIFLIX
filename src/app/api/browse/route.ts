@@ -5,7 +5,12 @@ import {
   getAnimeByGenre,
   getAnimeByKeywords,
 } from "@/lib/tmdb";
-import { isValidSeason, getSeasonDateRange, getRecentSeasons, type SeasonSlug } from "@/lib/seasons";
+import {
+  isValidSeason,
+  getSeasonDateRange,
+  getRecentSeasons,
+  type SeasonSlug,
+} from "@/lib/seasons";
 import { findGenre } from "@/lib/genres";
 import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 
@@ -19,6 +24,7 @@ export interface NormalizedGridItem {
   id: number;
   title: string;
   posterPath: string | null;
+  backdropPath: string | null;
   year: string;
   score: number;
   href: string;
@@ -36,6 +42,7 @@ function normalizeAnime(a: TMDbAnime): NormalizedGridItem {
     id: a.id,
     title: a.name,
     posterPath: a.poster_path,
+    backdropPath: a.backdrop_path,
     year: a.first_air_date?.split("-")[0] ?? "",
     score: a.vote_average ?? 0,
     href: `/anime/${a.id}`,
@@ -47,6 +54,7 @@ function normalizeMovie(m: TMDbMovie): NormalizedGridItem {
     id: m.id,
     title: m.title,
     posterPath: m.poster_path,
+    backdropPath: m.backdrop_path,
     year: m.release_date?.split("-")[0] ?? "",
     score: m.vote_average ?? 0,
     href: `/movie/${m.id}`,
@@ -99,7 +107,11 @@ export async function GET(req: NextRequest) {
       }
     } else if (type === "airing") {
       const currentSeason = getRecentSeasons(1)[0];
-      const data = await getAnimeBySeason(currentSeason.dateFrom, currentSeason.dateTo, page);
+      const data = await getAnimeBySeason(
+        currentSeason.dateFrom,
+        currentSeason.dateTo,
+        page,
+      );
       items = data.results.map(normalizeAnime);
       totalPages = data.total_pages;
       totalResults = data.total_results;
@@ -119,7 +131,7 @@ export async function GET(req: NextRequest) {
     console.error("Browse API error:", err);
     return NextResponse.json(
       { error: "データの取得に失敗しました" },
-      { status: 500, headers: SECURITY_HEADERS }
+      { status: 500, headers: SECURITY_HEADERS },
     );
   }
 }

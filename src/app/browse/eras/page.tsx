@@ -12,15 +12,19 @@ interface ErasPageProps {
 
 function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
   const year = anime.first_air_date?.split("-")[0] ?? null;
+  const posterImg = anime.poster_path ?? anime.backdrop_path;
+  const backdropImg = anime.backdrop_path ?? anime.poster_path;
+
   return (
     <Link href={`/anime/${anime.id}`} className="group block">
-      <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
-        {anime.poster_path ? (
+      {/* SP: 縦長ポスター */}
+      <div className="md:hidden relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
+        {posterImg ? (
           <Image
-            src={getImageUrl(anime.poster_path, "w342")}
+            src={getImageUrl(posterImg, "w342")}
             alt={anime.name}
             fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            sizes="50vw"
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
@@ -43,6 +47,40 @@ function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
             {anime.name}
           </p>
           {year && <p className="text-gray-400 text-[11px] mt-0.5">{year}年</p>}
+        </div>
+      </div>
+
+      {/* PC: 横長バックドロップ */}
+      <div className="hidden md:block relative aspect-video rounded-md overflow-hidden bg-gray-900">
+        {backdropImg ? (
+          <Image
+            src={getImageUrl(backdropImg, "w780")}
+            alt={anime.name}
+            fill
+            sizes="(max-width: 1024px) 30vw, (max-width: 1536px) 20vw, 16vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
+            <span className="text-white text-base font-bold text-center leading-tight">
+              {anime.name}
+            </span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
+        {anime.vote_average > 0 && (
+          <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
+            <span className="text-green-400 text-xs font-bold">
+              ★ {anime.vote_average.toFixed(1)}
+            </span>
+          </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5">
+          <p className="text-white text-sm font-bold truncate drop-shadow-md">
+            {anime.name}
+          </p>
+          {year && <p className="text-gray-300 text-[11px] mt-0.5">{year}年</p>}
         </div>
       </div>
     </Link>
@@ -172,7 +210,7 @@ export default async function ErasPage({ searchParams }: ErasPageProps) {
             )}
 
             {!error && results.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
                 {results.map((anime) => {
                   const year = parseInt(
                     anime.first_air_date?.split("-")[0] ?? "0",

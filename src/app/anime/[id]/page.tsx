@@ -7,6 +7,7 @@ import {
   getAnimeDetail,
   getAnimeExternalIds,
   getAnimeVideos,
+  getAnimeWatchProviders,
   getImageUrl,
 } from "@/lib/tmdb";
 import type {
@@ -15,11 +16,15 @@ import type {
   TMDbExternalIds,
   TMDbTVDetail,
   TMDbVideo,
+  TMDbWatchProvidersResponse,
 } from "@/types/tmdb";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
 import SeasonEpisodes from "@/components/SeasonEpisodes";
 import SeasonTimeline from "@/components/SeasonTimeline";
+import WatchProviders, {
+  pickProviderCountry,
+} from "@/components/WatchProviders";
 
 interface AnimeDetailPageProps {
   params: Promise<{ id: string }>;
@@ -139,15 +144,18 @@ export default async function AnimeDetailPage({
   let anime;
   let videos: TMDbVideo[] = [];
   let externalIds: TMDbExternalIds | null = null;
+  let watchProviders: TMDbWatchProvidersResponse | null = null;
   try {
-    [anime, videos, externalIds] = await Promise.all([
+    [anime, videos, externalIds, watchProviders] = await Promise.all([
       getAnimeDetail(numId),
       getAnimeVideos(numId).catch(() => []),
       getAnimeExternalIds(numId).catch(() => null),
+      getAnimeWatchProviders(numId).catch(() => null),
     ]);
   } catch {
     notFound();
   }
+  const providerCountry = pickProviderCountry(watchProviders?.results);
 
   const year = anime.first_air_date?.split("-")[0];
   const score = anime.vote_average?.toFixed(1);
@@ -603,6 +611,9 @@ export default async function AnimeDetailPage({
               </div>
             </section>
           )}
+
+          {/* 配信プラットフォーム */}
+          <WatchProviders country={providerCountry} />
 
           {/* ① キャスト・声優（クリックで声優詳細へ） */}
           {cast.length > 0 && (
