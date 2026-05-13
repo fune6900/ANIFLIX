@@ -149,6 +149,27 @@ export interface TMDbExternalIds {
   imdb_id: string | null;
 }
 
+export interface TMDbWatchProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+  display_priority: number;
+}
+
+export interface TMDbWatchProviderCountry {
+  link: string;
+  flatrate?: TMDbWatchProvider[];
+  buy?: TMDbWatchProvider[];
+  rent?: TMDbWatchProvider[];
+  ads?: TMDbWatchProvider[];
+  free?: TMDbWatchProvider[];
+}
+
+export interface TMDbWatchProvidersResponse {
+  id: number;
+  results: Record<string, TMDbWatchProviderCountry>;
+}
+
 export interface TMDbMovie {
   id: number;
   title: string;
@@ -186,6 +207,14 @@ export interface TMDbTVDetail extends TMDbAnime {
   seasons?: TMDbSeason[];
   last_air_date?: string | null;
   in_production?: boolean;
-  next_episode_to_air?: { air_date: string; season_number: number; episode_number: number } | null;
-  last_episode_to_air?: { air_date: string; season_number: number; episode_number: number } | null;
+  next_episode_to_air?: {
+    air_date: string;
+    season_number: number;
+    episode_number: number;
+  } | null;
+  last_episode_to_air?: {
+    air_date: string;
+    season_number: number;
+    episode_number: number;
+  } | null;
 }

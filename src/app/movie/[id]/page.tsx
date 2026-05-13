@@ -2,15 +2,23 @@ import type React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getMovieDetail, getImageUrl } from "@/lib/tmdb";
+import {
+  getMovieDetail,
+  getMovieWatchProviders,
+  getImageUrl,
+} from "@/lib/tmdb";
 import type {
   TMDbCastMember,
   TMDbExternalIds,
   TMDbMovie,
   TMDbVideo,
+  TMDbWatchProvidersResponse,
 } from "@/types/tmdb";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
+import WatchProviders, {
+  pickProviderCountry,
+} from "@/components/WatchProviders";
 
 interface MovieDetailPageProps {
   params: Promise<{ id: string }>;
@@ -82,11 +90,16 @@ export default async function MovieDetailPage({
   if (isNaN(numId)) notFound();
 
   let movie;
+  let watchProviders: TMDbWatchProvidersResponse | null = null;
   try {
-    movie = await getMovieDetail(numId);
+    [movie, watchProviders] = await Promise.all([
+      getMovieDetail(numId),
+      getMovieWatchProviders(numId).catch(() => null),
+    ]);
   } catch {
     notFound();
   }
+  const providerCountry = pickProviderCountry(watchProviders?.results);
 
   const year = movie.release_date?.split("-")[0];
   const score = movie.vote_average?.toFixed(1);
@@ -416,6 +429,9 @@ export default async function MovieDetailPage({
               )}
             </section>
           )}
+
+          {/* 配信プラットフォーム */}
+          <WatchProviders country={providerCountry} />
 
           {/* キャスト・声優 */}
           {cast.length > 0 && (
