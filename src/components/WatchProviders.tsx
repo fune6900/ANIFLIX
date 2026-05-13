@@ -20,8 +20,22 @@ export function pickProviderCountry(
   return results.JP ?? results.US ?? Object.values(results)[0];
 }
 
+/** TMDb 由来の外部 URL を https + themoviedb.org に限定して検証する */
+function sanitizeTmdbLink(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:") return null;
+    if (!u.hostname.endsWith("themoviedb.org")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default function WatchProviders({ country }: WatchProvidersProps) {
   if (!country) return null;
+  const safeLink = sanitizeTmdbLink(country.link);
   const seen = new Set<number>();
 
   const groups: ProviderGroup[] = [
@@ -70,9 +84,9 @@ export default function WatchProviders({ country }: WatchProvidersProps) {
     <section className="mt-10">
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="text-white font-bold text-lg">配信中のサービス</h2>
-        {country.link && (
+        {safeLink && (
           <a
-            href={country.link}
+            href={safeLink}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#54b9c5] hover:text-white text-xs font-semibold transition-colors flex items-center gap-1"
@@ -104,35 +118,53 @@ export default function WatchProviders({ country }: WatchProvidersProps) {
               {group.label}
             </p>
             <div className="flex flex-wrap gap-2">
-              {group.providers.map((provider) => (
-                <a
-                  key={provider.provider_id}
-                  href={country.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 rounded-full pl-1 pr-3 py-1 transition-all"
-                  title={`${provider.provider_name}（TMDb watch ページに遷移）`}
-                >
-                  <span className="relative block w-7 h-7 rounded-full overflow-hidden bg-gray-900 flex-shrink-0">
-                    {provider.logo_path ? (
-                      <Image
-                        src={getImageUrl(provider.logo_path, "w185")}
-                        alt={provider.provider_name}
-                        fill
-                        sizes="28px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">
-                        {provider.provider_name.slice(0, 2)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-white text-xs font-semibold group-hover:underline whitespace-nowrap">
-                    {provider.provider_name}
-                  </span>
-                </a>
-              ))}
+              {group.providers.map((provider) => {
+                const chipClass =
+                  "group flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 rounded-full pl-1 pr-3 py-1 transition-all";
+                const chipTitle = `${provider.provider_name}（TMDb watch ページに遷移）`;
+                const inner = (
+                  <>
+                    <span className="relative block w-7 h-7 rounded-full overflow-hidden bg-gray-900 flex-shrink-0">
+                      {provider.logo_path ? (
+                        <Image
+                          src={getImageUrl(provider.logo_path, "w185")}
+                          alt={provider.provider_name}
+                          fill
+                          sizes="28px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">
+                          {provider.provider_name.slice(0, 2)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-white text-xs font-semibold group-hover:underline whitespace-nowrap">
+                      {provider.provider_name}
+                    </span>
+                  </>
+                );
+                return safeLink ? (
+                  <a
+                    key={provider.provider_id}
+                    href={safeLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={chipClass}
+                    title={chipTitle}
+                  >
+                    {inner}
+                  </a>
+                ) : (
+                  <div
+                    key={provider.provider_id}
+                    className={chipClass}
+                    title={chipTitle}
+                  >
+                    {inner}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

@@ -67,16 +67,42 @@ async function resolveTmdbId(
   });
   if (direct) return direct;
 
-  // 2. TMDb の名前検索でフォールバック（最上位ヒットを採用）
+  // 2. TMDb の名前検索でフォールバック
+  //    誤マッチを避けるため、検索結果も normalizedCandidates と突き合わせて検証する
   const primary =
     media.title.native ?? media.title.romaji ?? media.title.english;
   if (!primary) return null;
   try {
     const sr = await searchAnime(primary);
-    return sr.results[0] ?? null;
+    const verified = sr.results.find((r) => {
+      const names = [r.name, r.original_name].filter((s): s is string => !!s);
+      return names.some((n) =>
+        normalizedCandidates.includes(normalizeTitleForMatch(n)),
+      );
+    });
+    return verified ?? null;
   } catch {
     return null;
   }
+}
+
+/** 上限を設けた並列実行 mapper。レートリミット対策で同時実行数を抑える */
+async function pMapLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function run(): Promise<void> {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await worker(items[i]);
+    }
+  }
+  const concurrent = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: concurrent }, () => run()));
+  return results;
 }
 
 export default async function SeasonPage({ params }: SeasonPageProps) {
@@ -111,12 +137,12 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
   if (anilist && anilist.results.length > 0) {
     // AniList を主軸に、TMDb で詳細ページに繋げる
-    const resolved = await Promise.all(
-      anilist.results.map(async (m) => {
-        const tmdb = await resolveTmdbId(m, tmdbPool);
-        return { media: m, tmdb };
-      }),
-    );
+    // TMDb プール未マッチ時は searchAnime にフォールバックするため、
+    // 同時並列数を絞ってレートリミットを回避する
+    const resolved = await pMapLimit(anilist.results, 4, async (m) => {
+      const tmdb = await resolveTmdbId(m, tmdbPool);
+      return { media: m, tmdb };
+    });
 
     merged = resolved.map(({ media, tmdb }) => {
       const title = pickAniListTitle(media);

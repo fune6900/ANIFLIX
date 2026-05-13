@@ -32,8 +32,8 @@ export interface AniListMedia {
 }
 
 interface AniListPageResponse {
-  data: {
-    Page: {
+  data?: {
+    Page?: {
       pageInfo: {
         hasNextPage: boolean;
         total: number;
@@ -43,6 +43,7 @@ interface AniListPageResponse {
       media: AniListMedia[];
     };
   };
+  errors?: Array<{ message: string }>;
 }
 
 const SEASON_QUERY = `
@@ -87,19 +88,29 @@ export async function getAniListSeasonAnime(
   totalPages: number;
   totalResults: number;
 }> {
-  const response = await fetch(ANILIST_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      query: SEASON_QUERY,
-      variables: { year, season, page, perPage },
-    }),
-    // シーズン一覧は頻繁に変わらないので6時間キャッシュ
-    next: { revalidate: 21600 },
-  });
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: SEASON_QUERY,
+        variables: { year, season, page, perPage },
+      }),
+      // 上流が遅延した場合に SSR が無限待機しないよう 8秒で打ち切る
+      signal: AbortSignal.timeout(8000),
+      // シーズン一覧は頻繁に変わらないので6時間キャッシュ
+      next: { revalidate: 21600 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error("AniList API timeout (>8s)");
+    }
+    throw err;
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -108,7 +119,16 @@ export async function getAniListSeasonAnime(
   }
 
   const data = (await response.json()) as AniListPageResponse;
-  const pageData = data.data.Page;
+
+  // GraphQL は HTTP 200 でも errors を返すケースがあるため明示チェック
+  if (data.errors && data.errors.length > 0) {
+    const message = data.errors.map((e) => e.message).join("; ");
+    throw new Error(`AniList GraphQL error: ${message}`);
+  }
+  const pageData = data.data?.Page;
+  if (!pageData) {
+    throw new Error("AniList GraphQL error: missing Page payload");
+  }
 
   return {
     results: pageData.media,
