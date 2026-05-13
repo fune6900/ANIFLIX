@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Image from "next/image";
 import type { TMDbEpisode, TMDbSeason } from "@/types/tmdb";
+
+// SSR では useLayoutEffect が動かないので useEffect にフォールバック
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function getImageUrl(path: string | null, size = "w300"): string {
   if (!path) return "";
@@ -11,6 +21,22 @@ function getImageUrl(path: string | null, size = "w300"): string {
 
 function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
   const [expanded, setExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const overviewRef = useRef<HTMLParagraphElement | null>(null);
+
+  // line-clamp-2 状態でテキストがクリップされているか判定
+  useIsomorphicLayoutEffect(() => {
+    const el = overviewRef.current;
+    if (!el) return;
+    const measure = () => {
+      // 展開済みのときは判定済みなので触らない
+      if (expanded) return;
+      setIsOverflowing(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [ep.overview, expanded]);
 
   return (
     <div className="flex gap-3 md:gap-4 py-4 border-b border-gray-800 last:border-0 group">
@@ -73,17 +99,20 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
         {ep.overview && (
           <>
             <p
+              ref={overviewRef}
               className={`text-gray-400 text-xs leading-relaxed ${expanded ? "" : "line-clamp-2"}`}
             >
               {ep.overview}
             </p>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="text-gray-500 hover:text-gray-300 text-xs mt-1 transition-colors"
-            >
-              {expanded ? "閉じる" : "続きを読む"}
-            </button>
+            {(isOverflowing || expanded) && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="text-gray-500 hover:text-gray-300 text-xs mt-1 transition-colors"
+              >
+                {expanded ? "閉じる" : "続きを読む"}
+              </button>
+            )}
           </>
         )}
       </div>
