@@ -140,11 +140,12 @@ export async function discoverAnime(
 // アニメ検索（サーバーサイド用）
 export async function searchAnime(
   query: string,
+  cacheTime = 0,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/search/tv",
     { query, include_adult: "false" },
-    0,
+    cacheTime,
   );
 }
 
@@ -377,15 +378,20 @@ export async function getAnimeBySeason(
   dateFrom: string,
   dateTo: string,
   page = 1,
+  cacheTime = 0,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    "first_air_date.gte": dateFrom,
-    "first_air_date.lte": dateTo,
-    sort_by: "popularity.desc",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      "first_air_date.gte": dateFrom,
+      "first_air_date.lte": dateTo,
+      sort_by: "popularity.desc",
+      page: String(page),
+    },
+    cacheTime,
+  );
 }
 
 // ──────────────────────────────────────────
