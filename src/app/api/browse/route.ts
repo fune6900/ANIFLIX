@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getAnimeMovies,
-  getAnimeBySeason,
   getAnimeByGenre,
   getAnimeByKeywords,
 } from "@/lib/tmdb";
-import {
-  isValidSeason,
-  getSeasonDateRange,
-  getRecentSeasons,
-  type SeasonSlug,
-} from "@/lib/seasons";
 import { findGenre } from "@/lib/genres";
 import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 
@@ -76,17 +69,6 @@ export async function GET(req: NextRequest) {
       items = data.results.map(normalizeMovie);
       totalPages = data.total_pages;
       totalResults = data.total_results;
-    } else if (type === "season") {
-      const year = parseInt(searchParams.get("year") ?? "", 10);
-      const season = searchParams.get("season") ?? "";
-      if (isNaN(year) || !isValidSeason(season)) {
-        return NextResponse.json({ error: "Invalid season" }, { status: 400 });
-      }
-      const { from, to } = getSeasonDateRange(year, season as SeasonSlug);
-      const data = await getAnimeBySeason(from, to, page);
-      items = data.results.map(normalizeAnime);
-      totalPages = data.total_pages;
-      totalResults = data.total_results;
     } else if (type === "genre") {
       const genreId = parseInt(searchParams.get("genreId") ?? "", 10);
       if (isNaN(genreId)) {
@@ -105,16 +87,6 @@ export async function GET(req: NextRequest) {
         totalPages = data.total_pages;
         totalResults = data.total_results;
       }
-    } else if (type === "airing") {
-      const currentSeason = getRecentSeasons(1)[0];
-      const data = await getAnimeBySeason(
-        currentSeason.dateFrom,
-        currentSeason.dateTo,
-        page,
-      );
-      items = data.results.map(normalizeAnime);
-      totalPages = data.total_pages;
-      totalResults = data.total_results;
     } else {
       return NextResponse.json({ error: "Unknown type" }, { status: 400 });
     }
