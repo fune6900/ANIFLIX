@@ -167,8 +167,91 @@ async function pMapLimit<T, R>(
 function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[\s　:：!！?？・,、。.「」『』()（）\-]/g, "")
+    .replace(/[\s　:：!！?？・,、。.「」『』()（）\-－–—~〜～]/g, "")
     .normalize("NFKC");
+}
+
+/**
+ * シーズン番号やパート番号のサフィックスを末尾から剥がす。内部利用専用
+ * （外部入力には流用しない）。
+ *
+ * 目的: AniList の「転生したらスライムだった件 第4期」を TMDb 本体の
+ * 「転生したらスライムだった件」に紐付ける。TMDb は新クールの作品を独立した
+ * TV エントリではなく本体作品の Season N として登録するため、サフィックス付き
+ * のタイトルでは検索ヒットしない。
+ *
+ * 対応パターン:
+ *   - 日本語: 「第4期」「4期」「シーズン4」「第2シーズン」「第N部」「パートN」
+ *   - 英語: "4th Season", "Season N", "Part N", "Cour N", "The Final Season"
+ *   - 副題付き: "4th Season 2-nensei-hen Ichi Gakki" 等の長いサフィックス
+ *   - 複数サフィックスの連鎖（"Foo 4th Season Part 2"）
+ *
+ * ローマ数字末尾（"II"〜"X"）は **メインパターンがヒットして変化があった後の
+ * 追加剥がし** に限定する。これは「K-On!! II」「Heaven's Feel II」「Code Geass R2」
+ * のように作品名自体に II が含まれるタイトルを誤剥がししないため。
+ *
+ * 章サフィックス（〜編 / hen / arc）は副題が独立 TMDb 登録されている作品で
+ * 一次マッチを潰すリスクが大きいので扱わない。シーズン番号系の剥がしのみで
+ * 主目的（続編 → 本体への紐付け）は十分カバーできる。
+ */
+const STRIP_SUFFIX_PATTERNS_MAIN: RegExp[] = [
+  // 英語: "Nth Season" 以降のあらゆる尾部（副題まで含めて吸収）
+  /[\s　]\d+(st|nd|rd|th)?[\s　]+season([\s　:：-].*)?$/i,
+  // 英語: "Season N"・"Season N Part M"
+  /[\s　]season[\s　]+\d+([\s　:：-].*)?$/i,
+  // 英語: "The Final Season"・"Final Season Part 2"
+  /[\s　](the[\s　]+)?final[\s　]+season([\s　:：-].*)?$/i,
+  // 英語: "Part N" 以降の副題も吸収
+  /[\s　]part[\s　]+\d+([\s　:：-].*)?$/i,
+  // 英語: "Cour N"・"Nth Cour"
+  /[\s　]cour[\s　]+\d+([\s　:：-].*)?$/i,
+  /[\s　]\d+(st|nd|rd|th)[\s　]+cour([\s　:：-].*)?$/i,
+  // 日本語: 第N期 / N期 / 第Nシーズン / シーズンN
+  /[\s　]*第\s*\d+\s*期\s*$/,
+  /[\s　]+\d+\s*期\s*$/,
+  /[\s　]*第\s*\d+\s*シーズン\s*$/i,
+  /[\s　]*シーズン\s*\d+\s*$/i,
+  // 日本語: 第N部 / Nパート
+  /[\s　]*第\s*\d+\s*部\s*$/,
+  /[\s　]*パート\s*\d+\s*$/i,
+];
+
+// ローマ数字末尾は メインパターンヒット後の追加剥がし にのみ適用する
+// （単独適用すると "K-On!! II" を "K-On!!" に誤剥がしする）
+const STRIP_ROMAN_SUFFIX = /[\s　]+(II|III|IV|V|VI|VII|VIII|IX|X)\s*$/;
+
+function stripSeasonSuffix(title: string): string {
+  let curr = title;
+
+  // 1) メインパターンを連鎖的に剥がす（変化が止まれば終了）
+  let mainStripped = false;
+  while (true) {
+    const before = curr;
+    for (const pattern of STRIP_SUFFIX_PATTERNS_MAIN) {
+      curr = curr.replace(pattern, "").trim();
+    }
+    if (curr === before) break;
+    mainStripped = true;
+  }
+
+  // 2) メインパターンで何か剥がした場合のみ、追加でローマ数字末尾も剥がす
+  //    （"Foo 4th Season II" → メインで "Foo II" → 追加で "Foo"）
+  if (mainStripped) {
+    while (true) {
+      const before = curr;
+      curr = curr.replace(STRIP_ROMAN_SUFFIX, "").trim();
+      if (curr === before) break;
+    }
+  }
+
+  return curr || title; // 完全に消えてしまったら元タイトルを返す（安全弁）
+}
+
+/** 比較用キー: フル正規化 + サフィックス剥がし正規化のセットを返す（AniList 候補側で使用） */
+function buildCompareKeys(title: string): { full: string; stripped: string } {
+  const full = normalizeTitle(title);
+  const stripped = normalizeTitle(stripSeasonSuffix(title));
+  return { full, stripped };
 }
 
 function pickDisplayTitle(media: AniListMedia): string {
@@ -182,8 +265,18 @@ function pickDisplayTitle(media: AniListMedia): string {
 
 /**
  * AniList の作品を TMDb の作品に紐付けて返す。
- * Step A: TMDb プール内で完全一致
- * Step B: TMDb /search/tv で検索し、結果を再検証
+ *
+ * TMDb は新クール作品を独立したエントリではなく本体作品の Season N として登録する
+ * ため（例: 「転スラ第4期」のエピソードが「転生したらスライムだった件」(id 82684) の
+ * Season 4 に入る）、AniList のシーズン番号サフィックスを剥がしてから比較する。
+ *
+ * 比較は非対称: AniList 側のみ「フル + サフィックス剥がし」両方をキー化し、
+ * TMDb 側は **フル正規化のみ** で照合する。これは AniList「進撃の巨人」(親) ×
+ * TMDb プール「進撃の巨人 Final Season」が同居した場合に、TMDb 側も strip して
+ * しまうと AniList 親が TMDb 続編エントリに誤マッチするため。
+ *
+ * Step A: TMDb プール内で完全一致（TMDb はフルのみ・AniList はフル / 剥がし両方）
+ * Step B: TMDb /search/tv をフル / サフィックス剥がしクエリ両方で検索し、結果を再検証
  * 不一致なら null
  */
 async function matchAniListToTmdb(
@@ -197,28 +290,50 @@ async function matchAniListToTmdb(
     ...(media.synonyms ?? []),
   ].filter((s): s is string => !!s);
 
-  const normalizedCandidates = new Set(candidates.map(normalizeTitle));
+  // 候補タイトル全てに対してフル正規化キー + サフィックス剥がしキーを集約
+  // （Set なのでフル == 剥がしの場合は自動で重複排除される）
+  const candidateKeys = new Set<string>();
+  for (const c of candidates) {
+    const { full, stripped } = buildCompareKeys(c);
+    candidateKeys.add(full);
+    if (stripped) candidateKeys.add(stripped);
+  }
+
+  // TMDb 側はフル正規化のみで照合（非対称比較で逆方向誤マッチを防ぐ）
+  const matchesCandidate = (tmdbName: string): boolean => {
+    return candidateKeys.has(normalizeTitle(tmdbName));
+  };
 
   // Step A: ローカルプールと突き合わせ
   const direct = tmdbPool.find((a) => {
     const tmdbNames = [a.name, a.original_name].filter((s): s is string => !!s);
-    return tmdbNames.some((n) => normalizedCandidates.has(normalizeTitle(n)));
+    return tmdbNames.some(matchesCandidate);
   });
   if (direct) return direct;
 
-  // Step B: TMDb 名前検索 → 結果を normalizedCandidates で再検証して誤マッチを排除
+  // Step B: TMDb 名前検索
+  // primary そのまま検索 → ヒット無ければサフィックス剥がし版で再検索。
+  // 例: 「転スラ第4期」では原文ゼロヒットなので「転スラ」にして本体作品(82684)を取りに行く
   const primary =
     media.title.native ?? media.title.romaji ?? media.title.english;
   if (!primary) return null;
-  try {
-    // ヘルパ経由は 24h キャッシュ
-    const sr = await searchAnime(primary, 86400);
-    const verified = sr.results.find((r) => {
-      const names = [r.name, r.original_name].filter((s): s is string => !!s);
-      return names.some((n) => normalizedCandidates.has(normalizeTitle(n)));
-    });
-    return verified ?? null;
-  } catch {
-    return null;
+
+  const stripped = stripSeasonSuffix(primary);
+  const queries =
+    stripped && stripped !== primary ? [primary, stripped] : [primary];
+
+  for (const query of queries) {
+    try {
+      // ヘルパ経由は 24h キャッシュ
+      const sr = await searchAnime(query, 86400);
+      const verified = sr.results.find((r) => {
+        const names = [r.name, r.original_name].filter((s): s is string => !!s);
+        return names.some(matchesCandidate);
+      });
+      if (verified) return verified;
+    } catch {
+      // 個別失敗は次のクエリへ
+    }
   }
+  return null;
 }
