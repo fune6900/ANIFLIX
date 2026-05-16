@@ -172,7 +172,8 @@ function normalizeTitle(title: string): string {
 }
 
 /**
- * シーズン番号やパート番号のサフィックスを末尾から剥がす。
+ * シーズン番号やパート番号のサフィックスを末尾から剥がす。内部利用専用
+ * （外部入力には流用しない）。
  *
  * 目的: AniList の「転生したらスライムだった件 第4期」を TMDb 本体の
  * 「転生したらスライムだった件」に紐付ける。TMDb は新クールの作品を独立した
@@ -180,24 +181,31 @@ function normalizeTitle(title: string): string {
  * のタイトルでは検索ヒットしない。
  *
  * 対応パターン:
- *   - 日本語: 「第4期」「4期」「シーズン4」「第2シーズン」
- *   - 英語: "4th Season", "Season 4", "Part 2", "Cour 2", "The Final Season"
+ *   - 日本語: 「第4期」「4期」「シーズン4」「第2シーズン」「第N部」「パートN」
+ *   - 英語: "4th Season", "Season N", "Part N", "Cour N", "The Final Season"
  *   - 副題付き: "4th Season 2-nensei-hen Ichi Gakki" 等の長いサフィックス
- *   - ローマ数字末尾: " II", " III"
- *   - 〜編 / 〜hen / 〜arc などの章サフィックス
  *   - 複数サフィックスの連鎖（"Foo 4th Season Part 2"）
+ *
+ * ローマ数字末尾（"II"〜"X"）は **メインパターンがヒットして変化があった後の
+ * 追加剥がし** に限定する。これは「K-On!! II」「Heaven's Feel II」「Code Geass R2」
+ * のように作品名自体に II が含まれるタイトルを誤剥がししないため。
+ *
+ * 章サフィックス（〜編 / hen / arc）は副題が独立 TMDb 登録されている作品で
+ * 一次マッチを潰すリスクが大きいので扱わない。シーズン番号系の剥がしのみで
+ * 主目的（続編 → 本体への紐付け）は十分カバーできる。
  */
-const STRIP_SUFFIX_PATTERNS: RegExp[] = [
+const STRIP_SUFFIX_PATTERNS_MAIN: RegExp[] = [
   // 英語: "Nth Season" 以降のあらゆる尾部（副題まで含めて吸収）
   /[\s　]\d+(st|nd|rd|th)?[\s　]+season([\s　:：-].*)?$/i,
   // 英語: "Season N"・"Season N Part M"
   /[\s　]season[\s　]+\d+([\s　:：-].*)?$/i,
   // 英語: "The Final Season"・"Final Season Part 2"
   /[\s　](the[\s　]+)?final[\s　]+season([\s　:：-].*)?$/i,
-  // 英語: "Part N"・"Cour N"・"Nth Cour"
-  /[\s　]part[\s　]+\d+$/i,
-  /[\s　]cour[\s　]+\d+$/i,
-  /[\s　]\d+(st|nd|rd|th)[\s　]+cour$/i,
+  // 英語: "Part N" 以降の副題も吸収
+  /[\s　]part[\s　]+\d+([\s　:：-].*)?$/i,
+  // 英語: "Cour N"・"Nth Cour"
+  /[\s　]cour[\s　]+\d+([\s　:：-].*)?$/i,
+  /[\s　]\d+(st|nd|rd|th)[\s　]+cour([\s　:：-].*)?$/i,
   // 日本語: 第N期 / N期 / 第Nシーズン / シーズンN
   /[\s　]*第\s*\d+\s*期\s*$/,
   /[\s　]+\d+\s*期\s*$/,
@@ -206,27 +214,40 @@ const STRIP_SUFFIX_PATTERNS: RegExp[] = [
   // 日本語: 第N部 / Nパート
   /[\s　]*第\s*\d+\s*部\s*$/,
   /[\s　]*パート\s*\d+\s*$/i,
-  // ローマ数字（II〜X 末尾）
-  /[\s　]+(II|III|IV|V|VI|VII|VIII|IX|X)\s*$/,
-  // 章サフィックス（〜編 / 〜hen / 〜arc）
-  /[\s　]+\S+編\s*$/,
-  /[\s　]+\S+\s*(hen|arc)\s*$/i,
 ];
 
+// ローマ数字末尾は メインパターンヒット後の追加剥がし にのみ適用する
+// （単独適用すると "K-On!! II" を "K-On!!" に誤剥がしする）
+const STRIP_ROMAN_SUFFIX = /[\s　]+(II|III|IV|V|VI|VII|VIII|IX|X)\s*$/;
+
 function stripSeasonSuffix(title: string): string {
-  let prev = "";
   let curr = title;
-  // 複合サフィックス（例: "Foo 4th Season Part 2"）を連鎖的に剥がす
-  for (let i = 0; i < 5 && curr !== prev; i++) {
-    prev = curr;
-    for (const pattern of STRIP_SUFFIX_PATTERNS) {
+
+  // 1) メインパターンを連鎖的に剥がす（変化が止まれば終了）
+  let mainStripped = false;
+  while (true) {
+    const before = curr;
+    for (const pattern of STRIP_SUFFIX_PATTERNS_MAIN) {
       curr = curr.replace(pattern, "").trim();
     }
+    if (curr === before) break;
+    mainStripped = true;
   }
+
+  // 2) メインパターンで何か剥がした場合のみ、追加でローマ数字末尾も剥がす
+  //    （"Foo 4th Season II" → メインで "Foo II" → 追加で "Foo"）
+  if (mainStripped) {
+    while (true) {
+      const before = curr;
+      curr = curr.replace(STRIP_ROMAN_SUFFIX, "").trim();
+      if (curr === before) break;
+    }
+  }
+
   return curr || title; // 完全に消えてしまったら元タイトルを返す（安全弁）
 }
 
-/** 比較用キー: フル正規化 + サフィックス剥がし正規化のセットを返す */
+/** 比較用キー: フル正規化 + サフィックス剥がし正規化のセットを返す（AniList 候補側で使用） */
 function buildCompareKeys(title: string): { full: string; stripped: string } {
   const full = normalizeTitle(title);
   const stripped = normalizeTitle(stripSeasonSuffix(title));
@@ -249,7 +270,12 @@ function pickDisplayTitle(media: AniListMedia): string {
  * ため（例: 「転スラ第4期」のエピソードが「転生したらスライムだった件」(id 82684) の
  * Season 4 に入る）、AniList のシーズン番号サフィックスを剥がしてから比較する。
  *
- * Step A: TMDb プール内で完全一致（フル / サフィックス剥がし両方を試行）
+ * 比較は非対称: AniList 側のみ「フル + サフィックス剥がし」両方をキー化し、
+ * TMDb 側は **フル正規化のみ** で照合する。これは AniList「進撃の巨人」(親) ×
+ * TMDb プール「進撃の巨人 Final Season」が同居した場合に、TMDb 側も strip して
+ * しまうと AniList 親が TMDb 続編エントリに誤マッチするため。
+ *
+ * Step A: TMDb プール内で完全一致（TMDb はフルのみ・AniList はフル / 剥がし両方）
  * Step B: TMDb /search/tv をフル / サフィックス剥がしクエリ両方で検索し、結果を再検証
  * 不一致なら null
  */
@@ -265,6 +291,7 @@ async function matchAniListToTmdb(
   ].filter((s): s is string => !!s);
 
   // 候補タイトル全てに対してフル正規化キー + サフィックス剥がしキーを集約
+  // （Set なのでフル == 剥がしの場合は自動で重複排除される）
   const candidateKeys = new Set<string>();
   for (const c of candidates) {
     const { full, stripped } = buildCompareKeys(c);
@@ -272,12 +299,9 @@ async function matchAniListToTmdb(
     if (stripped) candidateKeys.add(stripped);
   }
 
-  // TMDb 作品名側も同じ要領でフル/剥がし両方の候補キーを生成して照合する
+  // TMDb 側はフル正規化のみで照合（非対称比較で逆方向誤マッチを防ぐ）
   const matchesCandidate = (tmdbName: string): boolean => {
-    const { full, stripped } = buildCompareKeys(tmdbName);
-    return (
-      candidateKeys.has(full) || (!!stripped && candidateKeys.has(stripped))
-    );
+    return candidateKeys.has(normalizeTitle(tmdbName));
   };
 
   // Step A: ローカルプールと突き合わせ
