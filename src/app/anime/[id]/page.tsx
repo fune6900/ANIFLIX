@@ -338,22 +338,6 @@ export default async function AnimeDetailPage({
                     トレーラーを見る
                   </a>
                 )}
-                <button className="flex items-center gap-2 bg-gray-600/70 text-white font-semibold px-6 py-2.5 rounded hover:bg-gray-500/70 transition text-sm">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
-                  マイリストに追加
-                </button>
                 {/* ② 公式サイトリンク */}
                 {anime.homepage && (
                   <a
@@ -613,7 +597,7 @@ export default async function AnimeDetailPage({
           )}
 
           {/* 配信プラットフォーム */}
-          <WatchProviders country={providerCountry} />
+          <WatchProviders country={providerCountry} title={anime.name} />
 
           {/* ① キャスト・声優（クリックで声優詳細へ） */}
           {cast.length > 0 && (

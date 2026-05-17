@@ -274,22 +274,6 @@ export default async function MovieDetailPage({
                     再生
                   </button>
                 )}
-                <button className="flex items-center gap-2 bg-gray-600/70 text-white font-semibold px-6 py-2.5 rounded hover:bg-gray-500/70 transition text-sm">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
-                  マイリストに追加
-                </button>
                 {movie.homepage && (
                   <a
                     href={movie.homepage}
@@ -431,7 +415,7 @@ export default async function MovieDetailPage({
           )}
 
           {/* 配信プラットフォーム */}
-          <WatchProviders country={providerCountry} />
+          <WatchProviders country={providerCountry} title={movie.title} />
 
           {/* キャスト・声優 */}
           {cast.length > 0 && (
