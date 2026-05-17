@@ -18,6 +18,7 @@ import type {
   TMDbVideo,
   TMDbWatchProvidersResponse,
 } from "@/types/tmdb";
+import AnimeHeroTrailer from "@/components/AnimeHeroTrailer";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
 import SeasonEpisodes from "@/components/SeasonEpisodes";
@@ -222,23 +223,16 @@ export default async function AnimeDetailPage({
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-      {/* ヒーローバックドロップ */}
-      <div className="relative w-full h-[55vw] max-h-[70vh] overflow-hidden">
-        {anime.backdrop_path ? (
-          <Image
-            src={getImageUrl(anime.backdrop_path, "original")}
-            alt={anime.name}
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-top"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#141414]/70 via-transparent to-transparent" />
-      </div>
+      {/* ヒーロー: トレーラーがあれば背景にループ再生、無ければ backdrop 画像 */}
+      <AnimeHeroTrailer
+        trailerKey={mainVideo?.key ?? null}
+        backdropUrl={
+          anime.backdrop_path
+            ? getImageUrl(anime.backdrop_path, "original")
+            : null
+        }
+        title={anime.name}
+      />
 
       {/* コンテンツ */}
       <div className="relative -mt-32 md:-mt-48 pb-20">
