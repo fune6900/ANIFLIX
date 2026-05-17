@@ -143,8 +143,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const mode = params.mode === "filter" ? "filter" : "keyword";
   const currentPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  // フィルター値
-  const genreId = params.genre ? parseInt(params.genre, 10) : undefined;
+  // フィルター値（parseInt が NaN を返した場合は undefined に正規化）
+  const genreIdParsed = params.genre ? parseInt(params.genre, 10) : NaN;
+  const genreId = Number.isFinite(genreIdParsed) ? genreIdParsed : undefined;
   const yearFrom = params.yearFrom ? parseInt(params.yearFrom, 10) : undefined;
   const yearTo = params.yearTo ? parseInt(params.yearTo, 10) : undefined;
   const minScore = params.minScore ? parseFloat(params.minScore) : undefined;
@@ -169,7 +170,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     // 詳細検索モード → discover
     try {
       const data = await discoverAnime({
-        genreId: isNaN(genreId!) ? undefined : genreId,
+        genreId,
         yearFrom,
         yearTo,
         minScore,

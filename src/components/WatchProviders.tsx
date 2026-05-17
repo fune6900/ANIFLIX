@@ -58,7 +58,9 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
       `https://www.amazon.co.jp/s?k=${encodeURIComponent(t)}&i=instant-video`,
   },
   {
-    match: (n) => n.includes("Amazon Channel") || n === "Amazon Video",
+    // "Crunchyroll Amazon Channel" 等の複合名は各サービス側に寄せるため、
+    // ここは Amazon 単体の表記のみ拾う
+    match: (n) => n === "Amazon Video" || n === "Amazon Channel",
     build: (t) =>
       `https://www.amazon.co.jp/s?k=${encodeURIComponent(t)}&i=instant-video`,
   },
@@ -107,7 +109,8 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
     build: (t) => `https://abema.tv/search?q=${encodeURIComponent(t)}`,
   },
   {
-    match: (n) => n === "Crunchyroll",
+    // "Crunchyroll Amazon Channel" のような複合名も Crunchyroll に寄せる
+    match: (n) => n.startsWith("Crunchyroll"),
     build: (t) =>
       `https://www.crunchyroll.com/search?q=${encodeURIComponent(t)}`,
   },
@@ -115,11 +118,6 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
     match: (n) => n === "Bandai Channel",
     build: (t) =>
       `https://www.b-ch.com/list/keyword.php?ima=2000&p_word=${encodeURIComponent(t)}`,
-  },
-  {
-    match: (n) => n === "Paravi",
-    build: (t) =>
-      `https://www.paravi.jp/search?keyword=${encodeURIComponent(t)}`,
   },
   {
     match: (n) => n === "TELASA",
