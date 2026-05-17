@@ -35,12 +35,10 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-      {/* ヘッダー */}
-      <div
-        className={`relative bg-gradient-to-b ${gradientClass} pt-28 pb-10 px-4 md:px-12`}
-      >
-        <div className="relative z-10">
-          <p className="text-gray-400 text-sm mb-1">シーズン別アニメ</p>
+      {/* ヘッダー（タイトルもグリッドと同じ最大幅・横パディングで中央寄せ） */}
+      <div className={`relative bg-gradient-to-b ${gradientClass} pt-28 pb-10`}>
+        <div className="relative z-10 max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+          <p className="text-gray-400 text-sm mb-1">シーズン</p>
           <h1 className="text-4xl md:text-5xl font-black mb-2 flex items-center gap-3">
             <span>{currentSeason.emoji}</span>
             {currentSeason.label}アニメ
@@ -54,13 +52,13 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
             )}
           </p>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent opacity-40 pointer-events-none" />
       </div>
 
-      <div className="px-4 md:px-12 pb-24">
-        {/* シーズンナビゲーション */}
+      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-24">
+        {/* シーズンナビゲーション（中央寄せ） */}
         <div
-          className="flex gap-2 overflow-x-auto py-4 mb-6"
+          className="max-w-[1920px] mx-auto flex gap-2 overflow-x-auto py-4 mb-6"
           style={{ scrollbarWidth: "none" }}
         >
           {recentSeasons.map((s) => {

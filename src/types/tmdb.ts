@@ -12,6 +12,8 @@ export interface TMDbAnime {
   vote_count: number;
   genre_ids: number[];
   origin_country: string[];
+  /** ISO 639-1 language code (e.g. "ja", "en"). 検索結果のフィルタに使用 */
+  original_language?: string;
 }
 
 export interface TMDbSearchResponse<T> {
@@ -181,6 +183,10 @@ export interface TMDbMovie {
   vote_average: number;
   vote_count: number;
   genre_ids: number[];
+  /** ISO 639-1 language code. アニメ判定の補強に使用 */
+  original_language?: string;
+  /** TMDb の一部エンドポイントでは origin_country が返るため任意で保持 */
+  origin_country?: string[];
 }
 
 export interface TMDbMovieDetail extends TMDbMovie {

@@ -20,6 +20,36 @@ const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
 // アニメーションジャンルID
 const ANIMATION_GENRE_ID = 16;
 
+// ──────────────────────────────────────────
+// アニメ判定フィルター（実写ドラマ・洋画の混入を除外）
+// ──────────────────────────────────────────
+
+/**
+ * TV 作品を「日本のアニメ」に限定するフィルター。
+ * 必須: genre_ids にアニメーション(16)を含む
+ * 加重: origin_country に JP、または original_language === "ja" のいずれか
+ */
+export function isJapaneseAnimeTV(item: TMDbAnime): boolean {
+  const hasAnimationGenre = item.genre_ids?.includes(ANIMATION_GENRE_ID);
+  if (!hasAnimationGenre) return false;
+  const isJp =
+    item.origin_country?.includes("JP") || item.original_language === "ja";
+  return Boolean(isJp);
+}
+
+/**
+ * 映画作品を「日本のアニメ映画」に限定するフィルター。
+ * 必須: genre_ids にアニメーション(16)を含む
+ * 加重: original_language === "ja"、または origin_country に JP
+ */
+export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
+  const hasAnimationGenre = item.genre_ids?.includes(ANIMATION_GENRE_ID);
+  if (!hasAnimationGenre) return false;
+  const isJp =
+    item.original_language === "ja" || item.origin_country?.includes("JP");
+  return Boolean(isJp);
+}
+
 // 認証情報を解決する
 // TMDB_ACCESS_TOKEN があれば Bearer（優先）
 // TMDB_API_KEY が JWT (eyJ...) ならそれも Bearer として扱う
@@ -100,6 +130,9 @@ export interface DiscoverAnimeParams {
   genreId?: number;
   yearFrom?: number;
   yearTo?: number;
+  /** YYYY-MM-DD（年度フィルタより優先。シーズン範囲指定用） */
+  dateFrom?: string;
+  dateTo?: string;
   minScore?: number;
   sortBy?: string;
   status?: string;
@@ -120,10 +153,15 @@ export async function discoverAnime(
   if (params.genreId) {
     query.with_genres = `${ANIMATION_GENRE_ID},${params.genreId}`;
   }
-  if (params.yearFrom) {
+  // date 指定が優先、無ければ year を使用
+  if (params.dateFrom) {
+    query["first_air_date.gte"] = params.dateFrom;
+  } else if (params.yearFrom) {
     query["first_air_date.gte"] = `${params.yearFrom}-01-01`;
   }
-  if (params.yearTo) {
+  if (params.dateTo) {
+    query["first_air_date.lte"] = params.dateTo;
+  } else if (params.yearTo) {
     query["first_air_date.lte"] = `${params.yearTo}-12-31`;
   }
   if (params.minScore) {
@@ -135,6 +173,40 @@ export async function discoverAnime(
   }
 
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query, 0);
+}
+
+/** 映画版 discover 用パラメータ */
+export interface DiscoverMovieParams {
+  genreId?: number;
+  /** YYYY-MM-DD */
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  page?: number;
+}
+
+/** 詳細条件で日本のアニメ映画を検索 */
+export async function discoverAnimeMovie(
+  params: DiscoverMovieParams,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const query: Record<string, string> = {
+    with_genres: String(ANIMATION_GENRE_ID),
+    with_origin_country: "JP",
+    sort_by: params.sortBy ?? "popularity.desc",
+    page: String(params.page ?? 1),
+  };
+
+  if (params.genreId) {
+    query.with_genres = `${ANIMATION_GENRE_ID},${params.genreId}`;
+  }
+  if (params.dateFrom) {
+    query["primary_release_date.gte"] = params.dateFrom;
+  }
+  if (params.dateTo) {
+    query["primary_release_date.lte"] = params.dateTo;
+  }
+
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query, 0);
 }
 
 // アニメ検索（サーバーサイド用）
@@ -320,26 +392,39 @@ export async function resolveKeywordId(query: string): Promise<number | null> {
   return data.results[0]?.id ?? null;
 }
 
+/** キーワード discover 用のオプション（シーズン範囲などを上乗せ可） */
+export interface KeywordDiscoverOptions {
+  /** YYYY-MM-DD（シーズン範囲などを上乗せ） */
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+}
+
 /** キーワード ID（複数可・OR 検索）で日本アニメを取得 */
 export async function getAnimeByKeyword(
   keywordIds: number | number[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
+  const query: Record<string, string> = {
     with_keywords: ids.join("|"), // | = OR 検索
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
-    sort_by: "popularity.desc",
+    sort_by: options?.sortBy ?? "popularity.desc",
     "vote_count.gte": "5",
     page: String(page),
-  });
+  };
+  if (options?.dateFrom) query["first_air_date.gte"] = options.dateFrom;
+  if (options?.dateTo) query["first_air_date.lte"] = options.dateTo;
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query);
 }
 
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */
 export async function getAnimeByKeywords(
   keywords: string[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = (
     await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
@@ -348,7 +433,42 @@ export async function getAnimeByKeywords(
   if (ids.length === 0) {
     return { page: 1, results: [], total_pages: 0, total_results: 0 };
   }
-  return getAnimeByKeyword(ids, page);
+  return getAnimeByKeyword(ids, page, options);
+}
+
+/** キーワード ID（複数可・OR 検索）で日本アニメ映画を取得 */
+export async function getAnimeMovieByKeyword(
+  keywordIds: number | number[],
+  page = 1,
+  options?: KeywordDiscoverOptions,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
+  const query: Record<string, string> = {
+    with_keywords: ids.join("|"),
+    with_genres: String(ANIMATION_GENRE_ID),
+    with_origin_country: "JP",
+    sort_by: options?.sortBy ?? "popularity.desc",
+    page: String(page),
+  };
+  if (options?.dateFrom) query["primary_release_date.gte"] = options.dateFrom;
+  if (options?.dateTo) query["primary_release_date.lte"] = options.dateTo;
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query);
+}
+
+/** 複数キーワード名から ID を解決し OR 検索で日本アニメ映画を取得 */
+export async function getAnimeMovieByKeywords(
+  keywords: string[],
+  page = 1,
+  options?: KeywordDiscoverOptions,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const ids = (
+    await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
+  ).filter((id): id is number => id !== null);
+
+  if (ids.length === 0) {
+    return { page: 1, results: [], total_pages: 0, total_results: 0 };
+  }
+  return getAnimeMovieByKeyword(ids, page, options);
 }
 
 // ──────────────────────────────────────────
