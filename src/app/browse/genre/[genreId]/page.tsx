@@ -63,52 +63,55 @@ export default async function GenrePage({
         className={`relative bg-gradient-to-b ${genre.color} to-[#141414] pt-24 pb-12`}
       >
         <div
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
             backgroundImage: `radial-gradient(ellipse at 30% 50%, white 0%, transparent 60%)`,
           }}
         />
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6 relative"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {/* タイトルもコンテンツと同じ最大幅 + 横パディングで中央寄せ */}
+        <div className="relative max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          ホームに戻る
-        </Link>
-        <div className="relative flex items-end gap-4">
-          <span className="text-5xl md:text-6xl select-none">
-            {genre.emoji}
-          </span>
-          <div>
-            <p className="text-gray-400 text-sm font-medium mb-1">ジャンル</p>
-            <h1 className="text-white text-3xl md:text-4xl font-black">
-              {genre.name}
-            </h1>
-            {totalResults > 0 && (
-              <p className="text-gray-400 text-sm mt-1">
-                {totalResults.toLocaleString()}件
-              </p>
-            )}
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            ホームに戻る
+          </Link>
+          <div className="flex items-end gap-4">
+            <span className="text-5xl md:text-6xl select-none">
+              {genre.emoji}
+            </span>
+            <div>
+              <p className="text-gray-400 text-sm font-medium mb-1">ジャンル</p>
+              <h1 className="text-white text-3xl md:text-4xl font-black">
+                {genre.name}
+              </h1>
+              {totalResults > 0 && (
+                <p className="text-gray-400 text-sm mt-1">
+                  {totalResults.toLocaleString()}件
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-20">
         <div className="max-w-[1920px] mx-auto">
-          {/* 他ジャンルへのクイックリンク */}
-          <div className="flex gap-2 flex-wrap mb-8 -mt-4">
+          {/* 他ジャンルへのクイックリンク（ヘッダーと被らないようにマージン正方向） */}
+          <div className="flex gap-2 flex-wrap mb-8 mt-6">
             {ANIME_GENRES.filter((g) => g.id !== genreId).map((g) => (
               <Link
                 key={g.id}

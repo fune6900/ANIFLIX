@@ -39,3 +39,6 @@ next-env.d.ts
 # Claude Code session state
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Playwright MCP browser snapshots (検証用一時ファイル)
+.playwright-mcp/

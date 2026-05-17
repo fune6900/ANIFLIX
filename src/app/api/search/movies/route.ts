@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchMovie } from "@/lib/tmdb";
+import { isJapaneseAnimeMovie, searchMovie } from "@/lib/tmdb";
 
 function sanitizeQuery(raw: string): string {
   return raw
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   if (!rawQuery) {
     return NextResponse.json(
       { results: [], total_results: 0 },
-      { headers: SECURITY_HEADERS }
+      { headers: SECURITY_HEADERS },
     );
   }
 
@@ -30,26 +30,23 @@ export async function GET(request: NextRequest) {
   if (query.length < 1) {
     return NextResponse.json(
       { results: [], total_results: 0 },
-      { headers: SECURITY_HEADERS }
+      { headers: SECURITY_HEADERS },
     );
   }
 
   try {
     const data = await searchMovie(query);
-    // 日本語タイトルや日本映画を優先
-    const jpFiltered = data.results.filter(
-      (m) => m.original_title !== m.title || m.genre_ids.includes(16)
-    );
-    const results = jpFiltered.length > 0 ? jpFiltered : data.results.slice(0, 8);
+    // 日本のアニメ映画に厳密に絞り込む（実写・洋画の混入を排除）
+    const results = data.results.filter(isJapaneseAnimeMovie);
     return NextResponse.json(
-      { ...data, results: results.slice(0, 8) },
-      { headers: SECURITY_HEADERS }
+      { ...data, results, total_results: results.length },
+      { headers: SECURITY_HEADERS },
     );
   } catch (err) {
     console.error("Movie search error:", err);
     return NextResponse.json(
       { error: "検索に失敗しました" },
-      { status: 500, headers: SECURITY_HEADERS }
+      { status: 500, headers: SECURITY_HEADERS },
     );
   }
 }

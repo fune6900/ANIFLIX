@@ -2,7 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { getAnimeByEra, getImageUrl, searchTVByPage } from "@/lib/tmdb";
+import {
+  getAnimeByEra,
+  getImageUrl,
+  isJapaneseAnimeTV,
+  searchTVByPage,
+} from "@/lib/tmdb";
 import { ANIME_ERAS, findEra } from "@/lib/eras";
 import { detectDevice, itemsPerPage } from "@/lib/device";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -131,11 +136,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
       const endYear = decade + 9;
       results = allResults.filter((a) => {
         const year = parseInt(a.first_air_date?.split("-")[0] ?? "0", 10);
-        return (
-          year >= startYear &&
-          year <= endYear &&
-          (a.genre_ids?.includes(16) || a.origin_country?.includes("JP"))
-        );
+        return year >= startYear && year <= endYear && isJapaneseAnimeTV(a);
       });
       totalResults = results.length;
       totalPages = 1; // 検索結果はページネーションなし
@@ -156,7 +157,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
 
   return (
     <div className="min-h-screen bg-[#141414]">
-      {/* ヘッダー */}
+      {/* ヘッダー（タイトルもコンテンツと同じ最大幅・横パディングで中央寄せ） */}
       <div
         className={`relative bg-gradient-to-b ${era.color} to-[#141414] pt-24 pb-14 overflow-hidden`}
       >
@@ -165,60 +166,64 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           {era.shortLabel}
         </div>
 
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6 relative"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="relative max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          ホームに戻る
-        </Link>
-
-        <div className="relative flex items-end gap-5">
-          <span className="text-5xl md:text-6xl select-none">{era.emoji}</span>
-          <div>
-            <p className="text-gray-400 text-sm font-medium mb-1">年代</p>
-            <h1 className="text-white text-3xl md:text-4xl font-black">
-              {era.label}
-            </h1>
-            <p className="text-gray-400 text-sm mt-1">{era.description}</p>
-            {totalResults > 0 && !isSearchMode && (
-              <p className="text-gray-500 text-xs mt-1">
-                {totalResults.toLocaleString()}件
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* 年代タイムライン */}
-        <div
-          className="relative mt-8 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {ANIME_ERAS.map((e) => (
-            <Link
-              key={e.decade}
-              href={`/browse/era/${e.decade}`}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
-                e.decade === decade
-                  ? "bg-white text-black"
-                  : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
-              }`}
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {e.shortLabel}
-            </Link>
-          ))}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            ホームに戻る
+          </Link>
+
+          <div className="flex items-end gap-5">
+            <span className="text-5xl md:text-6xl select-none">
+              {era.emoji}
+            </span>
+            <div>
+              <p className="text-gray-400 text-sm font-medium mb-1">年代</p>
+              <h1 className="text-white text-3xl md:text-4xl font-black">
+                {era.label}
+              </h1>
+              <p className="text-gray-400 text-sm mt-1">{era.description}</p>
+              {totalResults > 0 && !isSearchMode && (
+                <p className="text-gray-500 text-xs mt-1">
+                  {totalResults.toLocaleString()}件
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* 年代タイムライン（中央寄せ） */}
+          <div
+            className="mt-8 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {ANIME_ERAS.map((e) => (
+              <Link
+                key={e.decade}
+                href={`/browse/era/${e.decade}`}
+                className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+                  e.decade === decade
+                    ? "bg-white text-black"
+                    : "bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white"
+                }`}
+              >
+                {e.shortLabel}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
