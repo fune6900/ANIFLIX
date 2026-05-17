@@ -1,49 +1,13 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAnimeByStudio, getImageUrl } from "@/lib/tmdb";
+import { getAnimeByStudio } from "@/lib/tmdb";
 import { ANIME_STUDIOS, findStudio } from "@/lib/studios";
 import type { TMDbAnime } from "@/types/tmdb";
+import SeasonAnimeCard from "@/components/SeasonAnimeCard";
 
 interface StudioPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ page?: string }>;
-}
-
-function AnimeCard({ anime }: { anime: TMDbAnime }) {
-  const year = anime.first_air_date?.split("-")[0];
-  const score = anime.vote_average?.toFixed(1);
-
-  return (
-    <Link href={`/anime/${anime.id}`} className="group block">
-      <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
-        {anime.poster_path ? (
-          <Image
-            src={getImageUrl(anime.poster_path, "w342")}
-            alt={anime.name}
-            fill
-            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center p-3 bg-gradient-to-br from-gray-800 to-gray-900">
-            <span className="text-gray-400 text-xs text-center font-semibold">{anime.name}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
-        {score && parseFloat(score) > 0 && (
-          <div className="absolute top-1.5 right-1.5 bg-black/70 rounded px-1.5 py-0.5">
-            <span className="text-green-400 text-[11px] font-bold">★ {score}</span>
-          </div>
-        )}
-        <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-xs font-semibold truncate leading-tight">{anime.name}</p>
-          {year && <p className="text-gray-400 text-[11px]">{year}年</p>}
-        </div>
-      </div>
-    </Link>
-  );
 }
 
 function Pagination({
@@ -72,11 +36,21 @@ function Pagination({
   return (
     <div className="flex items-center justify-center gap-1 mt-10 flex-wrap">
       {currentPage > 1 && (
-        <Link href={pageUrl(currentPage - 1)} className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition">← 前へ</Link>
+        <Link
+          href={pageUrl(currentPage - 1)}
+          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
+        >
+          ← 前へ
+        </Link>
       )}
       {pages[0] > 1 && (
         <>
-          <Link href={pageUrl(1)} className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition">1</Link>
+          <Link
+            href={pageUrl(1)}
+            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
+          >
+            1
+          </Link>
           {pages[0] > 2 && <span className="text-gray-500 px-1">…</span>}
         </>
       )}
@@ -85,7 +59,9 @@ function Pagination({
           key={p}
           href={pageUrl(p)}
           className={`px-3 py-2 rounded text-sm transition ${
-            p === currentPage ? "bg-[#E50914] text-white font-bold" : "bg-gray-800 hover:bg-gray-700 text-white"
+            p === currentPage
+              ? "bg-[#E50914] text-white font-bold"
+              : "bg-gray-800 hover:bg-gray-700 text-white"
           }`}
         >
           {p}
@@ -93,20 +69,33 @@ function Pagination({
       ))}
       {pages[pages.length - 1] < totalPages && (
         <>
-          {pages[pages.length - 1] < totalPages - 1 && <span className="text-gray-500 px-1">…</span>}
-          <Link href={pageUrl(totalPages)} className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition">
+          {pages[pages.length - 1] < totalPages - 1 && (
+            <span className="text-gray-500 px-1">…</span>
+          )}
+          <Link
+            href={pageUrl(totalPages)}
+            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
+          >
             {totalPages}
           </Link>
         </>
       )}
       {currentPage < totalPages && (
-        <Link href={pageUrl(currentPage + 1)} className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition">次へ →</Link>
+        <Link
+          href={pageUrl(currentPage + 1)}
+          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
+        >
+          次へ →
+        </Link>
       )}
     </div>
   );
 }
 
-export default async function StudioPage({ params, searchParams }: StudioPageProps) {
+export default async function StudioPage({
+  params,
+  searchParams,
+}: StudioPageProps) {
   const { id: idStr } = await params;
   const { page: pageStr } = await searchParams;
 
@@ -130,7 +119,9 @@ export default async function StudioPage({ params, searchParams }: StudioPagePro
         <div className="flex items-center gap-4 mb-3">
           <span className="text-5xl">{studio.emoji}</span>
           <div>
-            <p className="text-gray-400 text-xs font-semibold tracking-widest uppercase mb-1">スタジオ</p>
+            <p className="text-gray-400 text-xs font-semibold tracking-widest uppercase mb-1">
+              スタジオ
+            </p>
             <h1 className="text-3xl md:text-4xl font-black">{studio.name}</h1>
             <p className="text-gray-400 text-sm mt-1">{studio.description}</p>
           </div>
@@ -145,31 +136,40 @@ export default async function StudioPage({ params, searchParams }: StudioPagePro
 
       <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-24">
         <div className="max-w-[1920px] mx-auto">
-        {/* 他スタジオへのクイックリンク */}
-        <div className="flex gap-2 overflow-x-auto py-3 mb-6" style={{ scrollbarWidth: "none" }}>
-          {ANIME_STUDIOS.filter((s) => s.id !== studioId).map((s) => (
-            <Link
-              key={s.id}
-              href={`/browse/studio/${s.id}`}
-              className="flex-shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
-            >
-              <span>{s.emoji}</span>
-              {s.name}
-            </Link>
-          ))}
-        </div>
-
-        {anime.length > 0 ? (
-          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-            {anime.map((a) => (
-              <AnimeCard key={a.id} anime={a} />
+          {/* 他スタジオへのクイックリンク */}
+          <div
+            className="flex gap-2 overflow-x-auto py-3 mb-6"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {ANIME_STUDIOS.filter((s) => s.id !== studioId).map((s) => (
+              <Link
+                key={s.id}
+                href={`/browse/studio/${s.id}`}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
+              >
+                <span>{s.emoji}</span>
+                {s.name}
+              </Link>
             ))}
           </div>
-        ) : (
-          <div className="text-center py-20 text-gray-500">このスタジオの作品が見つかりませんでした</div>
-        )}
 
-        <Pagination studioId={studioId} currentPage={currentPage} totalPages={totalPages} />
+          {anime.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+              {anime.map((a) => (
+                <SeasonAnimeCard key={a.id} anime={a} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 text-gray-500">
+              このスタジオの作品が見つかりませんでした
+            </div>
+          )}
+
+          <Pagination
+            studioId={studioId}
+            currentPage={currentPage}
+            totalPages={totalPages}
+          />
         </div>
       </div>
     </div>

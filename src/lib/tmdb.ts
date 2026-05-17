@@ -220,6 +220,29 @@ export async function getTrendingAnime(
   });
 }
 
+/**
+ * 日本国内の旬なトレンドアニメを取得する。
+ * TMDb の /trending はワールドワイドで日本作品が少ないため、
+ * 直近 6ヶ月以内に放送開始した日本アニメを人気度順で取得することで
+ * 「日本国内のトレンド」として代用する。
+ */
+export async function getJapaneseTrendingAnime(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbAnime>> {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
+    with_genres: String(ANIMATION_GENRE_ID),
+    with_origin_country: "JP",
+    sort_by: "popularity.desc",
+    "first_air_date.gte": sixMonthsAgo.toISOString().split("T")[0],
+    "first_air_date.lte": now.toISOString().split("T")[0],
+    "vote_count.gte": "10",
+    page: String(page),
+  });
+}
+
 // ──────────────────────────────────────────
 // 声優（Person）関連
 // ──────────────────────────────────────────
