@@ -25,7 +25,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
   const currentSeason = findSeason(year, seasonSlug);
 
   // AniList を季別タイトルリスト源、TMDb を表示データ源として一括取得
-  const { items, source } = await fetchSeasonalAnime(year, seasonSlug, {
+  const { items } = await fetchSeasonalAnime(year, seasonSlug, {
     limit: 100,
   });
 
@@ -53,20 +53,6 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
               </span>
             )}
           </p>
-          {source === "anilist+tmdb" && (
-            <p className="text-gray-500 text-[11px] mt-2">
-              一次ソース:{" "}
-              <a
-                href="https://anilist.co"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-gray-300"
-              >
-                AniList
-              </a>
-              （表示データは TMDb）
-            </p>
-          )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent opacity-40" />
       </div>

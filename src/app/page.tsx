@@ -5,7 +5,7 @@ import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
 import {
   getNewAnime,
-  getTrendingAnime,
+  getJapaneseTrendingAnime,
   getPopularVoiceActors,
   getAnimeByGenre,
   getAnimeByKeywords,
@@ -15,7 +15,7 @@ import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { ANIME_GENRES } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_ERAS } from "@/lib/eras";
-import { getRecentSeasons } from "@/lib/seasons";
+import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
 import type { TMDbAnime, TMDbPerson } from "@/types/tmdb";
 
 // TMDb アニメデータを ContentRowItem に変換
@@ -111,8 +111,8 @@ export default async function Home() {
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
     getNewAnime(randomPage(3)),
-    getTrendingAnime(1),
-    getTrendingAnime(2),
+    getJapaneseTrendingAnime(1),
+    getJapaneseTrendingAnime(2),
     getPopularVoiceActors(),
     ...ANIME_GENRES.map((g) => fetchGenreItems(g)),
   ]);
@@ -155,6 +155,8 @@ export default async function Home() {
       : [];
 
   // 2ページ分を合算してフィルタ → シャッフル → 20件
+  // 「日本国内のトレンド」要件: 日本 origin の作品のみを採用する
+  // （TMDb の /trending はワールドワイドのトレンドだが、ここでは日本作品のみ通す）
   const trendingPool = [
     ...(trendingData1.status === "fulfilled"
       ? trendingData1.value.results
@@ -164,9 +166,7 @@ export default async function Home() {
       : []),
   ];
   const trendingAnime = shuffle(
-    trendingPool.filter(
-      (a) => a.genre_ids.includes(16) || a.origin_country.includes("JP"),
-    ),
+    trendingPool.filter((a) => a.origin_country?.includes("JP")),
   )
     .slice(0, 20)
     .map(toCardItem);
@@ -223,6 +223,49 @@ export default async function Home() {
         {voiceActors.length > 0 && (
           <ContentRow title="🎤 人気声優" items={voiceActors} />
         )}
+
+        {/* シーズン別セクション */}
+        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-6 mb-4 flex items-center gap-3">
+          <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
+            シーズンで探す
+          </h2>
+          <div className="flex-1 h-px bg-gray-800" />
+          <Link
+            href="/browse/seasons"
+            className="text-[#54b9c5] text-xs md:text-sm font-semibold hover:text-white transition flex-shrink-0"
+          >
+            一覧へ →
+          </Link>
+        </div>
+        <div
+          className="max-w-[1920px] mx-auto flex gap-3 xl:gap-4 px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mb-8 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {getRecentSeasons(8).map((s) => (
+            <Link
+              key={s.href}
+              href={s.href}
+              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 h-24 md:h-28 xl:h-32 2xl:h-36 bg-gradient-to-br ${SEASON_COLORS[s.season]} group`}
+            >
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+              <div className="absolute bottom-2 right-3 text-white/10 font-black text-4xl leading-none select-none">
+                {s.shortLabel}
+              </div>
+              <div className="relative p-3 h-full flex flex-col justify-between">
+                <span className="text-2xl">{s.emoji}</span>
+                <div>
+                  <p className="text-white font-black text-base leading-tight">
+                    {s.label}
+                  </p>
+                  <p className="text-gray-300 text-[10px] mt-0.5">
+                    {s.dateFrom.slice(5).replace("-", "/")} 〜{" "}
+                    {s.dateTo.slice(5).replace("-", "/")}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
 
         {/* 年代別セクション */}
         <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-6 mb-4 flex items-center gap-3">
