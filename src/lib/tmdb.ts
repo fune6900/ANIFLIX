@@ -392,26 +392,39 @@ export async function resolveKeywordId(query: string): Promise<number | null> {
   return data.results[0]?.id ?? null;
 }
 
+/** キーワード discover 用のオプション（シーズン範囲などを上乗せ可） */
+export interface KeywordDiscoverOptions {
+  /** YYYY-MM-DD（シーズン範囲などを上乗せ） */
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+}
+
 /** キーワード ID（複数可・OR 検索）で日本アニメを取得 */
 export async function getAnimeByKeyword(
   keywordIds: number | number[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
+  const query: Record<string, string> = {
     with_keywords: ids.join("|"), // | = OR 検索
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
-    sort_by: "popularity.desc",
+    sort_by: options?.sortBy ?? "popularity.desc",
     "vote_count.gte": "5",
     page: String(page),
-  });
+  };
+  if (options?.dateFrom) query["first_air_date.gte"] = options.dateFrom;
+  if (options?.dateTo) query["first_air_date.lte"] = options.dateTo;
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query);
 }
 
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */
 export async function getAnimeByKeywords(
   keywords: string[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const ids = (
     await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
@@ -420,28 +433,33 @@ export async function getAnimeByKeywords(
   if (ids.length === 0) {
     return { page: 1, results: [], total_pages: 0, total_results: 0 };
   }
-  return getAnimeByKeyword(ids, page);
+  return getAnimeByKeyword(ids, page, options);
 }
 
 /** キーワード ID（複数可・OR 検索）で日本アニメ映画を取得 */
 export async function getAnimeMovieByKeyword(
   keywordIds: number | number[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
   const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
-  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", {
+  const query: Record<string, string> = {
     with_keywords: ids.join("|"),
     with_genres: String(ANIMATION_GENRE_ID),
     with_origin_country: "JP",
-    sort_by: "popularity.desc",
+    sort_by: options?.sortBy ?? "popularity.desc",
     page: String(page),
-  });
+  };
+  if (options?.dateFrom) query["primary_release_date.gte"] = options.dateFrom;
+  if (options?.dateTo) query["primary_release_date.lte"] = options.dateTo;
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query);
 }
 
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメ映画を取得 */
 export async function getAnimeMovieByKeywords(
   keywords: string[],
   page = 1,
+  options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
   const ids = (
     await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
@@ -450,7 +468,7 @@ export async function getAnimeMovieByKeywords(
   if (ids.length === 0) {
     return { page: 1, results: [], total_pages: 0, total_results: 0 };
   }
-  return getAnimeMovieByKeyword(ids, page);
+  return getAnimeMovieByKeyword(ids, page, options);
 }
 
 // ──────────────────────────────────────────

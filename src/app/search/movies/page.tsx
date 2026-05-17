@@ -147,7 +147,9 @@ export default async function SearchMoviesPage({
           selectedGenre.keyword,
           ...(selectedGenre.extraKeywords ?? []),
         ];
-        const data = await getAnimeMovieByKeywords(allKeywords, currentPage);
+        const data = await getAnimeMovieByKeywords(allKeywords, currentPage, {
+          sortBy: sort,
+        });
         results = data.results;
         totalResults = data.total_results;
         totalPages = Math.min(data.total_pages, 500);

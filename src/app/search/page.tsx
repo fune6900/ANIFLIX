@@ -164,22 +164,19 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   if (mode === "filter" || hasFilters) {
     try {
       if (selectedGenre?.filterType === "keyword" && selectedGenre.keyword) {
-        // キーワードベースジャンル → keyword discover
+        // キーワードベースジャンル → keyword discover（シーズン範囲はサーバ側で適用して
+        // totalResults / totalPages の整合を保つ）
         const allKeywords = [
           selectedGenre.keyword,
           ...(selectedGenre.extraKeywords ?? []),
         ];
-        const data = await getAnimeByKeywords(allKeywords, currentPage);
-        let filtered = data.results;
-        if (selectedSeason) {
-          filtered = filtered.filter(
-            (a) =>
-              a.first_air_date >= selectedSeason.dateFrom &&
-              a.first_air_date <= selectedSeason.dateTo,
-          );
-        }
-        results = filtered;
-        totalResults = filtered.length;
+        const data = await getAnimeByKeywords(allKeywords, currentPage, {
+          dateFrom: selectedSeason?.dateFrom,
+          dateTo: selectedSeason?.dateTo,
+          sortBy: sort,
+        });
+        results = data.results;
+        totalResults = data.total_results;
         totalPages = Math.min(data.total_pages, 500);
       } else {
         const data = await discoverAnime({

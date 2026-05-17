@@ -70,6 +70,8 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // in-flight fetch のキャンセル用（タブ切替/連続入力での race 防止）
+  const abortRef = useRef<AbortController | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -77,8 +79,20 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
     setRecentSearches(getRecentSearches());
   }, []);
 
+  // タブ切替時: 走行中の debounce タイマと in-flight fetch を必ず止めてから再取得
   useEffect(() => {
-    if (query.trim()) fetchResults(query, mode);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    abortRef.current?.abort();
+    if (query.length === 0) {
+      setAnimeResults([]);
+      setMovieResults([]);
+      setPersonResults([]);
+      return;
+    }
+    fetchResults(query, mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -100,6 +114,13 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
     };
   }, []);
 
+  // アンマウント時に in-flight fetch を破棄
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const fetchResults = useCallback(
     async (q: string, currentMode: SearchMode) => {
       if (q.length === 0) {
@@ -108,6 +129,11 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
         setPersonResults([]);
         return;
       }
+      // 前回の fetch を中断
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setLoading(true);
       setError(null);
       setFocusedIndex(-1);
@@ -118,32 +144,48 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
           "voice-actor": `/api/voice-actors?q=${encodeURIComponent(q)}`,
         };
         const res = await fetch(endpoints[currentMode], {
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(5000),
+          ]),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
+        // res.json() は any 相当を返すため unknown で受けて型ガードする
+        const raw: unknown = await res.json();
+        if (!raw || typeof raw !== "object") {
+          throw new Error("不正な応答");
+        }
+        const data = raw as { error?: unknown; results?: unknown };
+        if (typeof data.error === "string") throw new Error(data.error);
+        const items: unknown[] = Array.isArray(data.results)
+          ? data.results
+          : [];
 
         if (currentMode === "anime") {
-          setAnimeResults((data.results ?? []).slice(0, 8));
+          setAnimeResults((items as TMDbAnime[]).slice(0, 8));
           setMovieResults([]);
           setPersonResults([]);
         } else if (currentMode === "movie") {
-          setMovieResults((data.results ?? []).slice(0, 8));
+          setMovieResults((items as TMDbMovie[]).slice(0, 8));
           setAnimeResults([]);
           setPersonResults([]);
         } else {
-          setPersonResults((data.results ?? []).slice(0, 8));
+          setPersonResults((items as TMDbPerson[]).slice(0, 8));
           setAnimeResults([]);
           setMovieResults([]);
         }
       } catch (err) {
+        // 中断・タイムアウトは無視（UI のチラつき防止）
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setAnimeResults([]);
         setMovieResults([]);
         setPersonResults([]);
         setError(err instanceof Error ? err.message : "検索に失敗しました");
       } finally {
-        setLoading(false);
+        // この fetch が最新（=自分が controller の所有者）の場合のみローディング解除
+        if (abortRef.current === controller) {
+          setLoading(false);
+        }
       }
     },
     [],
@@ -154,6 +196,15 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
     setQuery(value);
     setFocusedIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // 空入力時は即座にクリアして fetch しない
+    if (value.length === 0) {
+      abortRef.current?.abort();
+      setAnimeResults([]);
+      setMovieResults([]);
+      setPersonResults([]);
+      setLoading(false);
+      return;
+    }
     debounceRef.current = setTimeout(() => fetchResults(value, mode), 300);
   };
 
