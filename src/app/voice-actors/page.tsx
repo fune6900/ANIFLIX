@@ -230,16 +230,30 @@ export default async function VoiceActorsPage({
     }
   } else {
     // クエリなし: 日本出身声優一覧（無限スクロール用の初期データを取得）
+    // /person/popular はワールドワイドの人気ランキングで、上位は Hollywood 俳優で埋まる。
+    // 1 ページ (20件) フィルタ後に数件しか残らず一覧がスカスカになるので、初期は 5 ページ
+    // 並列取得して採用件数を稼ぐ。残り件数は無限スクロール側で順次補充される。
     isDefaultView = true;
     try {
-      const data = await getJapaneseVoiceActors(1);
-      // Acting 部門 + 日本人ヒューリスティクスの両方を満たすもののみ採用
-      const persons = data.results.filter(
-        (p) => p.known_for_department === "Acting" && isJapaneseVoiceActor(p),
+      const pages = await Promise.all(
+        [1, 2, 3, 4, 5].map((p) => getJapaneseVoiceActors(p).catch(() => null)),
       );
+      const seen = new Set<number>();
+      const persons: TMDbPerson[] = [];
+      for (const data of pages) {
+        if (!data) continue;
+        for (const p of data.results) {
+          if (seen.has(p.id)) continue;
+          if (p.known_for_department === "Acting" && isJapaneseVoiceActor(p)) {
+            persons.push(p);
+            seen.add(p.id);
+          }
+        }
+      }
       results = persons;
-      totalResults = data.total_results;
-      totalPages = data.total_pages;
+      totalResults = persons.length;
+      // 無限スクロールは page 6 から続けるため totalPages は TMDb 側総ページ数を保持
+      totalPages = pages[0]?.total_pages ?? 1;
     } catch {
       // デフォルト表示に失敗してもエラーは出さない
     }
@@ -386,7 +400,7 @@ export default async function VoiceActorsPage({
           ? results.length > 0 && (
               <VoiceActorInfiniteGrid
                 initialItems={results}
-                initialPage={1}
+                initialPage={5}
                 totalPages={totalPages}
               />
             )

@@ -6,7 +6,7 @@ import type { ContentRowItem } from "@/components/ContentRow";
 import {
   getNewAnime,
   getJapaneseTrendingAnime,
-  getPopularVoiceActors,
+  getJapaneseVoiceActors,
   getAnimeByGenre,
   getAnimeByKeywords,
   getAnimeVideos,
@@ -97,19 +97,28 @@ export default async function Home() {
   // 既存4列 + 全ジャンル を並列フェッチ
   // トレンドはフィルタ後に20件確保するため2ページ同時取得
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
+  // 声優は /person/popular がワールドワイドで Hollywood に偏るため、複数ページ集約してフィルタする
   const [
     currentSeasonResult,
     newData,
     trendingData1,
     trendingData2,
-    voiceActorData,
+    voiceActorPage1,
+    voiceActorPage2,
+    voiceActorPage3,
+    voiceActorPage4,
+    voiceActorPage5,
     ...genreResults
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
     getNewAnime(randomPage(3)),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
-    getPopularVoiceActors(),
+    getJapaneseVoiceActors(1),
+    getJapaneseVoiceActors(2),
+    getJapaneseVoiceActors(3),
+    getJapaneseVoiceActors(4),
+    getJapaneseVoiceActors(5),
     ...ANIME_GENRES.map((g) => fetchGenreItems(g)),
   ]);
 
@@ -168,16 +177,24 @@ export default async function Home() {
     .slice(0, 20)
     .map(toCardItem);
 
-  const voiceActors =
-    voiceActorData.status === "fulfilled"
-      ? voiceActorData.value.results
-          .filter(
-            (p) =>
-              p.known_for_department === "Acting" && isJapaneseVoiceActor(p),
-          )
-          .slice(0, 20)
-          .map(toPersonCardItem)
-      : [];
+  // 5 ページから日本人を抽出 → 重複除去 → 上位 20 件
+  const voiceActorPool: TMDbPerson[] = [
+    voiceActorPage1,
+    voiceActorPage2,
+    voiceActorPage3,
+    voiceActorPage4,
+    voiceActorPage5,
+  ].flatMap((r) => (r.status === "fulfilled" ? r.value.results : []));
+  const seenVoiceActorIds = new Set<number>();
+  const voiceActors: ContentRowItem[] = [];
+  for (const p of voiceActorPool) {
+    if (voiceActors.length >= 20) break;
+    if (seenVoiceActorIds.has(p.id)) continue;
+    if (p.known_for_department !== "Acting") continue;
+    if (!isJapaneseVoiceActor(p)) continue;
+    seenVoiceActorIds.add(p.id);
+    voiceActors.push(toPersonCardItem(p));
+  }
 
   // ジャンル別アイテム（ANIME_GENRES と同順）
   const genreItems = genreResults.map((r) =>

@@ -53,33 +53,30 @@ export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
 /**
  * 人物を「日本の声優・俳優」に限定するフィルター。
  *
- * TMDb /search/person は国別フィルターが無いため、以下の OR 条件で判定する:
- *   1) 名前に日本語文字（ひらがな・カタカナ・漢字）を含む
- *      → 日本人本人または日本作品にクレジットされた表記
- *   2) 代表作 (known_for) のいずれかの origin_country に "JP" が含まれる
- *   3) 代表作 (known_for) のいずれかの genre_ids にアニメーション (16) を含む
- *      → 邦アニメに出演 = 日本の声優の蓋然性が高い
+ * 重要: TMDb は language=ja-JP で `name` を翻訳するため、海外俳優 (Sydney Sweeney, Jackie Chan 等)
+ * も「シドニー・スウィーニー」のようにカタカナ表記になる。したがって `name` の日本語判定では
+ * 海外俳優を弾けない。原名 `original_name` は翻訳されず、本来の表記が残るのでこちらで判定する。
  *
- * いずれかを満たさない場合は除外する（=洋画俳優・海外人物を弾く）。
+ * 判定ロジック:
+ *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → ほぼ確実に日本人 → 採用
+ *      （ひらがな・カタカナは日本語にのみ存在。中国・韓国名と確実に切り分けられる）
+ *   2) それ以外（漢字のみ / ローマ字のみ）は代表作 `known_for` で判定:
+ *      `known_for` の「すべて」が JP origin またはアニメ (16) なら採用
+ *      （`some` だと『たまたま 1 本邦作品に出た海外俳優』を取りこぼすので `every`）
+ *   3) `known_for` が空 / 上記を満たさない → 除外
  */
 export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
-  // ひらがな (3040-309F) / カタカナ (30A0-30FF) / 常用漢字域 (4E00-9FAF)
-  if (/[぀-ヿ一-龯]/.test(person.name)) return true;
-  if (
-    person.known_for?.some((k) =>
-      (k.origin_country as string[] | undefined)?.includes("JP"),
-    )
-  ) {
-    return true;
-  }
-  if (
-    person.known_for?.some((k) =>
+  // 1) ひらがな or カタカナを含む原名 → 確定で日本
+  if (/[぀-ヿ]/.test(person.original_name)) return true;
+
+  // 2) 漢字のみ / ローマ字表記は known_for ですべて JP 制作 or アニメであることを要求
+  const works = person.known_for ?? [];
+  if (works.length === 0) return false;
+  return works.every(
+    (k) =>
+      (k.origin_country as string[] | undefined)?.includes("JP") ||
       (k.genre_ids as number[] | undefined)?.includes(ANIMATION_GENRE_ID),
-    )
-  ) {
-    return true;
-  }
-  return false;
+  );
 }
 
 // 認証情報を解決する
@@ -368,13 +365,6 @@ export async function getPersonDetail(id: number): Promise<TMDbPersonDetail> {
   return fetchTMDb<TMDbPersonDetail>(`/person/${id}`, {
     append_to_response: "combined_credits",
   });
-}
-
-/// トップページ用: 人気声優（週間トレンド人物からActing部門を抽出）
-export async function getPopularVoiceActors(): Promise<
-  TMDbSearchResponse<TMDbPerson>
-> {
-  return fetchTMDb<TMDbSearchResponse<TMDbPerson>>("/trending/person/week", {});
 }
 
 /** 日本の声優一覧（language=ja-JP で人気人物を取得） */

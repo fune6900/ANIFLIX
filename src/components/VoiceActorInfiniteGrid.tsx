@@ -4,28 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { TMDbPerson } from "@/types/tmdb";
+import { isJapaneseVoiceActor } from "@/lib/tmdb";
 
 function getImageUrl(path: string | null, size = "w342"): string {
   if (!path) return "";
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
-function hasJapaneseName(name: string): boolean {
-  return /[\u3040-\u30ff\u4e00-\u9faf]/.test(name);
-}
-
-function isJapaneseVoiceActor(p: TMDbPerson): boolean {
-  return (
-    p.known_for_department === "Acting" &&
-    (
-      hasJapaneseName(p.name) ||
-      p.known_for?.some(
-        (k) =>
-          (k.origin_country as string[] | undefined)?.includes("JP") ||
-          (k.genre_ids as number[] | undefined)?.includes(16)
-      ) === true
-    )
-  );
+/** \u30c7\u30d5\u30a9\u30eb\u30c8\u4e00\u89a7\u7528: Acting \u90e8\u9580\u304b\u3064\u65e5\u672c\u306e\u58f0\u512a\u30fb\u4ff3\u512a\u306e\u307f\u63a1\u7528 */
+function isDefaultListAcceptable(p: TMDbPerson): boolean {
+  return p.known_for_department === "Acting" && isJapaneseVoiceActor(p);
 }
 
 function PersonGridCard({ person }: { person: TMDbPerson }) {
@@ -48,7 +36,11 @@ function PersonGridCard({ person }: { person: TMDbPerson }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
-            <svg className="w-16 h-16 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-16 h-16 text-gray-600"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
             </svg>
           </div>
@@ -56,12 +48,18 @@ function PersonGridCard({ person }: { person: TMDbPerson }) {
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
         <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
-          <span className="text-[#54b9c5] text-xs font-bold">★ {person.popularity.toFixed(1)}</span>
+          <span className="text-[#54b9c5] text-xs font-bold">
+            ★ {person.popularity.toFixed(1)}
+          </span>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-xs font-semibold truncate leading-tight">{person.name}</p>
+          <p className="text-white text-xs font-semibold truncate leading-tight">
+            {person.name}
+          </p>
           {knownForTitles && (
-            <p className="text-gray-400 text-[11px] mt-0.5 truncate">{knownForTitles}</p>
+            <p className="text-gray-400 text-[11px] mt-0.5 truncate">
+              {knownForTitles}
+            </p>
           )}
         </div>
       </div>
@@ -88,19 +86,32 @@ export default function VoiceActorInfiniteGrid({
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
-    const nextPage = page + 1;
+    // TMDb /person/popular はワールドワイドなので 1 ページの採用率が低い。
+    // 1 スクロールあたり 5 ページまとめて取得して採用件数を確保する。
+    const startPage = page + 1;
+    const endPage = Math.min(startPage + 4, totalPages);
     setLoading(true);
     try {
-      const res = await fetch(`/api/voice-actors?page=${nextPage}`);
-      if (!res.ok) throw new Error("fetch failed");
-      const data = await res.json();
-      const newItems = (data.results as TMDbPerson[]).filter(isJapaneseVoiceActor);
+      const responses = await Promise.all(
+        Array.from({ length: endPage - startPage + 1 }, (_, i) =>
+          fetch(`/api/voice-actors?page=${startPage + i}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ),
+      );
+      const newItems: TMDbPerson[] = [];
+      for (const data of responses) {
+        if (!data) continue;
+        for (const p of data.results as TMDbPerson[]) {
+          if (isDefaultListAcceptable(p)) newItems.push(p);
+        }
+      }
       setItems((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));
         return [...prev, ...newItems.filter((p) => !existingIds.has(p.id))];
       });
-      setPage(nextPage);
-      setHasMore(nextPage < (data.total_pages ?? totalPages));
+      setPage(endPage);
+      setHasMore(endPage < totalPages);
     } catch (e) {
       console.error("VoiceActorInfiniteGrid load error:", e);
     } finally {
@@ -112,8 +123,10 @@ export default function VoiceActorInfiniteGrid({
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMore(); },
-      { rootMargin: "300px" }
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { rootMargin: "300px" },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -130,15 +143,32 @@ export default function VoiceActorInfiniteGrid({
       <div ref={sentinelRef} className="mt-10 flex justify-center">
         {loading && (
           <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
-            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            <svg
+              className="w-5 h-5 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              />
             </svg>
             読み込み中…
           </div>
         )}
         {!hasMore && items.length > 0 && (
-          <p className="text-gray-600 text-sm py-6">— 全 {items.length} 件表示済み —</p>
+          <p className="text-gray-600 text-sm py-6">
+            — 全 {items.length} 件表示済み —
+          </p>
         )}
       </div>
     </div>
