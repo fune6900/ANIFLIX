@@ -13,6 +13,7 @@ import {
   isValidSeason,
   type SeasonSlug,
 } from "@/lib/seasons";
+import SearchModeTabs from "@/components/SearchModeTabs";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
 
 function sanitize(raw: string): string {
@@ -216,20 +217,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   const isFilterMode = mode === "filter";
 
-  // タブ切替時に現在の値を保持するための URL ビルダ
-  function tabUrl(targetMode: "keyword" | "filter") {
-    const sp = new URLSearchParams();
-    if (query) sp.set("q", query);
-    if (targetMode === "filter") {
-      sp.set("mode", "filter");
-      if (selectedGenre) sp.set("genre", String(selectedGenre.id));
-      if (selectedSeason) sp.set("season", seasonParam);
-      if (sort !== "popularity.desc") sp.set("sort", sort);
-    }
-    const qs = sp.toString();
-    return qs ? `/search?${qs}` : "/search";
-  }
-
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
       <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
@@ -244,38 +231,35 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </div>
 
         {/* モード切り替えタブ（切替時にキーワード・フィルター値を保持） */}
-        <div className="flex border-b border-gray-700 mb-8 gap-0">
-          <Link
-            href={tabUrl("keyword")}
-            className={`px-5 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
-              !isFilterMode
-                ? "text-white border-[#E50914]"
-                : "text-gray-500 border-transparent hover:text-gray-300"
-            }`}
-          >
-            🔍 キーワード検索
-          </Link>
-          <Link
-            href={tabUrl("filter")}
-            className={`px-5 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
-              isFilterMode
-                ? "text-white border-[#E50914]"
-                : "text-gray-500 border-transparent hover:text-gray-300"
-            }`}
-          >
-            🎛️ 詳細フィルター
-          </Link>
-          <Link
-            href={`/search/movies${query ? `?q=${encodeURIComponent(query)}` : ""}`}
-            className="px-5 py-2.5 text-sm font-semibold transition text-gray-500 hover:text-gray-300 ml-auto"
-          >
-            🎬 アニメ映画検索 →
-          </Link>
-        </div>
+        <SearchModeTabs
+          currentMode={isFilterMode ? "filter" : "keyword"}
+          query={query}
+          genreId={selectedGenre ? String(selectedGenre.id) : ""}
+          season={seasonParam}
+          sort={sort}
+        />
 
         {/* キーワード検索フォーム（フィルター値を hidden で保持） */}
         {!isFilterMode && (
-          <form method="GET" className="mb-10 max-w-xl">
+          <form
+            id="search-keyword-form"
+            method="GET"
+            className="mb-10 max-w-xl"
+          >
+            {/* タブを跨いだ場合に詳細フィルター値を失わないよう hidden で保持 */}
+            {selectedGenre && (
+              <input
+                type="hidden"
+                name="genre"
+                value={String(selectedGenre.id)}
+              />
+            )}
+            {selectedSeason && (
+              <input type="hidden" name="season" value={seasonParam} />
+            )}
+            {sort !== "popularity.desc" && (
+              <input type="hidden" name="sort" value={sort} />
+            )}
             <div className="flex items-center border border-gray-600 bg-[#1a1a1a] rounded overflow-hidden focus-within:border-white transition-colors">
               <svg
                 className="w-5 h-5 text-gray-400 ml-4 shrink-0"
@@ -311,7 +295,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
         {/* 詳細フィルターフォーム（キーワード q を hidden で保持） */}
         {isFilterMode && (
-          <form method="GET" className="mb-10">
+          <form id="search-filter-form" method="GET" className="mb-10">
             <input type="hidden" name="mode" value="filter" />
             {query && <input type="hidden" name="q" value={query} />}
             <div className="bg-[#1a1a1a] border border-gray-700 rounded-lg p-5">

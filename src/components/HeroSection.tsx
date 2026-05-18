@@ -64,8 +64,9 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 src={`https://image.tmdb.org/t/p/original${it.backdropPath}`}
                 alt={it.title}
                 fill
-                className="object-cover"
-                priority={i === 0}
+                sizes="100vw"
+                className="object-cover object-center"
+                priority={i < 2}
               />
             </div>
           ) : (
@@ -87,11 +88,11 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 ANIME
               </div>
             </div>
-          )
+          ),
         )}
 
-        {/* 左フェードオーバーレイ */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/60 to-transparent" />
+        {/* 左フェードオーバーレイ（背景画像の視認性確保のため軽めに） */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#141414]/95 via-[#141414]/30 to-transparent" />
         {/* 下フェードオーバーレイ */}
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#141414] to-transparent" />
 
@@ -141,7 +142,11 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 onClick={() => setModalKey(item.trailerKey!)}
                 className="flex items-center gap-2 bg-white text-black font-bold px-5 md:px-8 py-2 md:py-3 rounded text-sm md:text-base hover:bg-white/80 transition-colors"
               >
-                <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 md:w-6 md:h-6"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
                 再生
@@ -151,7 +156,11 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 href={item.href}
                 className="flex items-center gap-2 bg-white text-black font-bold px-5 md:px-8 py-2 md:py-3 rounded text-sm md:text-base hover:bg-white/80 transition-colors"
               >
-                <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-5 h-5 md:w-6 md:h-6"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
                 再生
@@ -205,16 +214,36 @@ export default function HeroSection({ items }: HeroSectionProps) {
               }
               className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition opacity-0 hover:opacity-100 focus:opacity-100"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
             </button>
             <button
               onClick={next}
               className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition opacity-0 hover:opacity-100 focus:opacity-100"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           </>
@@ -233,14 +262,26 @@ export default function HeroSection({ items }: HeroSectionProps) {
             onClick={() => setModalKey(null)}
             aria-label="閉じる"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
 
           {/* タイトル */}
           <div className="absolute top-4 left-4 md:top-6 md:left-6">
-            <p className="text-white text-sm font-semibold opacity-80">{item.title}</p>
+            <p className="text-white text-sm font-semibold opacity-80">
+              {item.title}
+            </p>
           </div>
 
           {/* iframe ラッパー（クリックでモーダルが閉じないよう伝播を止める） */}
@@ -248,7 +289,10 @@ export default function HeroSection({ items }: HeroSectionProps) {
             className="relative w-full max-w-5xl mx-4 md:mx-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+            <div
+              className="relative w-full"
+              style={{ paddingBottom: "56.25%" }}
+            >
               <iframe
                 className="absolute inset-0 w-full h-full rounded-md shadow-2xl"
                 src={`https://www.youtube.com/embed/${modalKey}?autoplay=1&rel=0&modestbranding=1`}

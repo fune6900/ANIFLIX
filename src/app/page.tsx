@@ -123,8 +123,9 @@ export default async function Home() {
       : [];
 
   // ヒーロースライダー用: backdrop_path がある今期アニメ6件 + トレーラーキー取得
+  // 名前・あらすじが揃っている作品のみ採用（1枚目で「タイトルなしの真っ黒スライド」を防ぐ）
   const heroCandidates = currentSeasonAnime
-    .filter((a) => a.backdrop_path)
+    .filter((a) => a.backdrop_path && a.name && a.overview)
     .slice(0, 6);
 
   const trailerKeys = await Promise.all(
