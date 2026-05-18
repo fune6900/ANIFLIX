@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { searchPerson, getJapaneseVoiceActors } from "@/lib/tmdb";
-import { getImageUrl } from "@/lib/tmdb";
+import {
+  searchPerson,
+  getJapaneseVoiceActors,
+  isJapaneseVoiceActor,
+  getImageUrl,
+} from "@/lib/tmdb";
 import type { TMDbPerson } from "@/types/tmdb";
 import VoiceActorInfiniteGrid from "@/components/VoiceActorInfiniteGrid";
-
-function hasJapaneseName(name: string): boolean {
-  return /[\u3040-\u30ff\u4e00-\u9faf]/.test(name);
-}
 
 function sanitize(raw: string): string {
   return raw
@@ -201,7 +201,8 @@ export default async function VoiceActorsPage({
   if (query) {
     try {
       const data = await searchPerson(query, currentPage);
-      let persons = data.results;
+      // 日本の声優・俳優のみに限定（洋画俳優・海外人物を除外）
+      let persons = data.results.filter(isJapaneseVoiceActor);
 
       // 部門フィルター（クライアントサイド）
       if (dept) {
@@ -221,7 +222,8 @@ export default async function VoiceActorsPage({
       // popularity (default) はTMDb側でソート済み
 
       results = persons;
-      totalResults = data.total_results;
+      // 件数表示はフィルタ後の現ページ件数を反映
+      totalResults = persons.length;
       totalPages = Math.min(data.total_pages, 500);
     } catch {
       error = "検索中にエラーが発生しました";
@@ -231,15 +233,9 @@ export default async function VoiceActorsPage({
     isDefaultView = true;
     try {
       const data = await getJapaneseVoiceActors(1);
+      // Acting 部門 + 日本人ヒューリスティクスの両方を満たすもののみ採用
       const persons = data.results.filter(
-        (p) =>
-          p.known_for_department === "Acting" &&
-          (hasJapaneseName(p.name) ||
-            p.known_for?.some(
-              (k) =>
-                (k.origin_country as string[] | undefined)?.includes("JP") ||
-                (k.genre_ids as number[] | undefined)?.includes(16),
-            )),
+        (p) => p.known_for_department === "Acting" && isJapaneseVoiceActor(p),
       );
       results = persons;
       totalResults = data.total_results;

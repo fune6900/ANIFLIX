@@ -50,6 +50,38 @@ export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
   return Boolean(isJp);
 }
 
+/**
+ * 人物を「日本の声優・俳優」に限定するフィルター。
+ *
+ * TMDb /search/person は国別フィルターが無いため、以下の OR 条件で判定する:
+ *   1) 名前に日本語文字（ひらがな・カタカナ・漢字）を含む
+ *      → 日本人本人または日本作品にクレジットされた表記
+ *   2) 代表作 (known_for) のいずれかの origin_country に "JP" が含まれる
+ *   3) 代表作 (known_for) のいずれかの genre_ids にアニメーション (16) を含む
+ *      → 邦アニメに出演 = 日本の声優の蓋然性が高い
+ *
+ * いずれかを満たさない場合は除外する（=洋画俳優・海外人物を弾く）。
+ */
+export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
+  // ひらがな (3040-309F) / カタカナ (30A0-30FF) / 常用漢字域 (4E00-9FAF)
+  if (/[぀-ヿ一-龯]/.test(person.name)) return true;
+  if (
+    person.known_for?.some((k) =>
+      (k.origin_country as string[] | undefined)?.includes("JP"),
+    )
+  ) {
+    return true;
+  }
+  if (
+    person.known_for?.some((k) =>
+      (k.genre_ids as number[] | undefined)?.includes(ANIMATION_GENRE_ID),
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
 // 認証情報を解決する
 // TMDB_ACCESS_TOKEN があれば Bearer（優先）
 // TMDB_API_KEY が JWT (eyJ...) ならそれも Bearer として扱う

@@ -10,6 +10,7 @@ import {
   getAnimeByGenre,
   getAnimeByKeywords,
   getAnimeVideos,
+  isJapaneseVoiceActor,
 } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { ANIME_GENRES } from "@/lib/genres";
@@ -87,11 +88,6 @@ async function fetchGenreItems(genre: AnimeGenre): Promise<ContentRowItem[]> {
   } catch {
     return [];
   }
-}
-
-// 日本語名かどうか（ひらがな・カタカナ・漢字を含む）
-function hasJapaneseName(name: string): boolean {
-  return /[\u3040-\u30ff\u4e00-\u9faf]/.test(name);
 }
 
 export default async function Home() {
@@ -177,14 +173,7 @@ export default async function Home() {
       ? voiceActorData.value.results
           .filter(
             (p) =>
-              p.known_for_department === "Acting" &&
-              (hasJapaneseName(p.name) ||
-                p.known_for?.some(
-                  (k) =>
-                    (k.origin_country as string[] | undefined)?.includes(
-                      "JP",
-                    ) || (k.genre_ids as number[] | undefined)?.includes(16),
-                )),
+              p.known_for_department === "Acting" && isJapaneseVoiceActor(p),
           )
           .slice(0, 20)
           .map(toPersonCardItem)
