@@ -50,7 +50,7 @@ function buildAllResultsHref(mode: SearchMode, q: string): string {
     case "anime":
       return `/search?q=${enc}`;
     case "movie":
-      return `/search/movies?q=${enc}`;
+      return `/browse/movies?q=${enc}`;
     case "voice-actor":
       return `/voice-actors?q=${enc}`;
   }

@@ -7,7 +7,7 @@ export default function ErasPage() {
       <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl xl:text-5xl font-black mb-2">
-            年代別アニメ
+            年代
           </h1>
           <p className="text-gray-400 text-sm xl:text-base">
             放送年代からアニメを探す
