@@ -1,14 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import {
-  searchPerson,
-  getAnimeCredits,
-  isJapaneseVoiceActor,
-  getImageUrl,
-} from "@/lib/tmdb";
+import { searchPerson, isJapaneseVoiceActor, getImageUrl } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { getRecentSeasons } from "@/lib/seasons";
-import type { TMDbCastMember, TMDbPerson } from "@/types/tmdb";
+import {
+  aggregateSeasonalCast,
+  type AggregatedCast,
+} from "@/lib/seasonal-cast";
+import type { TMDbPerson } from "@/types/tmdb";
 
 function sanitize(raw: string): string {
   return raw
@@ -39,16 +38,6 @@ interface VoiceActorsPageProps {
     sort?: string;
     dept?: string;
   }>;
-}
-
-// シーズンアニメ集約用の声優エントリ
-interface AggregatedCast {
-  id: number;
-  name: string;
-  profilePath: string | null;
-  appearances: number;
-  bestOrder: number;
-  topCharacter: string;
 }
 
 function CastGridCard({ cast }: { cast: AggregatedCast }) {
@@ -298,39 +287,8 @@ export default async function VoiceActorsPage({
         currentSeason.season,
         { limit: 30 },
       );
-      const animeIds = seasonResult.items.slice(0, 30).map((a) => a.id);
-      const credits = await Promise.all(
-        animeIds.map((id) => getAnimeCredits(id).catch(() => null)),
-      );
-      const map = new Map<number, AggregatedCast>();
-      for (const c of credits) {
-        if (!c) continue;
-        for (const m of c.cast as TMDbCastMember[]) {
-          if (m.order >= 15) continue;
-          const prev = map.get(m.id);
-          if (prev) {
-            prev.appearances += 1;
-            if (m.order < prev.bestOrder) {
-              prev.bestOrder = m.order;
-              prev.topCharacter = m.character;
-            }
-          } else {
-            map.set(m.id, {
-              id: m.id,
-              name: m.name,
-              profilePath: m.profile_path,
-              appearances: 1,
-              bestOrder: m.order,
-              topCharacter: m.character,
-            });
-          }
-        }
-      }
-      defaultCastResults = [...map.values()].sort(
-        (a, b) =>
-          b.appearances - a.appearances ||
-          a.bestOrder - b.bestOrder ||
-          a.name.localeCompare(b.name, "ja"),
+      defaultCastResults = await aggregateSeasonalCast(
+        seasonResult.items.slice(0, 30).map((a) => a.id),
       );
       totalResults = defaultCastResults.length;
     } catch {
@@ -404,73 +362,77 @@ export default async function VoiceActorsPage({
             </button>
           </div>
 
-          {/* 絞り込み・ソートバー */}
-          <div className="flex flex-wrap gap-3 items-center bg-[#1a1a1a] border border-gray-700 rounded px-4 py-3">
-            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider shrink-0">
-              絞り込み:
-            </span>
-
-            <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-xs">部門</label>
-              <select
-                name="dept"
-                defaultValue={dept}
-                className="bg-[#2a2a2a] border border-gray-600 text-white text-xs rounded px-2 py-1.5 outline-none focus:border-gray-400 transition"
-              >
-                {DEPT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-xs">並び順</label>
-              <select
-                name="sort"
-                defaultValue={sort}
-                className="bg-[#2a2a2a] border border-gray-600 text-white text-xs rounded px-2 py-1.5 outline-none focus:border-gray-400 transition"
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded transition"
-            >
-              適用
-            </button>
-
-            {hasFilters && (
-              <Link
-                href={`/voice-actors${query ? `?q=${encodeURIComponent(query)}` : ""}`}
-                className="text-xs text-gray-500 hover:text-gray-300 transition"
-              >
-                リセット
-              </Link>
-            )}
-          </div>
-
-          {/* アクティブフィルターバッジ */}
-          {hasFilters && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {dept && (
-                <span className="bg-[#54b9c5]/20 text-[#54b9c5] text-xs px-2.5 py-1 rounded-full border border-[#54b9c5]/30">
-                  {DEPT_OPTIONS.find((o) => o.value === dept)?.label}
+          {/* 絞り込み・ソートバー（デフォルト表示は集約キャストの固定順なので隠す） */}
+          {!isDefaultView && (
+            <>
+              <div className="flex flex-wrap gap-3 items-center bg-[#1a1a1a] border border-gray-700 rounded px-4 py-3">
+                <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider shrink-0">
+                  絞り込み:
                 </span>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs">部門</label>
+                  <select
+                    name="dept"
+                    defaultValue={dept}
+                    className="bg-[#2a2a2a] border border-gray-600 text-white text-xs rounded px-2 py-1.5 outline-none focus:border-gray-400 transition"
+                  >
+                    {DEPT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs">並び順</label>
+                  <select
+                    name="sort"
+                    defaultValue={sort}
+                    className="bg-[#2a2a2a] border border-gray-600 text-white text-xs rounded px-2 py-1.5 outline-none focus:border-gray-400 transition"
+                  >
+                    {SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded transition"
+                >
+                  適用
+                </button>
+
+                {hasFilters && (
+                  <Link
+                    href={`/voice-actors${query ? `?q=${encodeURIComponent(query)}` : ""}`}
+                    className="text-xs text-gray-500 hover:text-gray-300 transition"
+                  >
+                    リセット
+                  </Link>
+                )}
+              </div>
+
+              {/* アクティブフィルターバッジ */}
+              {hasFilters && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {dept && (
+                    <span className="bg-[#54b9c5]/20 text-[#54b9c5] text-xs px-2.5 py-1 rounded-full border border-[#54b9c5]/30">
+                      {DEPT_OPTIONS.find((o) => o.value === dept)?.label}
+                    </span>
+                  )}
+                  {sort !== "popularity" && (
+                    <span className="bg-[#54b9c5]/20 text-[#54b9c5] text-xs px-2.5 py-1 rounded-full border border-[#54b9c5]/30">
+                      {SORT_OPTIONS.find((o) => o.value === sort)?.label}
+                    </span>
+                  )}
+                </div>
               )}
-              {sort !== "popularity" && (
-                <span className="bg-[#54b9c5]/20 text-[#54b9c5] text-xs px-2.5 py-1 rounded-full border border-[#54b9c5]/30">
-                  {SORT_OPTIONS.find((o) => o.value === sort)?.label}
-                </span>
-              )}
-            </div>
+            </>
           )}
         </form>
 

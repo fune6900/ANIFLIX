@@ -9,14 +9,17 @@ import {
   getAnimeByGenre,
   getAnimeByKeywords,
   getAnimeVideos,
-  getAnimeCredits,
 } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
+import {
+  aggregateSeasonalCast,
+  type AggregatedCast,
+} from "@/lib/seasonal-cast";
 import { ANIME_GENRES } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_ERAS } from "@/lib/eras";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
-import type { TMDbAnime, TMDbCastMember } from "@/types/tmdb";
+import type { TMDbAnime } from "@/types/tmdb";
 
 // TMDb アニメデータを ContentRowItem に変換
 function toCardItem(anime: TMDbAnime): ContentRowItem {
@@ -33,20 +36,6 @@ function toCardItem(anime: TMDbAnime): ContentRowItem {
     overview: anime.overview,
     href: `/anime/${anime.id}`,
   };
-}
-
-// 集約後のキャストエントリ
-interface AggregatedCast {
-  id: number;
-  name: string;
-  originalName: string;
-  profilePath: string | null;
-  /** 出演本数（集約対象アニメに何作出ているか） */
-  appearances: number;
-  /** その作品中での出演順（小さいほど主役寄り） */
-  bestOrder: number;
-  /** 代表キャラ名 (最も主役寄り作品でのもの) */
-  topCharacter: string;
 }
 
 function toCastCardItem(c: AggregatedCast): ContentRowItem {
@@ -178,42 +167,10 @@ export default async function Home() {
   // 人気声優: シーズン人気アニメ上位 12 作品のキャストを並列取得し集約。
   // /person/popular はワールドワイドで Hollywood に偏り、日本人声優がほぼ取れないため、
   // 「今期人気アニメに出演している声優」を出演本数順に並べる方が信頼性が高い。
-  const seasonAnimeForCast = currentSeasonAnime.slice(0, 12);
-  const castResponses = await Promise.allSettled(
-    seasonAnimeForCast.map((a) => getAnimeCredits(a.id)),
+  const aggregatedCast = await aggregateSeasonalCast(
+    currentSeasonAnime.slice(0, 12).map((a) => a.id),
   );
-  const castMap = new Map<number, AggregatedCast>();
-  for (const r of castResponses) {
-    if (r.status !== "fulfilled") continue;
-    for (const m of r.value.cast as TMDbCastMember[]) {
-      if (m.order >= 15) continue; // 主役級のみ採用
-      const prev = castMap.get(m.id);
-      if (prev) {
-        prev.appearances += 1;
-        if (m.order < prev.bestOrder) {
-          prev.bestOrder = m.order;
-          prev.topCharacter = m.character;
-        }
-      } else {
-        castMap.set(m.id, {
-          id: m.id,
-          name: m.name,
-          originalName: m.original_name,
-          profilePath: m.profile_path,
-          appearances: 1,
-          bestOrder: m.order,
-          topCharacter: m.character,
-        });
-      }
-    }
-  }
-  const voiceActors: ContentRowItem[] = [...castMap.values()]
-    .sort(
-      (a, b) =>
-        b.appearances - a.appearances ||
-        a.bestOrder - b.bestOrder ||
-        a.name.localeCompare(b.name, "ja"),
-    )
+  const voiceActors: ContentRowItem[] = aggregatedCast
     .slice(0, 20)
     .map(toCastCardItem);
 

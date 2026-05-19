@@ -61,10 +61,13 @@ export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
  * 判定ロジック:
  *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → 採用
  *      （ひらがな・カタカナは日本語にのみ存在。中国・韓国名と確実に切り分けられる）
- *   2) それ以外（漢字のみ / ローマ字のみ）の場合:
- *      a) `known_for` の「すべて」が JP origin またはアニメ (16) であること（必須）
- *      b) かつ ローマ字表記原名の場合は「少なくとも 1 本」の known_for が JP origin であること
- *         （Hollywood ライター等で 1 本だけ偶然 anime ジャンルが付いている false positive を弾く）
+ *   2) かな以外（漢字のみ / ローマ字のみ）の場合は
+ *      `known_for` に「少なくとも 1 本」の JP origin を要求し、かつ全 known_for が
+ *      JP origin またはアニメ (genre 16) であることを要求する。
+ *      - 中国漢字 (例: 成龍) と日本漢字 (例: 神谷浩史) は Unicode 上区別できないため、
+ *        漢字のみ名前は kana なし扱いで「JP origin の作品が必須」とする
+ *      - これにより Tom Palmer 型 (アニメ 1 本だけ持つ Hollywood ライター) と
+ *        中国アニメ作品しかない中国名が同時に除外される
  */
 export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
   const originalName = person.original_name ?? "";
@@ -75,7 +78,7 @@ export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
   const works = person.known_for ?? [];
   if (works.length === 0) return false;
 
-  // 2a) すべての known_for が JP 制作 or アニメであることを要求
+  // 2a) すべての known_for が JP origin またはアニメ (16) であることを要求
   const allJpOrAnime = works.every(
     (k) =>
       (k.origin_country as string[] | undefined)?.includes("JP") ||
@@ -83,17 +86,11 @@ export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
   );
   if (!allJpOrAnime) return false;
 
-  // 2b) ローマ字表記 (CJK 漢字を含まない) の場合は known_for に最低 1 本の JP origin を要求
-  //     → Tom Palmer 型（海外ライターが 1 本だけ anime ジャンルの作品に名を連ねた）を除外
-  //     漢字を含む原名は東アジア人の可能性が高いので、anime ジャンルのみでも採用する
-  const hasCJKIdeograph = /[一-龯]/.test(originalName);
-  if (!hasCJKIdeograph) {
-    return works.some((k) =>
-      (k.origin_country as string[] | undefined)?.includes("JP"),
-    );
-  }
-
-  return true;
+  // 2b) かな以外は必ず known_for に最低 1 本の JP origin を要求
+  //     （CJK 漢字判定で甘くすると Chinese 漢字名 + 中国アニメで false positive 再発）
+  return works.some((k) =>
+    (k.origin_country as string[] | undefined)?.includes("JP"),
+  );
 }
 
 // 認証情報を解決する
