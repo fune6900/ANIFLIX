@@ -2,6 +2,7 @@
 
 import type {
   TMDbAnime,
+  TMDbCastMember,
   TMDbExternalIds,
   TMDbMovie,
   TMDbMovieDetail,
@@ -58,24 +59,37 @@ export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
  * 海外俳優を弾けない。原名 `original_name` は翻訳されず、本来の表記が残るのでこちらで判定する。
  *
  * 判定ロジック:
- *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → ほぼ確実に日本人 → 採用
+ *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → 採用
  *      （ひらがな・カタカナは日本語にのみ存在。中国・韓国名と確実に切り分けられる）
- *   2) それ以外（漢字のみ / ローマ字のみ）は代表作 `known_for` で判定:
- *      `known_for` の「すべて」が JP origin またはアニメ (16) なら採用
- *      （`some` だと『たまたま 1 本邦作品に出た海外俳優』を取りこぼすので `every`）
- *   3) `known_for` が空 / 上記を満たさない → 除外
+ *   2) かな以外（漢字のみ / ローマ字のみ）の場合は
+ *      `known_for` に「少なくとも 1 本」の JP origin を要求し、かつ全 known_for が
+ *      JP origin またはアニメ (genre 16) であることを要求する。
+ *      - 中国漢字 (例: 成龍) と日本漢字 (例: 神谷浩史) は Unicode 上区別できないため、
+ *        漢字のみ名前は kana なし扱いで「JP origin の作品が必須」とする
+ *      - これにより Tom Palmer 型 (アニメ 1 本だけ持つ Hollywood ライター) と
+ *        中国アニメ作品しかない中国名が同時に除外される
  */
 export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
-  // 1) ひらがな or カタカナを含む原名 → 確定で日本
-  if (/[぀-ヿ]/.test(person.original_name)) return true;
+  const originalName = person.original_name ?? "";
 
-  // 2) 漢字のみ / ローマ字表記は known_for ですべて JP 制作 or アニメであることを要求
+  // 1) ひらがな or カタカナを含む原名 → 確定で日本
+  if (/[぀-ヿ]/.test(originalName)) return true;
+
   const works = person.known_for ?? [];
   if (works.length === 0) return false;
-  return works.every(
+
+  // 2a) すべての known_for が JP origin またはアニメ (16) であることを要求
+  const allJpOrAnime = works.every(
     (k) =>
       (k.origin_country as string[] | undefined)?.includes("JP") ||
       (k.genre_ids as number[] | undefined)?.includes(ANIMATION_GENRE_ID),
+  );
+  if (!allJpOrAnime) return false;
+
+  // 2b) かな以外は必ず known_for に最低 1 本の JP origin を要求
+  //     （CJK 漢字判定で甘くすると Chinese 漢字名 + 中国アニメで false positive 再発）
+  return works.some((k) =>
+    (k.origin_country as string[] | undefined)?.includes("JP"),
   );
 }
 
@@ -267,6 +281,17 @@ export async function getAnimeDetail(id: number): Promise<TMDbTVDetail> {
   return fetchTMDb<TMDbTVDetail>(`/tv/${id}`, {
     append_to_response: "credits",
   });
+}
+
+/** TV 作品のキャストを取得（声優一覧用） */
+export async function getAnimeCredits(
+  animeId: number,
+): Promise<{ cast: TMDbCastMember[] }> {
+  return fetchTMDb<{ cast: TMDbCastMember[] }>(
+    `/tv/${animeId}/credits`,
+    {},
+    3600,
+  );
 }
 
 /** シーズンのエピソード一覧を取得 */
