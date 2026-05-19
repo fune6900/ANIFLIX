@@ -2,12 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   searchPerson,
-  getJapaneseVoiceActors,
+  getAnimeCredits,
   isJapaneseVoiceActor,
   getImageUrl,
 } from "@/lib/tmdb";
-import type { TMDbPerson } from "@/types/tmdb";
-import VoiceActorInfiniteGrid from "@/components/VoiceActorInfiniteGrid";
+import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
+import { getRecentSeasons } from "@/lib/seasons";
+import type { TMDbCastMember, TMDbPerson } from "@/types/tmdb";
 
 function sanitize(raw: string): string {
   return raw
@@ -38,6 +39,61 @@ interface VoiceActorsPageProps {
     sort?: string;
     dept?: string;
   }>;
+}
+
+// シーズンアニメ集約用の声優エントリ
+interface AggregatedCast {
+  id: number;
+  name: string;
+  profilePath: string | null;
+  appearances: number;
+  bestOrder: number;
+  topCharacter: string;
+}
+
+function CastGridCard({ cast }: { cast: AggregatedCast }) {
+  return (
+    <Link href={`/voice-actors/${cast.id}`} className="group block">
+      <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
+        {cast.profilePath ? (
+          <Image
+            src={getImageUrl(cast.profilePath, "w342")}
+            alt={cast.name}
+            fill
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
+            className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
+            <svg
+              className="w-16 h-16 text-gray-600"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+            </svg>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
+        <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
+          <span className="text-[#54b9c5] text-xs font-bold">
+            {cast.appearances}本
+          </span>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 p-2">
+          <p className="text-white text-xs font-semibold truncate leading-tight">
+            {cast.name}
+          </p>
+          {cast.topCharacter && (
+            <p className="text-gray-400 text-[11px] mt-0.5 truncate">
+              役: {cast.topCharacter}
+            </p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function PersonGridCard({ person }: { person: TMDbPerson }) {
@@ -193,6 +249,7 @@ export default async function VoiceActorsPage({
   const dept = params.dept ?? "";
 
   let results: TMDbPerson[] = [];
+  let defaultCastResults: AggregatedCast[] = [];
   let totalResults = 0;
   let totalPages = 0;
   let error: string | null = null;
@@ -229,31 +286,53 @@ export default async function VoiceActorsPage({
       error = "検索中にエラーが発生しました";
     }
   } else {
-    // クエリなし: 日本出身声優一覧（無限スクロール用の初期データを取得）
-    // /person/popular はワールドワイドの人気ランキングで、上位は Hollywood 俳優で埋まる。
-    // 1 ページ (20件) フィルタ後に数件しか残らず一覧がスカスカになるので、初期は 5 ページ
-    // 並列取得して採用件数を稼ぐ。残り件数は無限スクロール側で順次補充される。
+    // クエリなし: 「今期人気アニメに出演している声優」を集約して表示する。
+    // /person/popular はワールドワイドで Hollywood 俳優ばかり拾ってしまうため
+    // (日本の声優は 100 位までに 0 名級) 信頼できない。
+    // 今期トップ 30 作品のキャスト (order < 15) を出演本数順に並べる。
     isDefaultView = true;
     try {
-      const pages = await Promise.all(
-        [1, 2, 3, 4, 5].map((p) => getJapaneseVoiceActors(p).catch(() => null)),
+      const currentSeason = getRecentSeasons(1)[0];
+      const seasonResult = await fetchSeasonalAnime(
+        currentSeason.year,
+        currentSeason.season,
+        { limit: 30 },
       );
-      const seen = new Set<number>();
-      const persons: TMDbPerson[] = [];
-      for (const data of pages) {
-        if (!data) continue;
-        for (const p of data.results) {
-          if (seen.has(p.id)) continue;
-          if (p.known_for_department === "Acting" && isJapaneseVoiceActor(p)) {
-            persons.push(p);
-            seen.add(p.id);
+      const animeIds = seasonResult.items.slice(0, 30).map((a) => a.id);
+      const credits = await Promise.all(
+        animeIds.map((id) => getAnimeCredits(id).catch(() => null)),
+      );
+      const map = new Map<number, AggregatedCast>();
+      for (const c of credits) {
+        if (!c) continue;
+        for (const m of c.cast as TMDbCastMember[]) {
+          if (m.order >= 15) continue;
+          const prev = map.get(m.id);
+          if (prev) {
+            prev.appearances += 1;
+            if (m.order < prev.bestOrder) {
+              prev.bestOrder = m.order;
+              prev.topCharacter = m.character;
+            }
+          } else {
+            map.set(m.id, {
+              id: m.id,
+              name: m.name,
+              profilePath: m.profile_path,
+              appearances: 1,
+              bestOrder: m.order,
+              topCharacter: m.character,
+            });
           }
         }
       }
-      results = persons;
-      totalResults = persons.length;
-      // 無限スクロールは page 6 から続けるため totalPages は TMDb 側総ページ数を保持
-      totalPages = pages[0]?.total_pages ?? 1;
+      defaultCastResults = [...map.values()].sort(
+        (a, b) =>
+          b.appearances - a.appearances ||
+          a.bestOrder - b.bestOrder ||
+          a.name.localeCompare(b.name, "ja"),
+      );
+      totalResults = defaultCastResults.length;
     } catch {
       // デフォルト表示に失敗してもエラーは出さない
     }
@@ -267,9 +346,9 @@ export default async function VoiceActorsPage({
         {/* ヘッダー */}
         <div className="mb-8">
           <h1 className="text-white text-2xl font-bold">声優を検索</h1>
-          {isDefaultView && results.length > 0 && (
+          {isDefaultView && defaultCastResults.length > 0 && (
             <p className="text-gray-400 text-sm mt-1">
-              🇯🇵 日本出身声優 · 無限スクロールで全件表示
+              🇯🇵 今期アニメに出演中の声優 ({defaultCastResults.length}名)
             </p>
           )}
           {query && totalResults > 0 && (
@@ -397,12 +476,12 @@ export default async function VoiceActorsPage({
 
         {/* 結果グリッド */}
         {isDefaultView
-          ? results.length > 0 && (
-              <VoiceActorInfiniteGrid
-                initialItems={results}
-                initialPage={5}
-                totalPages={totalPages}
-              />
+          ? defaultCastResults.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-9 gap-3 md:gap-4 xl:gap-5">
+                {defaultCastResults.map((cast) => (
+                  <CastGridCard key={cast.id} cast={cast} />
+                ))}
+              </div>
             )
           : results.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-9 gap-3 md:gap-4 xl:gap-5">

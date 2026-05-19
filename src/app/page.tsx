@@ -6,18 +6,17 @@ import type { ContentRowItem } from "@/components/ContentRow";
 import {
   getNewAnime,
   getJapaneseTrendingAnime,
-  getJapaneseVoiceActors,
   getAnimeByGenre,
   getAnimeByKeywords,
   getAnimeVideos,
-  isJapaneseVoiceActor,
+  getAnimeCredits,
 } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { ANIME_GENRES } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_ERAS } from "@/lib/eras";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
-import type { TMDbAnime, TMDbPerson } from "@/types/tmdb";
+import type { TMDbAnime, TMDbCastMember } from "@/types/tmdb";
 
 // TMDb アニメデータを ContentRowItem に変換
 function toCardItem(anime: TMDbAnime): ContentRowItem {
@@ -36,24 +35,32 @@ function toCardItem(anime: TMDbAnime): ContentRowItem {
   };
 }
 
-// TMDb 人物データを ContentRowItem に変換（声優カード）
-function toPersonCardItem(person: TMDbPerson): ContentRowItem {
-  const knownFor = person.known_for
-    ?.map((k) => k.name ?? k.title)
-    .filter(Boolean)
-    .slice(0, 2)
-    .join(" / ");
+// 集約後のキャストエントリ
+interface AggregatedCast {
+  id: number;
+  name: string;
+  originalName: string;
+  profilePath: string | null;
+  /** 出演本数（集約対象アニメに何作出ているか） */
+  appearances: number;
+  /** その作品中での出演順（小さいほど主役寄り） */
+  bestOrder: number;
+  /** 代表キャラ名 (最も主役寄り作品でのもの) */
+  topCharacter: string;
+}
+
+function toCastCardItem(c: AggregatedCast): ContentRowItem {
   return {
-    id: person.id,
-    title: person.name,
-    year: knownFor ? `代表作: ${knownFor}` : undefined,
+    id: c.id,
+    title: c.name,
+    year: c.topCharacter ? `役: ${c.topCharacter}` : undefined,
     rating: "CV",
-    match: Math.min(99, Math.round(person.popularity)),
+    match: Math.min(99, 50 + c.appearances * 10),
     gradient: "linear-gradient(135deg, #1a1a2e 0%, #243b55 100%)",
-    posterPath: person.profile_path,
+    posterPath: c.profilePath,
     backdropPath: null,
     isPortrait: true,
-    href: `/voice-actors/${person.id}`,
+    href: `/voice-actors/${c.id}`,
   };
 }
 
@@ -97,28 +104,19 @@ export default async function Home() {
   // 既存4列 + 全ジャンル を並列フェッチ
   // トレンドはフィルタ後に20件確保するため2ページ同時取得
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
-  // 声優は /person/popular がワールドワイドで Hollywood に偏るため、複数ページ集約してフィルタする
+  // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
+  // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
   const [
     currentSeasonResult,
     newData,
     trendingData1,
     trendingData2,
-    voiceActorPage1,
-    voiceActorPage2,
-    voiceActorPage3,
-    voiceActorPage4,
-    voiceActorPage5,
     ...genreResults
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
     getNewAnime(randomPage(3)),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
-    getJapaneseVoiceActors(1),
-    getJapaneseVoiceActors(2),
-    getJapaneseVoiceActors(3),
-    getJapaneseVoiceActors(4),
-    getJapaneseVoiceActors(5),
     ...ANIME_GENRES.map((g) => fetchGenreItems(g)),
   ]);
 
@@ -177,24 +175,47 @@ export default async function Home() {
     .slice(0, 20)
     .map(toCardItem);
 
-  // 5 ページから日本人を抽出 → 重複除去 → 上位 20 件
-  const voiceActorPool: TMDbPerson[] = [
-    voiceActorPage1,
-    voiceActorPage2,
-    voiceActorPage3,
-    voiceActorPage4,
-    voiceActorPage5,
-  ].flatMap((r) => (r.status === "fulfilled" ? r.value.results : []));
-  const seenVoiceActorIds = new Set<number>();
-  const voiceActors: ContentRowItem[] = [];
-  for (const p of voiceActorPool) {
-    if (voiceActors.length >= 20) break;
-    if (seenVoiceActorIds.has(p.id)) continue;
-    if (p.known_for_department !== "Acting") continue;
-    if (!isJapaneseVoiceActor(p)) continue;
-    seenVoiceActorIds.add(p.id);
-    voiceActors.push(toPersonCardItem(p));
+  // 人気声優: シーズン人気アニメ上位 12 作品のキャストを並列取得し集約。
+  // /person/popular はワールドワイドで Hollywood に偏り、日本人声優がほぼ取れないため、
+  // 「今期人気アニメに出演している声優」を出演本数順に並べる方が信頼性が高い。
+  const seasonAnimeForCast = currentSeasonAnime.slice(0, 12);
+  const castResponses = await Promise.allSettled(
+    seasonAnimeForCast.map((a) => getAnimeCredits(a.id)),
+  );
+  const castMap = new Map<number, AggregatedCast>();
+  for (const r of castResponses) {
+    if (r.status !== "fulfilled") continue;
+    for (const m of r.value.cast as TMDbCastMember[]) {
+      if (m.order >= 15) continue; // 主役級のみ採用
+      const prev = castMap.get(m.id);
+      if (prev) {
+        prev.appearances += 1;
+        if (m.order < prev.bestOrder) {
+          prev.bestOrder = m.order;
+          prev.topCharacter = m.character;
+        }
+      } else {
+        castMap.set(m.id, {
+          id: m.id,
+          name: m.name,
+          originalName: m.original_name,
+          profilePath: m.profile_path,
+          appearances: 1,
+          bestOrder: m.order,
+          topCharacter: m.character,
+        });
+      }
+    }
   }
+  const voiceActors: ContentRowItem[] = [...castMap.values()]
+    .sort(
+      (a, b) =>
+        b.appearances - a.appearances ||
+        a.bestOrder - b.bestOrder ||
+        a.name.localeCompare(b.name, "ja"),
+    )
+    .slice(0, 20)
+    .map(toCastCardItem);
 
   // ジャンル別アイテム（ANIME_GENRES と同順）
   const genreItems = genreResults.map((r) =>

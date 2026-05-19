@@ -2,6 +2,7 @@
 
 import type {
   TMDbAnime,
+  TMDbCastMember,
   TMDbExternalIds,
   TMDbMovie,
   TMDbMovieDetail,
@@ -58,25 +59,41 @@ export function isJapaneseAnimeMovie(item: TMDbMovie): boolean {
  * 海外俳優を弾けない。原名 `original_name` は翻訳されず、本来の表記が残るのでこちらで判定する。
  *
  * 判定ロジック:
- *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → ほぼ確実に日本人 → 採用
+ *   1) `original_name` にひらがな or カタカナ (U+3040〜U+30FF) を含む → 採用
  *      （ひらがな・カタカナは日本語にのみ存在。中国・韓国名と確実に切り分けられる）
- *   2) それ以外（漢字のみ / ローマ字のみ）は代表作 `known_for` で判定:
- *      `known_for` の「すべて」が JP origin またはアニメ (16) なら採用
- *      （`some` だと『たまたま 1 本邦作品に出た海外俳優』を取りこぼすので `every`）
- *   3) `known_for` が空 / 上記を満たさない → 除外
+ *   2) それ以外（漢字のみ / ローマ字のみ）の場合:
+ *      a) `known_for` の「すべて」が JP origin またはアニメ (16) であること（必須）
+ *      b) かつ ローマ字表記原名の場合は「少なくとも 1 本」の known_for が JP origin であること
+ *         （Hollywood ライター等で 1 本だけ偶然 anime ジャンルが付いている false positive を弾く）
  */
 export function isJapaneseVoiceActor(person: TMDbPerson): boolean {
-  // 1) ひらがな or カタカナを含む原名 → 確定で日本
-  if (/[぀-ヿ]/.test(person.original_name)) return true;
+  const originalName = person.original_name ?? "";
 
-  // 2) 漢字のみ / ローマ字表記は known_for ですべて JP 制作 or アニメであることを要求
+  // 1) ひらがな or カタカナを含む原名 → 確定で日本
+  if (/[぀-ヿ]/.test(originalName)) return true;
+
   const works = person.known_for ?? [];
   if (works.length === 0) return false;
-  return works.every(
+
+  // 2a) すべての known_for が JP 制作 or アニメであることを要求
+  const allJpOrAnime = works.every(
     (k) =>
       (k.origin_country as string[] | undefined)?.includes("JP") ||
       (k.genre_ids as number[] | undefined)?.includes(ANIMATION_GENRE_ID),
   );
+  if (!allJpOrAnime) return false;
+
+  // 2b) ローマ字表記 (CJK 漢字を含まない) の場合は known_for に最低 1 本の JP origin を要求
+  //     → Tom Palmer 型（海外ライターが 1 本だけ anime ジャンルの作品に名を連ねた）を除外
+  //     漢字を含む原名は東アジア人の可能性が高いので、anime ジャンルのみでも採用する
+  const hasCJKIdeograph = /[一-龯]/.test(originalName);
+  if (!hasCJKIdeograph) {
+    return works.some((k) =>
+      (k.origin_country as string[] | undefined)?.includes("JP"),
+    );
+  }
+
+  return true;
 }
 
 // 認証情報を解決する
@@ -267,6 +284,17 @@ export async function getAnimeDetail(id: number): Promise<TMDbTVDetail> {
   return fetchTMDb<TMDbTVDetail>(`/tv/${id}`, {
     append_to_response: "credits",
   });
+}
+
+/** TV 作品のキャストを取得（声優一覧用） */
+export async function getAnimeCredits(
+  animeId: number,
+): Promise<{ cast: TMDbCastMember[] }> {
+  return fetchTMDb<{ cast: TMDbCastMember[] }>(
+    `/tv/${animeId}/credits`,
+    {},
+    3600,
+  );
 }
 
 /** シーズンのエピソード一覧を取得 */
