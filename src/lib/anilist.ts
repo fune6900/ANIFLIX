@@ -1,6 +1,17 @@
 // AniList GraphQL クライアント
-// TMDb のシーズン情報がズレるケース（2期エピソードが1期に統合されている等）の補完用。
+// TMDb のシーズン情報がズレるケース（2期エピソードが1期に統合されている等）の補完、
+// および TMDb に存在しないキャラクター名検索 (/search/characters) の補完に使用する。
 // API キー不要・読み取り専用クエリのみ使用する。
+
+import type {
+  AniListCharacter,
+  AniListCharacterDetail,
+  AniListCharacterDetailResponse,
+  AniListMediaCharactersResponse,
+  AniListRelatedCharacterEdge,
+  AniListSearchCharactersResponse,
+  CharacterSearchResult,
+} from "@/types/anilist";
 
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
@@ -152,4 +163,259 @@ export function pickAniListTitle(media: AniListMedia): string {
     media.title.english ??
     `(id:${media.id})`
   );
+}
+
+// --- キャラクター検索 ---
+
+const SEARCH_CHARACTERS_QUERY = `
+  query ($search: String!, $perPage: Int!) {
+    Page(perPage: $perPage) {
+      characters(search: $search) {
+        id
+        name { full native alternative }
+        image { large medium }
+        media(perPage: 1, sort: POPULARITY_DESC, type: ANIME) {
+          edges {
+            node {
+              id
+              idMal
+              title { native romaji english }
+              coverImage { large extraLarge }
+              seasonYear
+              countryOfOrigin
+            }
+            voiceActors(language: JAPANESE) {
+              id
+              name { full native }
+              image { large medium }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** AniList でキャラ名検索 → 主要作品 + 日本語声優を 1 クエリで返す */
+export async function searchAniListCharacters(
+  search: string,
+  perPage = 20,
+): Promise<CharacterSearchResult[]> {
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: SEARCH_CHARACTERS_QUERY,
+        variables: { search, perPage },
+      }),
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 0 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error("AniList API timeout (>8s)");
+    }
+    throw err;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `AniList API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as AniListSearchCharactersResponse;
+
+  if (data.errors && data.errors.length > 0) {
+    const message = data.errors.map((e) => e.message).join("; ");
+    throw new Error(`AniList GraphQL error: ${message}`);
+  }
+
+  const characters = data.data?.Page?.characters ?? [];
+  return characters.map(toCharacterSearchResult);
+}
+
+function toCharacterSearchResult(
+  character: AniListCharacter,
+): CharacterSearchResult {
+  const edge = character.media.edges[0];
+  const node = edge?.node ?? null;
+  const va = edge?.voiceActors?.[0] ?? null;
+
+  const characterImage =
+    character.image.large || character.image.medium || null;
+  // AniList のデフォルト画像（情報無しキャラ）を除外する
+  const safeCharacterImage =
+    characterImage && !characterImage.includes("/default.")
+      ? characterImage
+      : null;
+
+  return {
+    id: character.id,
+    name:
+      character.name.native || character.name.full || `(id:${character.id})`,
+    characterImageUrl: safeCharacterImage,
+    work: node
+      ? {
+          aniListId: node.id,
+          title:
+            node.title.native ||
+            node.title.romaji ||
+            node.title.english ||
+            `(id:${node.id})`,
+          posterUrl:
+            node.coverImage.extraLarge || node.coverImage.large || null,
+          seasonYear: node.seasonYear,
+        }
+      : null,
+    voiceActor: va
+      ? {
+          id: va.id,
+          name: va.name.native || va.name.full || `(id:${va.id})`,
+        }
+      : null,
+  };
+}
+
+const CHARACTER_DETAIL_QUERY = `
+  query ($id: Int!) {
+    Character(id: $id) {
+      id
+      name { full native alternative }
+      image { large medium }
+      description(asHtml: false)
+      age
+      gender
+      bloodType
+      dateOfBirth { year month day }
+      siteUrl
+      favourites
+      media(sort: POPULARITY_DESC, perPage: 25, type: ANIME) {
+        edges {
+          characterRole
+          node {
+            id
+            idMal
+            title { native romaji english }
+            coverImage { large extraLarge }
+            seasonYear
+            countryOfOrigin
+          }
+          voiceActors(language: JAPANESE) {
+            id
+            name { full native }
+            image { large medium }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** AniList Character 詳細を取得 (id は AniList Character ID) */
+export async function getAniListCharacter(
+  id: number,
+): Promise<AniListCharacterDetail | null> {
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: CHARACTER_DETAIL_QUERY,
+        variables: { id },
+      }),
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error("AniList API timeout (>8s)");
+    }
+    throw err;
+  }
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(
+      `AniList API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as AniListCharacterDetailResponse;
+
+  if (data.errors && data.errors.length > 0) {
+    // Character が見つからない場合 AniList は errors を返すケースがある → 呼び出し側で notFound() できるよう null
+    const notFoundError = data.errors.some((e) =>
+      /not found|does not exist/i.test(e.message),
+    );
+    if (notFoundError) return null;
+    const message = data.errors.map((e) => e.message).join("; ");
+    throw new Error(`AniList GraphQL error: ${message}`);
+  }
+
+  return data.data?.Character ?? null;
+}
+
+const MEDIA_CHARACTERS_QUERY = `
+  query ($id: Int!, $perPage: Int!) {
+    Media(id: $id) {
+      characters(sort: FAVOURITES_DESC, perPage: $perPage) {
+        edges {
+          role
+          node {
+            id
+            name { full native }
+            image { large medium }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** Media（作品）に属するキャラ一覧を取得 → 関連キャラ表示に使う */
+export async function getAniListMediaCharacters(
+  mediaId: number,
+  perPage = 12,
+): Promise<AniListRelatedCharacterEdge[]> {
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: MEDIA_CHARACTERS_QUERY,
+        variables: { id: mediaId, perPage },
+      }),
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error("AniList API timeout (>8s)");
+    }
+    throw err;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `AniList API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as AniListMediaCharactersResponse;
+  if (data.errors && data.errors.length > 0) return [];
+  return data.data?.Media?.characters?.edges ?? [];
 }

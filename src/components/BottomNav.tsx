@@ -146,6 +146,27 @@ export default function BottomNav() {
           <span className="text-[10px]">声優</span>
         </Link>
 
+        {/* キャラ */}
+        <Link
+          href="/search/characters"
+          className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 transition min-w-[40px] ${isActive("/search/characters") ? "text-white" : "text-gray-400 hover:text-white"}`}
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10h.01M15 10h.01M9 15a4 4 0 006 0"
+            />
+          </svg>
+          <span className="text-[10px]">キャラ</span>
+        </Link>
+
         {/* 診断 */}
         <Link
           href="/diagnosis"

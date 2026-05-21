@@ -81,6 +81,13 @@ export default function Navbar() {
               声優
             </Link>
 
+            <Link
+              href="/search/characters"
+              className="hover:text-white transition"
+            >
+              キャラ
+            </Link>
+
             {/* 診断 */}
             <Link
               href="/diagnosis"
@@ -170,6 +177,13 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   声優
+                </Link>
+                <Link
+                  href="/search/characters"
+                  className="block px-5 py-2 text-sm text-gray-200 hover:text-white hover:underline"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  キャラ
                 </Link>
                 <Link
                   href="/diagnosis"

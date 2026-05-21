@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { TMDbAnime, TMDbMovie, TMDbPerson } from "@/types/tmdb";
+import type { CharacterSearchResult } from "@/types/anilist";
 import { getImageUrl } from "@/lib/tmdb";
 
-type SearchMode = "anime" | "movie" | "voice-actor";
+type SearchMode = "anime" | "movie" | "voice-actor" | "character";
 
 const RECENT_KEY = "aniflex-recent-searches";
 const MAX_RECENT = 5;
@@ -53,7 +54,14 @@ function buildAllResultsHref(mode: SearchMode, q: string): string {
       return `/browse/movies?q=${enc}`;
     case "voice-actor":
       return `/voice-actors?q=${enc}`;
+    case "character":
+      return `/search/characters?q=${enc}`;
   }
+}
+
+/** キャラ結果カードのクリック遷移先: キャラ詳細ページ */
+function buildCharacterHref(c: CharacterSearchResult): string {
+  return `/characters/${c.id}`;
 }
 
 export default function SearchDropdown({ onClose }: SearchDropdownProps) {
@@ -62,6 +70,9 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
   const [animeResults, setAnimeResults] = useState<TMDbAnime[]>([]);
   const [movieResults, setMovieResults] = useState<TMDbMovie[]>([]);
   const [personResults, setPersonResults] = useState<TMDbPerson[]>([]);
+  const [characterResults, setCharacterResults] = useState<
+    CharacterSearchResult[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
@@ -90,6 +101,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
       setAnimeResults([]);
       setMovieResults([]);
       setPersonResults([]);
+      setCharacterResults([]);
       return;
     }
     fetchResults(query, mode);
@@ -127,6 +139,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
         setAnimeResults([]);
         setMovieResults([]);
         setPersonResults([]);
+        setCharacterResults([]);
         return;
       }
       // 前回の fetch を中断
@@ -142,6 +155,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
           anime: `/api/search?q=${encodeURIComponent(q)}`,
           movie: `/api/search/movies?q=${encodeURIComponent(q)}`,
           "voice-actor": `/api/voice-actors?q=${encodeURIComponent(q)}`,
+          character: `/api/search/characters?q=${encodeURIComponent(q)}`,
         };
         const res = await fetch(endpoints[currentMode], {
           signal: AbortSignal.any([
@@ -165,14 +179,22 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
           setAnimeResults((items as TMDbAnime[]).slice(0, 8));
           setMovieResults([]);
           setPersonResults([]);
+          setCharacterResults([]);
         } else if (currentMode === "movie") {
           setMovieResults((items as TMDbMovie[]).slice(0, 8));
           setAnimeResults([]);
           setPersonResults([]);
-        } else {
+          setCharacterResults([]);
+        } else if (currentMode === "voice-actor") {
           setPersonResults((items as TMDbPerson[]).slice(0, 8));
           setAnimeResults([]);
           setMovieResults([]);
+          setCharacterResults([]);
+        } else {
+          setCharacterResults((items as CharacterSearchResult[]).slice(0, 8));
+          setAnimeResults([]);
+          setMovieResults([]);
+          setPersonResults([]);
         }
       } catch (err) {
         // 中断・タイムアウトは無視（UI のチラつき防止）
@@ -180,6 +202,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
         setAnimeResults([]);
         setMovieResults([]);
         setPersonResults([]);
+        setCharacterResults([]);
         setError(err instanceof Error ? err.message : "検索に失敗しました");
       } finally {
         // この fetch が最新（=自分が controller の所有者）の場合のみローディング解除
@@ -202,6 +225,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
       setAnimeResults([]);
       setMovieResults([]);
       setPersonResults([]);
+      setCharacterResults([]);
       setLoading(false);
       return;
     }
@@ -219,9 +243,14 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
         label: m.title,
         href: `/movie/${m.id}`,
       }));
-    return personResults.map((p) => ({
-      label: p.name,
-      href: `/voice-actors/${p.id}`,
+    if (mode === "voice-actor")
+      return personResults.map((p) => ({
+        label: p.name,
+        href: `/voice-actors/${p.id}`,
+      }));
+    return characterResults.map((c) => ({
+      label: c.name,
+      href: buildCharacterHref(c),
     }));
   })();
 
@@ -268,13 +297,15 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
   const hasResults =
     animeResults.length > 0 ||
     movieResults.length > 0 ||
-    personResults.length > 0;
+    personResults.length > 0 ||
+    characterResults.length > 0;
   const showRecent = !query && recentSearches.length > 0;
 
   const TABS: { key: SearchMode; label: string; color: string }[] = [
     { key: "anime", label: "📺 アニメ", color: "border-[#E50914]" },
     { key: "movie", label: "🎬 映画", color: "border-yellow-400" },
     { key: "voice-actor", label: "🎤 声優", color: "border-[#54b9c5]" },
+    { key: "character", label: "👤 キャラ", color: "border-purple-400" },
   ];
 
   return (
@@ -363,7 +394,9 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
                 ? "タイトル、キーワードでアニメを検索"
                 : mode === "movie"
                   ? "アニメ映画タイトルで検索"
-                  : "声優・俳優名で検索（例: 花江夏樹）"
+                  : mode === "voice-actor"
+                    ? "声優・俳優名で検索（例: 花江夏樹）"
+                    : "キャラクター名で検索（例: ナルト、炭治郎）"
             }
             autoComplete="off"
             maxLength={100}
@@ -438,7 +471,9 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
                       ? "📺"
                       : r.mode === "movie"
                         ? "🎬"
-                        : "🎤"}
+                        : r.mode === "voice-actor"
+                          ? "🎤"
+                          : "👤"}
                   </span>
                 </button>
               ))}
@@ -629,6 +664,74 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
                       </div>
                       <span className="text-gray-600 text-[10px] shrink-0">
                         🎤
+                      </span>
+                    </button>
+                  );
+                })}
+
+              {mode === "character" &&
+                characterResults.map((char, idx) => {
+                  // キャラ画像優先。AniList の default 画像は lib 側で除外済みのため null の時は作品ポスターで代替
+                  const thumb = char.characterImageUrl ?? char.work?.posterUrl;
+                  return (
+                    <button
+                      key={char.id}
+                      onClick={() =>
+                        navigateToResult(buildCharacterHref(char), query)
+                      }
+                      className={`flex items-center gap-3 w-full px-3 py-2 transition text-left ${
+                        idx === focusedIndex
+                          ? "bg-[#3a3a3a]"
+                          : "hover:bg-[#2a2a2a]"
+                      }`}
+                    >
+                      <div className="relative w-12 h-16 flex-shrink-0 rounded overflow-hidden bg-gray-800">
+                        {thumb ? (
+                          <Image
+                            src={thumb}
+                            alt={char.name}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-600">
+                            <svg
+                              className="w-7 h-7"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.5}
+                                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10h.01M15 10h.01M9 15a4 4 0 006 0"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-semibold truncate">
+                          {char.name}
+                        </p>
+                        {char.work && (
+                          <p className="text-gray-400 text-xs truncate">
+                            {char.work.title}
+                            {char.work.seasonYear
+                              ? ` (${char.work.seasonYear})`
+                              : ""}
+                          </p>
+                        )}
+                        {char.voiceActor && (
+                          <p className="text-purple-300 text-xs truncate mt-0.5">
+                            CV: {char.voiceActor.name}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-gray-600 text-[10px] shrink-0">
+                        👤
                       </span>
                     </button>
                   );
