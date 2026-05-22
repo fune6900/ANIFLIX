@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * DeepL 翻訳クライアント
  *
@@ -99,6 +101,9 @@ async function callDeepL(
     body.append("text", text);
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
   let response: Response;
   try {
     response = await fetch(endpoint, {
@@ -108,10 +113,13 @@ async function callDeepL(
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: body.toString(),
+      signal: controller.signal,
     });
   } catch (err) {
     console.error("[translate] DeepL fetch error:", err);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
@@ -123,7 +131,12 @@ async function callDeepL(
     return null;
   }
 
-  return (await response.json()) as DeepLResponse;
+  try {
+    return (await response.json()) as DeepLResponse;
+  } catch (err) {
+    console.error("[translate] DeepL response parse error:", err);
+    return null;
+  }
 }
 
 // ──────────────────────────────────────────

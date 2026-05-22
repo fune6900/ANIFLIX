@@ -221,7 +221,11 @@ export default function SearchPageInput({
   const handleAllResultsClick = () => {
     const q = value.trim();
     if (!q) return;
-    router.push(`${formAction}?q=${encodeURIComponent(q)}`);
+    const params = new URLSearchParams({ q });
+    hiddenFields?.forEach(({ name, value: fieldValue }) => {
+      if (fieldValue) params.append(name, fieldValue);
+    });
+    router.push(`${formAction}?${params.toString()}`);
     closeSuggestions();
   };
 
