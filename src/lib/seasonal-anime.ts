@@ -16,6 +16,7 @@ import {
 } from "@/lib/anilist";
 import { getAnimeBySeason, searchAnime } from "@/lib/tmdb";
 import { getSeasonDateRange, type SeasonSlug } from "@/lib/seasons";
+import { stripSeasonSuffix } from "@/lib/title-strip";
 import type { TMDbAnime } from "@/types/tmdb";
 
 // ──────────────────────────────────────────
@@ -169,82 +170,6 @@ function normalizeTitle(title: string): string {
     .toLowerCase()
     .replace(/[\s　:：!！?？・,、。.「」『』()（）\-－–—~〜～]/g, "")
     .normalize("NFKC");
-}
-
-/**
- * シーズン番号やパート番号のサフィックスを末尾から剥がす。内部利用専用
- * （外部入力には流用しない）。
- *
- * 目的: AniList の「転生したらスライムだった件 第4期」を TMDb 本体の
- * 「転生したらスライムだった件」に紐付ける。TMDb は新クールの作品を独立した
- * TV エントリではなく本体作品の Season N として登録するため、サフィックス付き
- * のタイトルでは検索ヒットしない。
- *
- * 対応パターン:
- *   - 日本語: 「第4期」「4期」「シーズン4」「第2シーズン」「第N部」「パートN」
- *   - 英語: "4th Season", "Season N", "Part N", "Cour N", "The Final Season"
- *   - 副題付き: "4th Season 2-nensei-hen Ichi Gakki" 等の長いサフィックス
- *   - 複数サフィックスの連鎖（"Foo 4th Season Part 2"）
- *
- * ローマ数字末尾（"II"〜"X"）は **メインパターンがヒットして変化があった後の
- * 追加剥がし** に限定する。これは「K-On!! II」「Heaven's Feel II」「Code Geass R2」
- * のように作品名自体に II が含まれるタイトルを誤剥がししないため。
- *
- * 章サフィックス（〜編 / hen / arc）は副題が独立 TMDb 登録されている作品で
- * 一次マッチを潰すリスクが大きいので扱わない。シーズン番号系の剥がしのみで
- * 主目的（続編 → 本体への紐付け）は十分カバーできる。
- */
-const STRIP_SUFFIX_PATTERNS_MAIN: RegExp[] = [
-  // 英語: "Nth Season" 以降のあらゆる尾部（副題まで含めて吸収）
-  /[\s　]\d+(st|nd|rd|th)?[\s　]+season([\s　:：-].*)?$/i,
-  // 英語: "Season N"・"Season N Part M"
-  /[\s　]season[\s　]+\d+([\s　:：-].*)?$/i,
-  // 英語: "The Final Season"・"Final Season Part 2"
-  /[\s　](the[\s　]+)?final[\s　]+season([\s　:：-].*)?$/i,
-  // 英語: "Part N" 以降の副題も吸収
-  /[\s　]part[\s　]+\d+([\s　:：-].*)?$/i,
-  // 英語: "Cour N"・"Nth Cour"
-  /[\s　]cour[\s　]+\d+([\s　:：-].*)?$/i,
-  /[\s　]\d+(st|nd|rd|th)[\s　]+cour([\s　:：-].*)?$/i,
-  // 日本語: 第N期 / N期 / 第Nシーズン / シーズンN
-  /[\s　]*第\s*\d+\s*期\s*$/,
-  /[\s　]+\d+\s*期\s*$/,
-  /[\s　]*第\s*\d+\s*シーズン\s*$/i,
-  /[\s　]*シーズン\s*\d+\s*$/i,
-  // 日本語: 第N部 / Nパート
-  /[\s　]*第\s*\d+\s*部\s*$/,
-  /[\s　]*パート\s*\d+\s*$/i,
-];
-
-// ローマ数字末尾は メインパターンヒット後の追加剥がし にのみ適用する
-// （単独適用すると "K-On!! II" を "K-On!!" に誤剥がしする）
-const STRIP_ROMAN_SUFFIX = /[\s　]+(II|III|IV|V|VI|VII|VIII|IX|X)\s*$/;
-
-function stripSeasonSuffix(title: string): string {
-  let curr = title;
-
-  // 1) メインパターンを連鎖的に剥がす（変化が止まれば終了）
-  let mainStripped = false;
-  while (true) {
-    const before = curr;
-    for (const pattern of STRIP_SUFFIX_PATTERNS_MAIN) {
-      curr = curr.replace(pattern, "").trim();
-    }
-    if (curr === before) break;
-    mainStripped = true;
-  }
-
-  // 2) メインパターンで何か剥がした場合のみ、追加でローマ数字末尾も剥がす
-  //    （"Foo 4th Season II" → メインで "Foo II" → 追加で "Foo"）
-  if (mainStripped) {
-    while (true) {
-      const before = curr;
-      curr = curr.replace(STRIP_ROMAN_SUFFIX, "").trim();
-      if (curr === before) break;
-    }
-  }
-
-  return curr || title; // 完全に消えてしまったら元タイトルを返す（安全弁）
 }
 
 /** 比較用キー: フル正規化 + サフィックス剥がし正規化のセットを返す（AniList 候補側で使用） */

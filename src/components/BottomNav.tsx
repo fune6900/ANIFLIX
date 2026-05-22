@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { getRecentSeasons } from "@/lib/seasons";
-
-const currentSeason = getRecentSeasons(1)[0];
 
 export default function BottomNav() {
   const router = useRouter();
@@ -104,27 +101,6 @@ export default function BottomNav() {
           <span className="text-[10px]">映画</span>
         </Link>
 
-        {/* シーズン */}
-        <Link
-          href={currentSeason.href}
-          className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 transition min-w-[40px] ${isActive("/browse/season") ? "text-white" : "text-gray-400 hover:text-white"}`}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <span className="text-[10px]">シーズン</span>
-        </Link>
-
         {/* 声優 */}
         <Link
           href="/voice-actors"
@@ -144,48 +120,6 @@ export default function BottomNav() {
             />
           </svg>
           <span className="text-[10px]">声優</span>
-        </Link>
-
-        {/* キャラ */}
-        <Link
-          href="/search/characters"
-          className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 transition min-w-[40px] ${isActive("/search/characters") ? "text-white" : "text-gray-400 hover:text-white"}`}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10h.01M15 10h.01M9 15a4 4 0 006 0"
-            />
-          </svg>
-          <span className="text-[10px]">キャラ</span>
-        </Link>
-
-        {/* 診断 */}
-        <Link
-          href="/diagnosis"
-          className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 transition min-w-[40px] ${isActive("/diagnosis") ? "text-[#E50914]" : "text-gray-400 hover:text-[#E50914]"}`}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-            />
-          </svg>
-          <span className="text-[10px] font-bold">診断</span>
         </Link>
       </div>
     </nav>

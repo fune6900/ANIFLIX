@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isJapaneseAnimeMovie, searchMovie } from "@/lib/tmdb";
+import { getSearchTitleVariants } from "@/lib/title-strip";
+import type { TMDbMovie } from "@/types/tmdb";
 
 function sanitizeQuery(raw: string): string {
   return raw
@@ -35,11 +37,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const data = await searchMovie(query);
-    // 日本のアニメ映画に厳密に絞り込む（実写・洋画の混入を排除）
-    const results = data.results.filter(isJapaneseAnimeMovie);
+    const variants = getSearchTitleVariants(query);
+    const allResults: TMDbMovie[] = [];
+    const seenIds = new Set<number>();
+
+    for (const variant of variants) {
+      const data = await searchMovie(variant);
+      for (const item of data.results.filter(isJapaneseAnimeMovie)) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          allResults.push(item);
+        }
+      }
+    }
+
     return NextResponse.json(
-      { ...data, results, total_results: results.length },
+      { results: allResults, total_results: allResults.length },
       { headers: SECURITY_HEADERS },
     );
   } catch (err) {

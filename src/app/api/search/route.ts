@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isJapaneseAnimeTV, searchAnime } from "@/lib/tmdb";
+import { getSearchTitleVariants } from "@/lib/title-strip";
+import type { TMDbAnime } from "@/types/tmdb";
 
 // 入力サニタイズ: HTMLタグ・危険文字除去、長さ制限
 function sanitizeQuery(raw: string): string {
@@ -40,13 +42,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const data = await searchAnime(query);
+    const variants = getSearchTitleVariants(query);
+    const allResults: TMDbAnime[] = [];
+    const seenIds = new Set<number>();
 
-    // 日本アニメに厳密に絞り込む（実写ドラマ・洋画の混入を排除）
-    const results = data.results.filter(isJapaneseAnimeTV);
+    for (const variant of variants) {
+      const data = await searchAnime(variant);
+      for (const item of data.results.filter(isJapaneseAnimeTV)) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          allResults.push(item);
+        }
+      }
+    }
 
     return NextResponse.json(
-      { ...data, results, total_results: results.length },
+      {
+        results: allResults,
+        total_results: allResults.length,
+        page: 1,
+        total_pages: 1,
+      },
       { headers: securityHeaders },
     );
   } catch (error) {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAniListCharacter, getAniListMediaCharacters } from "@/lib/anilist";
 import { searchAnnictCharacterByName } from "@/lib/annict";
+import { translateManyToJa } from "@/lib/translate";
 import type {
   AniListCharacterDetail,
   AniListCharacterDetailMediaEdge,
@@ -14,11 +15,17 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  MAIN: "主役",
-  SUPPORTING: "助演",
-  BACKGROUND: "脇役",
+const GENDER_MAP: Record<string, string> = {
+  Male: "男性",
+  Female: "女性",
+  "Non-binary": "ノンバイナリー",
+  Other: "その他",
 };
+
+function normalizeGender(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return GENDER_MAP[raw] ?? raw;
+}
 
 function pickName(detail: AniListCharacterDetail): string {
   return detail.name.native || detail.name.full || `(id:${detail.id})`;
@@ -77,7 +84,6 @@ function MediaEdgeCard({ edge }: { edge: AniListCharacterDetailMediaEdge }) {
   const title = workTitle(edge);
   const poster = edge.node.coverImage.extraLarge || edge.node.coverImage.large;
   const va = edge.voiceActors[0];
-  const role = edge.characterRole ? ROLE_LABEL[edge.characterRole] : null;
 
   return (
     <div className="group">
@@ -102,12 +108,6 @@ function MediaEdgeCard({ edge }: { edge: AniListCharacterDetailMediaEdge }) {
         )}
 
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
-
-        {role && (
-          <div className="absolute top-1.5 left-1.5 bg-[#E50914]/80 rounded px-1.5 py-0.5">
-            <span className="text-white text-[10px] font-bold">{role}</span>
-          </div>
-        )}
 
         <div className="absolute bottom-0 left-0 right-0 p-2">
           <p className="text-white text-[11px] font-semibold truncate">
@@ -134,7 +134,6 @@ function RelatedCharacterCard({ edge }: { edge: AniListRelatedCharacterEdge }) {
   const img = edge.node.image.large || edge.node.image.medium;
   const safeImg = img && !img.includes("/default.") ? img : null;
   const name = edge.node.name.native || edge.node.name.full || "?";
-  const role = edge.role ? ROLE_LABEL[edge.role] : null;
 
   return (
     <Link href={`/characters/${edge.node.id}`} className="group block">
@@ -150,11 +149,6 @@ function RelatedCharacterCard({ edge }: { edge: AniListRelatedCharacterEdge }) {
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
             No Image
-          </div>
-        )}
-        {role && (
-          <div className="absolute top-1.5 left-1.5 bg-gray-900/80 rounded px-1.5 py-0.5">
-            <span className="text-gray-200 text-[10px] font-bold">{role}</span>
           </div>
         )}
       </div>
@@ -211,7 +205,31 @@ export default async function CharacterDetailPage({ params }: PageProps) {
   const aniListBirthday = formatBirthday(detail.dateOfBirth);
   const aniListDescription = sanitizeText(detail.description);
 
-  // Annict 値を優先、無ければ AniList で埋める
+  // Annict 値を優先、無ければ AniList で埋める（翻訳前の原文フィールド）
+  const rawGender = normalizeGender(detail.gender || "");
+  const rawHeight = annict?.height || "";
+  const rawWeight = annict?.weight || "";
+  const rawNationality = annict?.nationality || "";
+  const rawDescription =
+    sanitizeText(annict?.description) || aniListDescription;
+  const rawAliases = (detail.name.alternative ?? []).filter(
+    (a) => a && a.trim().length > 0,
+  );
+
+  // 翻訳対象テキストをまとめて DeepL へ送る
+  // 順序: [height, weight, nationality, description, ...aliases]
+  // 性別は GENDER_MAP で静的マッピング済みのため翻訳 API には渡さない
+  const textsToTranslate = [
+    rawHeight,
+    rawWeight,
+    rawNationality,
+    rawDescription,
+    ...rawAliases,
+  ];
+  const translated = await translateManyToJa(textsToTranslate);
+  const [tHeight, tWeight, tNationality, tDescription, ...tAliases] =
+    translated;
+
   const fields = {
     name: display,
     nameKana: annict?.nameKana || "",
@@ -221,19 +239,17 @@ export default async function CharacterDetailPage({ params }: PageProps) {
     birthday: annict?.birthday || aniListBirthday || "",
     age: annict?.age || detail.age || "",
     bloodType: annict?.bloodType || detail.bloodType || "",
-    height: annict?.height || "",
-    weight: annict?.weight || "",
-    nationality: annict?.nationality || "",
+    height: tHeight || "",
+    weight: tWeight || "",
+    nationality: tNationality || "",
     occupation: annict?.occupation || "",
-    description: sanitizeText(annict?.description) || aniListDescription,
+    description: tDescription || "",
     descriptionSource: annict?.descriptionSource || "",
-    gender: detail.gender || "",
+    gender: rawGender || "",
     favourites: detail.favourites,
   };
 
-  const aliases = (detail.name.alternative ?? []).filter(
-    (a) => a && a.trim().length > 0,
-  );
+  const aliases = tAliases;
   const edges = detail.media.edges;
   const cvFromTopWork = edges[0]?.voiceActors[0] ?? null;
 
