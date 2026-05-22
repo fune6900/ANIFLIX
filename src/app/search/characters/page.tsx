@@ -2,6 +2,7 @@ import Link from "next/link";
 import { searchAniListCharacters } from "@/lib/anilist";
 import { searchAnnictCharacterByName } from "@/lib/annict";
 import type { CharacterSearchResult } from "@/types/anilist";
+import SearchPageInput from "@/components/SearchPageInput";
 
 function sanitize(raw: string): string {
   return raw
@@ -50,38 +51,11 @@ export default async function CharacterSearchPage({ searchParams }: PageProps) {
           )}
         </div>
 
-        <form method="GET" className="mb-10 max-w-xl">
-          <div className="flex items-center border border-gray-600 bg-[#1a1a1a] rounded overflow-hidden focus-within:border-white transition-colors">
-            <svg
-              className="w-5 h-5 text-gray-400 ml-4 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            <input
-              type="search"
-              name="q"
-              defaultValue={query}
-              placeholder="キャラクター名で検索（例: ナルト、炭治郎）"
-              maxLength={100}
-              autoComplete="off"
-              className="flex-1 bg-transparent text-white px-4 py-3 text-sm outline-none placeholder-gray-500"
-            />
-            <button
-              type="submit"
-              className="bg-[#E50914] text-white px-5 py-3 text-sm font-semibold hover:bg-red-700 transition"
-            >
-              検索
-            </button>
-          </div>
-        </form>
+        <SearchPageInput
+          mode="character"
+          defaultValue={query}
+          formAction="/search/characters"
+        />
 
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
