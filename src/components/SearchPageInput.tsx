@@ -103,9 +103,23 @@ function getItemScore(item: SuggestionItem): number {
 }
 
 /**
+ * 画像 URL を src に渡しても安全か検証する。
+ * `javascript:` / `data:` 等のスキームを弾いて XSS を防止する。
+ */
+function isSafeImageUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * サジェストアイテムの画像 src を返す。
  * - tv / movie / person: TMDb 画像 → getImageUrl() を通す
- * - character: AniList の絶対 URL をそのまま返す
+ * - character: AniList の絶対 URL は安全性を検証してから返す
  */
 function getItemImageSrc(item: SuggestionItem): string | null {
   switch (item.kind) {
@@ -119,8 +133,50 @@ function getItemImageSrc(item: SuggestionItem): string | null {
         ? getImageUrl(item.data.profile_path, "w185")
         : null;
     case "character":
-      return item.data.characterImageUrl;
+      return isSafeImageUrl(item.data.characterImageUrl)
+        ? item.data.characterImageUrl
+        : null;
   }
+}
+
+/**
+ * 外部レスポンスの最低限の型ガード。
+ * 数値 id と文字列名（name / title）が揃っているレコードのみ通す。
+ */
+function isAnimeItem(value: unknown): value is TMDbAnime {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
+}
+
+function isMovieItem(value: unknown): value is TMDbMovie {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { title?: unknown }).title === "string"
+  );
+}
+
+function isPersonItem(value: unknown): value is TMDbPerson {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
+}
+
+function isCharacterItem(value: unknown): value is CharacterSearchResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
 }
 
 export default function SearchPageInput({
@@ -232,25 +288,25 @@ export default function SearchPageInput({
 
         let mapped: SuggestionItem[];
         if (mode === "tv") {
-          mapped = (items as TMDbAnime[]).slice(0, 8).map((a) => ({
-            kind: "tv" as const,
-            data: a,
-          }));
+          mapped = items
+            .filter(isAnimeItem)
+            .slice(0, 8)
+            .map((a) => ({ kind: "tv" as const, data: a }));
         } else if (mode === "movie") {
-          mapped = (items as TMDbMovie[]).slice(0, 8).map((m) => ({
-            kind: "movie" as const,
-            data: m,
-          }));
+          mapped = items
+            .filter(isMovieItem)
+            .slice(0, 8)
+            .map((m) => ({ kind: "movie" as const, data: m }));
         } else if (mode === "person") {
-          mapped = (items as TMDbPerson[]).slice(0, 8).map((p) => ({
-            kind: "person" as const,
-            data: p,
-          }));
+          mapped = items
+            .filter(isPersonItem)
+            .slice(0, 8)
+            .map((p) => ({ kind: "person" as const, data: p }));
         } else {
-          mapped = (items as CharacterSearchResult[]).slice(0, 8).map((c) => ({
-            kind: "character" as const,
-            data: c,
-          }));
+          mapped = items
+            .filter(isCharacterItem)
+            .slice(0, 8)
+            .map((c) => ({ kind: "character" as const, data: c }));
         }
 
         setSuggestions(mapped);
