@@ -246,7 +246,6 @@ export default async function CharacterDetailPage({ params }: PageProps) {
     description: tDescription || "",
     descriptionSource: annict?.descriptionSource || "",
     gender: rawGender || "",
-    favourites: detail.favourites,
   };
 
   const aliases = tAliases;
@@ -293,15 +292,6 @@ export default async function CharacterDetailPage({ params }: PageProps) {
             )}
             {hasValue(fields.nameEn) && fields.nameEn !== fields.name && (
               <p className="text-gray-500 text-sm">{fields.nameEn}</p>
-            )}
-
-            {/* お気に入り */}
-            {fields.favourites != null && fields.favourites > 0 && (
-              <div className="mt-3">
-                <span className="bg-pink-900/40 text-pink-300 text-xs px-2.5 py-1 rounded-full">
-                  ♥ {fields.favourites.toLocaleString()}
-                </span>
-              </div>
             )}
 
             {/* 詳細フィールド */}

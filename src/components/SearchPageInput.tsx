@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useId } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
+import type { TMDbAnime, TMDbMovie, TMDbPerson } from "@/types/tmdb";
+import type { CharacterSearchResult } from "@/types/anilist";
 import { getImageUrl } from "@/lib/tmdb";
 
 interface HiddenField {
@@ -12,11 +13,11 @@ interface HiddenField {
 }
 
 interface SearchPageInputProps {
-  /** "tv" → /api/search、"movie" → /api/search/movies */
-  mode: "tv" | "movie";
+  /** "tv" → /api/search、"movie" → /api/search/movies、"person" → /api/voice-actors、"character" → /api/search/characters */
+  mode: "tv" | "movie" | "person" | "character";
   /** 初期値（URL のクエリパラメータから渡される） */
   defaultValue?: string;
-  /** フォーム送信先 URL（"/search" or "/browse/movies"） */
+  /** フォーム送信先 URL（"/search" or "/browse/movies" or "/voice-actors" or "/search/characters"） */
   formAction: string;
   /** hidden input として埋め込む追加フィールド（フィルター値の引き継ぎ用） */
   hiddenFields?: HiddenField[];
@@ -24,35 +25,158 @@ interface SearchPageInputProps {
 
 type SuggestionItem =
   | { kind: "tv"; data: TMDbAnime }
-  | { kind: "movie"; data: TMDbMovie };
+  | { kind: "movie"; data: TMDbMovie }
+  | { kind: "person"; data: TMDbPerson }
+  | { kind: "character"; data: CharacterSearchResult };
 
 function buildDetailHref(item: SuggestionItem): string {
-  if (item.kind === "tv") return `/anime/${item.data.id}`;
-  return `/movie/${item.data.id}`;
+  switch (item.kind) {
+    case "tv":
+      return `/anime/${item.data.id}`;
+    case "movie":
+      return `/movie/${item.data.id}`;
+    case "person":
+      return `/voice-actors/${item.data.id}`;
+    case "character":
+      return `/characters/${item.data.id}`;
+  }
 }
 
 function getItemTitle(item: SuggestionItem): string {
-  if (item.kind === "tv") return item.data.name;
-  return item.data.title;
+  switch (item.kind) {
+    case "tv":
+      return item.data.name;
+    case "movie":
+      return item.data.title;
+    case "person":
+      return item.data.name;
+    case "character":
+      return item.data.name;
+  }
 }
 
 function getItemSubtitle(item: SuggestionItem): string {
-  if (item.kind === "tv") return item.data.original_name;
-  return item.data.original_title;
+  switch (item.kind) {
+    case "tv":
+      return item.data.original_name;
+    case "movie":
+      return item.data.original_title;
+    case "person":
+      return (
+        item.data.known_for
+          ?.map((k) => k.name ?? k.title)
+          .filter((t): t is string => Boolean(t))
+          .slice(0, 2)
+          .join(" / ") ?? ""
+      );
+    case "character":
+      return item.data.work?.title ?? item.data.voiceActor?.name ?? "";
+  }
 }
 
 function getItemYear(item: SuggestionItem): string {
-  const raw =
-    item.kind === "tv" ? item.data.first_air_date : item.data.release_date;
-  return raw ? raw.split("-")[0] : "";
+  switch (item.kind) {
+    case "tv": {
+      const raw = item.data.first_air_date;
+      return raw ? raw.split("-")[0] : "";
+    }
+    case "movie": {
+      const raw = item.data.release_date;
+      return raw ? raw.split("-")[0] : "";
+    }
+    case "person":
+      return "";
+    case "character":
+      return item.data.work?.seasonYear?.toString() ?? "";
+  }
 }
 
 function getItemScore(item: SuggestionItem): number {
-  return item.data.vote_average;
+  switch (item.kind) {
+    case "tv":
+    case "movie":
+      return item.data.vote_average;
+    case "person":
+    case "character":
+      return 0;
+  }
 }
 
-function getItemPosterPath(item: SuggestionItem): string | null {
-  return item.data.poster_path;
+/**
+ * 画像 URL を src に渡しても安全か検証する。
+ * `javascript:` / `data:` 等のスキームを弾いて XSS を防止する。
+ */
+function isSafeImageUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * サジェストアイテムの画像 src を返す。
+ * - tv / movie / person: TMDb 画像 → getImageUrl() を通す
+ * - character: AniList の絶対 URL は安全性を検証してから返す
+ */
+function getItemImageSrc(item: SuggestionItem): string | null {
+  switch (item.kind) {
+    case "tv":
+    case "movie":
+      return item.data.poster_path
+        ? getImageUrl(item.data.poster_path, "w185")
+        : null;
+    case "person":
+      return item.data.profile_path
+        ? getImageUrl(item.data.profile_path, "w185")
+        : null;
+    case "character":
+      return isSafeImageUrl(item.data.characterImageUrl)
+        ? item.data.characterImageUrl
+        : null;
+  }
+}
+
+/**
+ * 外部レスポンスの最低限の型ガード。
+ * 数値 id と文字列名（name / title）が揃っているレコードのみ通す。
+ */
+function isAnimeItem(value: unknown): value is TMDbAnime {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
+}
+
+function isMovieItem(value: unknown): value is TMDbMovie {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { title?: unknown }).title === "string"
+  );
+}
+
+function isPersonItem(value: unknown): value is TMDbPerson {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
+}
+
+function isCharacterItem(value: unknown): value is CharacterSearchResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "number" &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
 }
 
 export default function SearchPageInput({
@@ -77,11 +201,32 @@ export default function SearchPageInput({
   const listId = useId();
   const inputId = useId();
 
-  const endpoint = mode === "tv" ? "/api/search" : "/api/search/movies";
+  const endpoint =
+    mode === "tv"
+      ? "/api/search"
+      : mode === "movie"
+        ? "/api/search/movies"
+        : mode === "person"
+          ? "/api/voice-actors"
+          : "/api/search/characters";
+
   const placeholder =
     mode === "tv"
       ? "タイトル、キーワードで検索"
-      : "映画タイトル、キーワードで検索";
+      : mode === "movie"
+        ? "映画タイトル、キーワードで検索"
+        : mode === "person"
+          ? "声優・俳優名で検索（例: 花江夏樹、悠木碧）"
+          : "キャラクター名で検索（例: ナルト、炭治郎）";
+
+  const listboxLabel =
+    mode === "tv"
+      ? "アニメの候補"
+      : mode === "movie"
+        ? "映画の候補"
+        : mode === "person"
+          ? "声優の候補"
+          : "キャラクターの候補";
 
   const closeSuggestions = useCallback(() => {
     setOpen(false);
@@ -141,16 +286,28 @@ export default function SearchPageInput({
           ? data.results
           : [];
 
-        const mapped: SuggestionItem[] =
-          mode === "tv"
-            ? (items as TMDbAnime[]).slice(0, 8).map((a) => ({
-                kind: "tv" as const,
-                data: a,
-              }))
-            : (items as TMDbMovie[]).slice(0, 8).map((m) => ({
-                kind: "movie" as const,
-                data: m,
-              }));
+        let mapped: SuggestionItem[];
+        if (mode === "tv") {
+          mapped = items
+            .filter(isAnimeItem)
+            .slice(0, 8)
+            .map((a) => ({ kind: "tv" as const, data: a }));
+        } else if (mode === "movie") {
+          mapped = items
+            .filter(isMovieItem)
+            .slice(0, 8)
+            .map((m) => ({ kind: "movie" as const, data: m }));
+        } else if (mode === "person") {
+          mapped = items
+            .filter(isPersonItem)
+            .slice(0, 8)
+            .map((p) => ({ kind: "person" as const, data: p }));
+        } else {
+          mapped = items
+            .filter(isCharacterItem)
+            .slice(0, 8)
+            .map((c) => ({ kind: "character" as const, data: c }));
+        }
 
         setSuggestions(mapped);
         setOpen(mapped.length > 0 || q.trim().length > 0);
@@ -316,7 +473,7 @@ export default function SearchPageInput({
             ref={listRef}
             id={listId}
             role="listbox"
-            aria-label={mode === "tv" ? "アニメの候補" : "映画の候補"}
+            aria-label={listboxLabel}
             className="max-h-[60vh] overflow-y-auto"
           >
             {suggestions.map((item, idx) => {
@@ -324,7 +481,7 @@ export default function SearchPageInput({
               const subtitle = getItemSubtitle(item);
               const year = getItemYear(item);
               const score = getItemScore(item);
-              const posterPath = getItemPosterPath(item);
+              const imageSrc = getItemImageSrc(item);
               const isActive = idx === activeIndex;
 
               return (
@@ -342,15 +499,25 @@ export default function SearchPageInput({
                     }`}
                   >
                     <div className="relative w-10 h-14 flex-shrink-0 rounded overflow-hidden bg-gray-800">
-                      {posterPath ? (
-                        <Image
-                          src={getImageUrl(posterPath, "w185")}
-                          alt={title}
-                          fill
-                          sizes="40px"
-                          className="object-cover"
-                          unoptimized
-                        />
+                      {imageSrc ? (
+                        item.kind === "character" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={imageSrc}
+                            alt={title}
+                            className="w-full h-full object-cover object-top"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Image
+                            src={imageSrc}
+                            alt={title}
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        )
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-600">
                           <svg
