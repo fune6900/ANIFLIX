@@ -43,13 +43,9 @@ export default async function CharacterSearchPage({ searchParams }: PageProps) {
           <h1 className="text-white text-2xl font-bold mb-1">
             キャラクターを検索
           </h1>
-          {results.length > 0 ? (
+          {results.length > 0 && (
             <p className="text-gray-400 text-sm">
               {results.length.toLocaleString()}件
-            </p>
-          ) : (
-            <p className="text-gray-500 text-sm">
-              キャラ名から作品と声優を逆引きできる
             </p>
           )}
         </div>
@@ -129,9 +125,6 @@ export default async function CharacterSearchPage({ searchParams }: PageProps) {
             </svg>
             <p className="text-gray-400 mb-2">
               キャラクター名を入力してください
-            </p>
-            <p className="text-gray-600 text-sm">
-              AniList のキャラデータベースから検索する
             </p>
           </div>
         )}

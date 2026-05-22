@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { isJapaneseAnimeTV, searchAnime } from "@/lib/tmdb";
+import { getSearchTitleVariants, stripSeasonSuffix } from "@/lib/title-strip";
 
 interface PageProps {
   searchParams: Promise<{ title?: string; aniListId?: string }>;
@@ -21,18 +22,24 @@ export default async function WorksResolvePage({ searchParams }: PageProps) {
     redirect("/");
   }
 
-  let topId: number | null = null;
-  try {
-    const data = await searchAnime(title);
-    const top = data.results.find(isJapaneseAnimeTV) ?? data.results[0];
-    topId = top?.id ?? null;
-  } catch (error) {
-    console.error("[/works/resolve] TMDb error:", error);
+  const variants = getSearchTitleVariants(title);
+
+  let targetId: number | null = null;
+  for (const variant of variants) {
+    try {
+      const data = await searchAnime(variant);
+      const filtered = data.results.filter(isJapaneseAnimeTV);
+      if (filtered.length > 0) {
+        targetId = filtered[0].id;
+        break;
+      }
+    } catch (error) {
+      console.error("[/works/resolve] TMDb error:", error);
+    }
   }
 
-  if (topId !== null) {
-    redirect(`/anime/${topId}`);
+  if (targetId !== null) {
+    redirect(`/anime/${targetId}`);
   }
-
-  redirect(`/search?q=${encodeURIComponent(title)}`);
+  redirect(`/search?q=${encodeURIComponent(stripSeasonSuffix(title))}`);
 }
