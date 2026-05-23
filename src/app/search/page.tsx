@@ -1,10 +1,6 @@
 import Link from "next/link";
-import {
-  searchAnime,
-  discoverAnime,
-  getAnimeByKeywords,
-  isJapaneseAnimeTV,
-} from "@/lib/tmdb";
+import { discoverAnime, getAnimeByKeywords } from "@/lib/tmdb";
+import { searchAnimeKeyword } from "@/lib/anime-search";
 import type { TMDbAnime } from "@/types/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
 import {
@@ -196,13 +192,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       error = "検索中にエラーが発生しました";
     }
   } else if (query) {
-    // キーワード検索モード → search/tv（アニメ以外を除外）
+    // キーワード検索モード: 揺らぎ吸収 + AniList フォールバック
+    // 「転生したらスライムだった件 4期」のようなシーズン付き入力もベース作品にヒットさせる
     try {
-      const data = await searchAnime(query);
-      const filtered = data.results.filter(isJapaneseAnimeTV);
-      results = filtered;
-      totalResults = filtered.length;
-      totalPages = Math.min(data.total_pages, 500);
+      const data = await searchAnimeKeyword(query, currentPage);
+      results = data.results;
+      totalResults = data.totalResults;
+      totalPages = Math.min(data.totalPages, 500);
     } catch {
       error = "検索中にエラーが発生しました";
     }

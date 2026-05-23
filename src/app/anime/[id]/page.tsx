@@ -21,6 +21,7 @@ import type {
 import AnimeHeroTrailer from "@/components/AnimeHeroTrailer";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
+import RelatedCharacters from "@/components/RelatedCharacters";
 import SeasonEpisodes from "@/components/SeasonEpisodes";
 import SeasonTimeline from "@/components/SeasonTimeline";
 import WatchProviders, {
@@ -640,6 +641,13 @@ export default async function AnimeDetailPage({
               </div>
             </section>
           )}
+
+          {/* 関連キャラクター（AniList 経由・クリックで /characters/[id] へ） */}
+          <RelatedCharacters
+            title={anime.name}
+            originalTitle={anime.original_name}
+            mediaType="ANIME"
+          />
 
           {/* ヒストリー（シリーズ年表）*/}
           {anime.seasons &&

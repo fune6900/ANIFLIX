@@ -141,3 +141,81 @@ export interface CharacterSearchResult {
     name: string;
   } | null;
 }
+
+// --- Media タイトル検索（フォールバック用 / 詳細ページの AniList ID 解決用） ---
+
+export type AniListMediaType = "ANIME" | "MOVIE";
+
+export interface AniListMediaSearchNode {
+  id: number;
+  idMal: number | null;
+  format: string | null;
+  popularity: number;
+  countryOfOrigin: string | null;
+  isAdult: boolean;
+  synonyms: string[];
+  title: {
+    native: string | null;
+    romaji: string | null;
+    english: string | null;
+  };
+}
+
+export interface AniListMediaSearchResponse {
+  data?: {
+    Page?: {
+      media: AniListMediaSearchNode[];
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+// --- Staff（声優）→ 演じたキャラ ---
+
+export interface AniListStaffCharacterMediaNode {
+  id: number;
+  title: {
+    native: string | null;
+    romaji: string | null;
+    english: string | null;
+  };
+  coverImage: {
+    large: string | null;
+    extraLarge: string | null;
+  };
+  seasonYear: number | null;
+  popularity: number;
+}
+
+export interface AniListStaffCharacterNode {
+  id: number;
+  name: {
+    full: string | null;
+    native: string | null;
+  };
+  image: AniListCharacterImage;
+}
+
+export interface AniListStaffCharacterEdge {
+  role: string | null;
+  node: AniListStaffCharacterNode;
+  media: AniListStaffCharacterMediaNode[];
+}
+
+export interface AniListStaffSearchResponse {
+  data?: {
+    Page?: {
+      staff: Array<{
+        id: number;
+        name: {
+          full: string | null;
+          native: string | null;
+        };
+        characters?: {
+          edges: AniListStaffCharacterEdge[];
+        } | null;
+      }>;
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}

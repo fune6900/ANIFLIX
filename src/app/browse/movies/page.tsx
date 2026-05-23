@@ -1,11 +1,10 @@
 import Link from "next/link";
 import {
-  searchMovie,
   discoverAnimeMovie,
   getAnimeMovieByKeywords,
   getAnimeMovies,
-  isJapaneseAnimeMovie,
 } from "@/lib/tmdb";
+import { searchMovieKeyword } from "@/lib/anime-search";
 import type { TMDbMovie } from "@/types/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
 import MovieCard from "@/components/MovieCard";
@@ -171,12 +170,12 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
       error = "検索中にエラーが発生しました";
     }
   } else if (query) {
+    // キーワード検索: 揺らぎ吸収 + AniList フォールバック
     try {
-      const data = await searchMovie(query);
-      const filtered = data.results.filter(isJapaneseAnimeMovie);
-      results = filtered;
-      totalResults = filtered.length;
-      totalPages = Math.min(data.total_pages, 500);
+      const data = await searchMovieKeyword(query);
+      results = data.results;
+      totalResults = data.totalResults;
+      totalPages = Math.min(data.totalPages, 500);
     } catch {
       error = "検索中にエラーが発生しました";
     }
