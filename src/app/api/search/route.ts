@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isJapaneseAnimeTV, searchAnime } from "@/lib/tmdb";
-import { getSearchTitleVariants } from "@/lib/title-strip";
-import type { TMDbAnime } from "@/types/tmdb";
+import { searchAnimeKeyword } from "@/lib/anime-search";
 
 // 入力サニタイズ: HTMLタグ・危険文字除去、長さ制限
 function sanitizeQuery(raw: string): string {
@@ -13,63 +11,48 @@ function sanitizeQuery(raw: string): string {
     .slice(0, 100); // 最大100文字
 }
 
-export async function GET(request: NextRequest) {
-  // セキュリティヘッダー
-  const securityHeaders = {
-    "X-Content-Type-Options": "nosniff",
-    "Cache-Control": "no-store, no-cache",
-    "X-Frame-Options": "DENY",
-  };
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "Cache-Control": "no-store, no-cache",
+  "X-Frame-Options": "DENY",
+};
 
+export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const rawQuery = searchParams.get("q") ?? "";
 
   if (!rawQuery) {
     return NextResponse.json(
       { results: [], total_results: 0, page: 1, total_pages: 0 },
-      { headers: securityHeaders },
+      { headers: SECURITY_HEADERS },
     );
   }
 
   const query = sanitizeQuery(rawQuery);
-
-  // サニタイズ後が空、または1文字未満は弾く
   if (query.length < 1) {
     return NextResponse.json(
       { results: [], total_results: 0, page: 1, total_pages: 0 },
-      { headers: securityHeaders },
+      { headers: SECURITY_HEADERS },
     );
   }
 
   try {
-    const variants = getSearchTitleVariants(query);
-    const allResults: TMDbAnime[] = [];
-    const seenIds = new Set<number>();
-
-    for (const variant of variants) {
-      const data = await searchAnime(variant);
-      for (const item of data.results.filter(isJapaneseAnimeTV)) {
-        if (!seenIds.has(item.id)) {
-          seenIds.add(item.id);
-          allResults.push(item);
-        }
-      }
-    }
-
+    // 揺らぎ吸収（getSearchTitleVariants）+ AniList フォールバックで部分一致を強化
+    const data = await searchAnimeKeyword(query, 1);
     return NextResponse.json(
       {
-        results: allResults,
-        total_results: allResults.length,
+        results: data.results,
+        total_results: data.totalResults,
         page: 1,
-        total_pages: 1,
+        total_pages: data.totalPages,
       },
-      { headers: securityHeaders },
+      { headers: SECURITY_HEADERS },
     );
   } catch (error) {
     console.error("Search error:", error);
     return NextResponse.json(
       { error: "検索に失敗しました" },
-      { status: 500, headers: securityHeaders },
+      { status: 500, headers: SECURITY_HEADERS },
     );
   }
 }

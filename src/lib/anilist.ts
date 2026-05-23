@@ -8,8 +8,13 @@ import type {
   AniListCharacterDetail,
   AniListCharacterDetailResponse,
   AniListMediaCharactersResponse,
+  AniListMediaSearchNode,
+  AniListMediaSearchResponse,
+  AniListMediaType,
   AniListRelatedCharacterEdge,
   AniListSearchCharactersResponse,
+  AniListStaffCharacterEdge,
+  AniListStaffSearchResponse,
   CharacterSearchResult,
 } from "@/types/anilist";
 
@@ -418,4 +423,199 @@ export async function getAniListMediaCharacters(
   const data = (await response.json()) as AniListMediaCharactersResponse;
   if (data.errors && data.errors.length > 0) return [];
   return data.data?.Media?.characters?.edges ?? [];
+}
+
+// --- Media タイトル検索（TMDb 名 → AniList ID 解決、TMDb 検索のフォールバック） ---
+
+const MEDIA_SEARCH_QUERY = `
+  query ($search: String!, $perPage: Int!, $format_in: [MediaFormat]) {
+    Page(perPage: $perPage) {
+      media(
+        search: $search
+        type: ANIME
+        format_in: $format_in
+        sort: SEARCH_MATCH
+        isAdult: false
+      ) {
+        id
+        idMal
+        format
+        popularity
+        countryOfOrigin
+        isAdult
+        synonyms
+        title { native romaji english }
+      }
+    }
+  }
+`;
+
+const FORMATS_BY_TYPE: Record<AniListMediaType, string[]> = {
+  ANIME: ["TV", "TV_SHORT", "OVA", "ONA", "SPECIAL"],
+  MOVIE: ["MOVIE"],
+};
+
+/**
+ * AniList で作品をタイトル検索する。
+ * 用途:
+ *   - TMDb で 0 件のときのフォールバック検索（AniList の synonyms に略称が登録されているケース）
+ *   - 詳細ページから AniList ID を解決してキャラ一覧を取得
+ *
+ * 日本アニメだけに絞るため countryOfOrigin === "JP" を後段でフィルタする。
+ */
+export async function searchAniListMedia(
+  search: string,
+  type: AniListMediaType = "ANIME",
+  perPage = 10,
+): Promise<AniListMediaSearchNode[]> {
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: MEDIA_SEARCH_QUERY,
+        variables: {
+          search,
+          perPage,
+          format_in: FORMATS_BY_TYPE[type],
+        },
+      }),
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      return [];
+    }
+    throw err;
+  }
+
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as AniListMediaSearchResponse;
+  if (data.errors && data.errors.length > 0) return [];
+  const media = data.data?.Page?.media ?? [];
+  return media.filter((m) => m.countryOfOrigin === "JP" && !m.isAdult);
+}
+
+/**
+ * AniList のメディア候補からタイトル候補一覧を返す（native → romaji → english + synonyms）。
+ * 重複と空文字を排除する。
+ */
+export function pickAniListTitleCandidates(
+  media: AniListMediaSearchNode,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (s: string | null | undefined) => {
+    if (!s) return;
+    const trimmed = s.trim();
+    if (!trimmed) return;
+    if (seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+  push(media.title.native);
+  push(media.title.romaji);
+  push(media.title.english);
+  for (const syn of media.synonyms ?? []) push(syn);
+  return out;
+}
+
+// --- Staff（声優）→ 演じたキャラ ---
+
+const STAFF_CHARACTERS_QUERY = `
+  query ($search: String!, $perPage: Int!) {
+    Page(perPage: 5) {
+      staff(search: $search) {
+        id
+        name { full native }
+        characters(sort: FAVOURITES_DESC, perPage: $perPage) {
+          edges {
+            role
+            node {
+              id
+              name { full native }
+              image { large medium }
+            }
+            media {
+              id
+              title { native romaji english }
+              coverImage { large extraLarge }
+              seasonYear
+              popularity
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * 声優名 → AniList の staff 解決 → 演じたキャラエッジ一覧を返す。
+ *
+ * AniList の staff 検索は完全一致を期待せず複数の同名人物が返るケースがあるため、
+ * 取得した staff 候補のうち characters エッジが最も多いものを採用する
+ * （同名 staff のうち実体のあるレコードを優先するため）。各エッジには
+ * 代表作（媒体）も同時に乗せて UI に出す。
+ */
+export async function getAniListStaffCharactersByName(
+  search: string,
+  perPage = 24,
+): Promise<{
+  staffId: number;
+  staffName: string;
+  edges: AniListStaffCharacterEdge[];
+} | null> {
+  let response: Response;
+  try {
+    response = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query: STAFF_CHARACTERS_QUERY,
+        variables: { search, perPage },
+      }),
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      return null;
+    }
+    throw err;
+  }
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as AniListStaffSearchResponse;
+  if (data.errors && data.errors.length > 0) return null;
+  const staffList = data.data?.Page?.staff ?? [];
+  if (staffList.length === 0) return null;
+
+  // 「characters エッジが最も多い」staff を採用 (同名 staff の中から実体のあるものを選ぶ)
+  let best = staffList[0];
+  let bestCount = best.characters?.edges.length ?? 0;
+  for (const s of staffList.slice(1)) {
+    const count = s.characters?.edges.length ?? 0;
+    if (count > bestCount) {
+      best = s;
+      bestCount = count;
+    }
+  }
+  if (bestCount === 0) return null;
+
+  return {
+    staffId: best.id,
+    staffName: best.name.native || best.name.full || `(id:${best.id})`,
+    edges: best.characters?.edges ?? [],
+  };
 }

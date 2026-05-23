@@ -17,6 +17,7 @@ import type {
 import AnimeHeroTrailer from "@/components/AnimeHeroTrailer";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
+import RelatedCharacters from "@/components/RelatedCharacters";
 import WatchProviders, {
   pickProviderCountry,
 } from "@/components/WatchProviders";
@@ -452,6 +453,13 @@ export default async function MovieDetailPage({
               </div>
             </section>
           )}
+
+          {/* 関連キャラクター（AniList 経由・クリックで /characters/[id] へ） */}
+          <RelatedCharacters
+            title={movie.title}
+            originalTitle={movie.original_title}
+            mediaType="MOVIE"
+          />
 
           {/* 関連映画 */}
           {relatedMovies.length > 0 && (

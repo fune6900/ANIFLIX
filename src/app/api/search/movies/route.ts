@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isJapaneseAnimeMovie, searchMovie } from "@/lib/tmdb";
-import { getSearchTitleVariants } from "@/lib/title-strip";
-import type { TMDbMovie } from "@/types/tmdb";
+import { searchMovieKeyword } from "@/lib/anime-search";
 
 function sanitizeQuery(raw: string): string {
   return raw
@@ -37,22 +35,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const variants = getSearchTitleVariants(query);
-    const allResults: TMDbMovie[] = [];
-    const seenIds = new Set<number>();
-
-    for (const variant of variants) {
-      const data = await searchMovie(variant);
-      for (const item of data.results.filter(isJapaneseAnimeMovie)) {
-        if (!seenIds.has(item.id)) {
-          seenIds.add(item.id);
-          allResults.push(item);
-        }
-      }
-    }
-
+    // 揺らぎ吸収 + AniList フォールバック
+    const data = await searchMovieKeyword(query);
     return NextResponse.json(
-      { results: allResults, total_results: allResults.length },
+      { results: data.results, total_results: data.totalResults },
       { headers: SECURITY_HEADERS },
     );
   } catch (err) {
