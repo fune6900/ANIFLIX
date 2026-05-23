@@ -134,7 +134,12 @@ export async function searchAnimeKeyword(
   };
 }
 
-/** アニメ映画版（searchMovie はページ番号を直接取れない API なので page=1 固定で補強） */
+/**
+ * アニメ映画版。`searchMovie` の TMDb API はページ番号を直接取れないため、
+ * このヘルパは常に「page=1 を補強した単一ページ結果」を返す。呼び出し側のページャが
+ * 2ページ目以降を要求しても同じ結果を繰り返さないよう、totalPages は常に 1 に固定し、
+ * totalResults は merged 件数に揃える。
+ */
 export async function searchMovieKeyword(
   query: string,
 ): Promise<SearchResult<TMDbMovie>> {
@@ -184,7 +189,7 @@ export async function searchMovieKeyword(
 
   return {
     results: merged,
-    totalResults: Math.max(primary.totalResults, merged.length),
-    totalPages: Math.max(primary.totalPages, 1),
+    totalResults: merged.length,
+    totalPages: 1,
   };
 }

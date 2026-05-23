@@ -160,7 +160,7 @@ export default async function VoiceActorDetailPage({
   const { id } = await params;
   const { page: pageStr } = await searchParams;
   const numId = parseInt(id, 10);
-  const currentPage = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
+  const requestedPage = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
 
   if (isNaN(numId)) notFound();
 
@@ -178,7 +178,9 @@ export default async function VoiceActorDetailPage({
     .sort((a, b) => b.vote_average - a.vote_average);
 
   const totalWorks = animeWorks.length;
-  const totalPages = Math.ceil(totalWorks / PER_PAGE);
+  // URL で巨大なページ番号が来ても空グリッドにならないよう totalPages で上限クランプ
+  const totalPages = Math.max(1, Math.ceil(totalWorks / PER_PAGE));
+  const currentPage = Math.min(requestedPage, totalPages);
   const pagedWorks = animeWorks.slice(
     (currentPage - 1) * PER_PAGE,
     currentPage * PER_PAGE,

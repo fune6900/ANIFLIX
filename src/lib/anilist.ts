@@ -559,8 +559,10 @@ const STAFF_CHARACTERS_QUERY = `
 /**
  * 声優名 → AniList の staff 解決 → 演じたキャラエッジ一覧を返す。
  *
- * AniList の staff 検索は完全一致を期待しないため、見つかった最初の staff の
- * characters エッジを返す。代表作（媒体）も同時に取得して UI に出す。
+ * AniList の staff 検索は完全一致を期待せず複数の同名人物が返るケースがあるため、
+ * 取得した staff 候補のうち characters エッジが最も多いものを採用する
+ * （同名 staff のうち実体のあるレコードを優先するため）。各エッジには
+ * 代表作（媒体）も同時に乗せて UI に出す。
  */
 export async function getAniListStaffCharactersByName(
   search: string,
