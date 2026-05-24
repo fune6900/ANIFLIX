@@ -11,12 +11,21 @@ import type {
   AniListMediaSearchNode,
   AniListMediaSearchResponse,
   AniListMediaType,
+  AniListPageInfo,
   AniListRelatedCharacterEdge,
   AniListSearchCharactersResponse,
   AniListStaffCharacterEdge,
   AniListStaffSearchResponse,
   CharacterSearchResult,
 } from "@/types/anilist";
+
+const EMPTY_PAGE_INFO: AniListPageInfo = {
+  total: 0,
+  currentPage: 1,
+  lastPage: 1,
+  hasNextPage: false,
+  perPage: 0,
+};
 
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
@@ -371,9 +380,10 @@ export async function getAniListCharacter(
 }
 
 const MEDIA_CHARACTERS_QUERY = `
-  query ($id: Int!, $perPage: Int!) {
+  query ($id: Int!, $page: Int!, $perPage: Int!) {
     Media(id: $id) {
-      characters(sort: FAVOURITES_DESC, perPage: $perPage) {
+      characters(sort: FAVOURITES_DESC, page: $page, perPage: $perPage) {
+        pageInfo { total currentPage lastPage hasNextPage perPage }
         edges {
           role
           node {
@@ -390,8 +400,12 @@ const MEDIA_CHARACTERS_QUERY = `
 /** Media（作品）に属するキャラ一覧を取得 → 関連キャラ表示に使う */
 export async function getAniListMediaCharacters(
   mediaId: number,
-  perPage = 12,
-): Promise<AniListRelatedCharacterEdge[]> {
+  page = 1,
+  perPage = 24,
+): Promise<{
+  edges: AniListRelatedCharacterEdge[];
+  pageInfo: AniListPageInfo;
+}> {
   let response: Response;
   try {
     response = await fetch(ANILIST_ENDPOINT, {
@@ -402,7 +416,7 @@ export async function getAniListMediaCharacters(
       },
       body: JSON.stringify({
         query: MEDIA_CHARACTERS_QUERY,
-        variables: { id: mediaId, perPage },
+        variables: { id: mediaId, page, perPage },
       }),
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 3600 },
@@ -421,8 +435,14 @@ export async function getAniListMediaCharacters(
   }
 
   const data = (await response.json()) as AniListMediaCharactersResponse;
-  if (data.errors && data.errors.length > 0) return [];
-  return data.data?.Media?.characters?.edges ?? [];
+  if (data.errors && data.errors.length > 0) {
+    return { edges: [], pageInfo: EMPTY_PAGE_INFO };
+  }
+  const connection = data.data?.Media?.characters;
+  return {
+    edges: connection?.edges ?? [],
+    pageInfo: connection?.pageInfo ?? EMPTY_PAGE_INFO,
+  };
 }
 
 // --- Media タイトル検索（TMDb 名 → AniList ID 解決、TMDb 検索のフォールバック） ---
@@ -529,12 +549,13 @@ export function pickAniListTitleCandidates(
 // --- Staff（声優）→ 演じたキャラ ---
 
 const STAFF_CHARACTERS_QUERY = `
-  query ($search: String!, $perPage: Int!) {
+  query ($search: String!, $page: Int!, $perPage: Int!) {
     Page(perPage: 5) {
       staff(search: $search) {
         id
         name { full native }
-        characters(sort: FAVOURITES_DESC, perPage: $perPage) {
+        characters(sort: FAVOURITES_DESC, page: $page, perPage: $perPage) {
+          pageInfo { total currentPage lastPage hasNextPage perPage }
           edges {
             role
             node {
@@ -560,17 +581,19 @@ const STAFF_CHARACTERS_QUERY = `
  * 声優名 → AniList の staff 解決 → 演じたキャラエッジ一覧を返す。
  *
  * AniList の staff 検索は完全一致を期待せず複数の同名人物が返るケースがあるため、
- * 取得した staff 候補のうち characters エッジが最も多いものを採用する
- * （同名 staff のうち実体のあるレコードを優先するため）。各エッジには
- * 代表作（媒体）も同時に乗せて UI に出す。
+ * 取得した staff 候補のうち characters の総数（pageInfo.total）が最も多いものを採用する
+ * （同名 staff のうち実体のあるレコードを優先するため）。page 番号が変わっても
+ * total はメディア由来で安定するため、ページ間で同じ staff が選ばれる。
  */
 export async function getAniListStaffCharactersByName(
   search: string,
+  page = 1,
   perPage = 24,
 ): Promise<{
   staffId: number;
   staffName: string;
   edges: AniListStaffCharacterEdge[];
+  pageInfo: AniListPageInfo;
 } | null> {
   let response: Response;
   try {
@@ -582,7 +605,7 @@ export async function getAniListStaffCharactersByName(
       },
       body: JSON.stringify({
         query: STAFF_CHARACTERS_QUERY,
-        variables: { search, perPage },
+        variables: { search, page, perPage },
       }),
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 3600 },
@@ -601,21 +624,23 @@ export async function getAniListStaffCharactersByName(
   const staffList = data.data?.Page?.staff ?? [];
   if (staffList.length === 0) return null;
 
-  // 「characters エッジが最も多い」staff を採用 (同名 staff の中から実体のあるものを選ぶ)
+  // pageInfo.total（total characters）が最大の staff を採用。
+  // edges 件数ベースだと page=2 以降で空になり同一性が崩れるため total を用いる。
   let best = staffList[0];
-  let bestCount = best.characters?.edges.length ?? 0;
+  let bestTotal = best.characters?.pageInfo.total ?? 0;
   for (const s of staffList.slice(1)) {
-    const count = s.characters?.edges.length ?? 0;
-    if (count > bestCount) {
+    const total = s.characters?.pageInfo.total ?? 0;
+    if (total > bestTotal) {
       best = s;
-      bestCount = count;
+      bestTotal = total;
     }
   }
-  if (bestCount === 0) return null;
+  if (bestTotal === 0) return null;
 
   return {
     staffId: best.id,
     staffName: best.name.native || best.name.full || `(id:${best.id})`,
     edges: best.characters?.edges ?? [],
+    pageInfo: best.characters?.pageInfo ?? EMPTY_PAGE_INFO,
   };
 }

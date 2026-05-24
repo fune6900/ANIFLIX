@@ -9,7 +9,10 @@ const PER_PAGE = 20;
 
 interface VoiceActorDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    page?: string | string[];
+    cpage?: string | string[];
+  }>;
 }
 
 // アニメ出演作カード
@@ -158,9 +161,12 @@ export default async function VoiceActorDetailPage({
   searchParams,
 }: VoiceActorDetailPageProps) {
   const { id } = await params;
-  const { page: pageStr } = await searchParams;
+  const { page, cpage } = await searchParams;
+  const pageStr = Array.isArray(page) ? page[0] : page;
+  const cpageStr = Array.isArray(cpage) ? cpage[0] : cpage;
   const numId = parseInt(id, 10);
   const requestedPage = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
+  const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
 
   if (isNaN(numId)) notFound();
 
@@ -337,6 +343,10 @@ export default async function VoiceActorDetailPage({
               name={person.name}
               originalName={person.original_name}
               alsoKnownAs={person.also_known_as}
+              currentPage={charactersPage}
+              pageUrl={(p) =>
+                `/voice-actors/${numId}?cpage=${p}#voiced-characters`
+              }
             />
           )}
 
