@@ -30,6 +30,7 @@ import WatchProviders, {
 
 interface AnimeDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ cpage?: string }>;
 }
 
 function getSeasonStart(d: Date): Date {
@@ -138,10 +139,13 @@ function VideoTypeLabel({
 
 export default async function AnimeDetailPage({
   params,
+  searchParams,
 }: AnimeDetailPageProps) {
   const { id } = await params;
+  const { cpage: cpageStr } = await searchParams;
   const numId = parseInt(id, 10);
   if (isNaN(numId)) notFound();
+  const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
 
   let anime;
   let videos: TMDbVideo[] = [];
@@ -647,6 +651,8 @@ export default async function AnimeDetailPage({
             title={anime.name}
             originalTitle={anime.original_name}
             mediaType="ANIME"
+            currentPage={charactersPage}
+            pageUrl={(p) => `/anime/${numId}?cpage=${p}#related-characters`}
           />
 
           {/* ヒストリー（シリーズ年表）*/}

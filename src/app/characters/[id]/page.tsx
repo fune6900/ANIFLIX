@@ -3,16 +3,21 @@ import { notFound } from "next/navigation";
 import { getAniListCharacter, getAniListMediaCharacters } from "@/lib/anilist";
 import { searchAnnictCharacterByName } from "@/lib/annict";
 import { translateManyToJa } from "@/lib/translate";
+import Pagination from "@/components/Pagination";
 import type {
   AniListCharacterDetail,
   AniListCharacterDetailMediaEdge,
   AniListFuzzyDate,
+  AniListPageInfo,
   AniListRelatedCharacterEdge,
 } from "@/types/anilist";
 import type { AnnictCharacterProfile } from "@/types/annict";
 
+const RELATED_PER_PAGE = 24;
+
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ cpage?: string }>;
 }
 
 const GENDER_MAP: Record<string, string> = {
@@ -163,10 +168,17 @@ interface CharacterPageData {
   detail: AniListCharacterDetail;
   annict: AnnictCharacterProfile | null;
   related: AniListRelatedCharacterEdge[];
+  relatedPageInfo: AniListPageInfo | null;
 }
+
+const EMPTY_RELATED = {
+  edges: [] as AniListRelatedCharacterEdge[],
+  pageInfo: null as AniListPageInfo | null,
+};
 
 async function loadCharacterPageData(
   id: number,
+  relatedPage: number,
 ): Promise<CharacterPageData | null> {
   const detail = await getAniListCharacter(id);
   if (!detail) return null;
@@ -177,25 +189,37 @@ async function loadCharacterPageData(
   const [annict, relatedRaw] = await Promise.all([
     searchAnnictCharacterByName(name),
     topMediaId
-      ? getAniListMediaCharacters(topMediaId, 12)
-      : Promise.resolve([]),
+      ? getAniListMediaCharacters(topMediaId, relatedPage, RELATED_PER_PAGE)
+          .then((r) => ({ edges: r.edges, pageInfo: r.pageInfo }))
+          .catch(() => EMPTY_RELATED)
+      : Promise.resolve(EMPTY_RELATED),
   ]);
 
   // 自分自身は関連から除外
-  const related = relatedRaw.filter((e) => e.node.id !== id);
+  const related = relatedRaw.edges.filter((e) => e.node.id !== id);
 
-  return { detail, annict, related };
+  return {
+    detail,
+    annict,
+    related,
+    relatedPageInfo: relatedRaw.pageInfo,
+  };
 }
 
-export default async function CharacterDetailPage({ params }: PageProps) {
+export default async function CharacterDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id: rawId } = await params;
+  const { cpage: cpageStr } = await searchParams;
   const id = parseInt(rawId, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
+  const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
 
-  const data = await loadCharacterPageData(id);
+  const data = await loadCharacterPageData(id, charactersPage);
   if (!data) notFound();
 
-  const { detail, annict, related } = data;
+  const { detail, annict, related, relatedPageInfo } = data;
   const display = pickName(detail);
   const characterImage = detail.image.large || detail.image.medium || null;
   const safeImage =
@@ -388,19 +412,40 @@ export default async function CharacterDetailPage({ params }: PageProps) {
         </section>
 
         {/* 関連キャラクター */}
-        {related.length > 0 && (
-          <section>
-            <h2 className="text-white text-xl font-bold mb-4">
-              関連キャラクター
-              <span className="text-gray-500 text-sm font-normal ml-2">
-                {edges[0] ? workTitle(edges[0]) : ""} より
+        {relatedPageInfo && relatedPageInfo.total > 0 && (
+          <section id="related-characters" className="scroll-mt-24">
+            <div className="flex items-baseline gap-3 mb-4 flex-wrap">
+              <h2 className="text-white text-xl font-bold">
+                関連キャラクター
+                <span className="text-gray-500 text-sm font-normal ml-2">
+                  {edges[0] ? workTitle(edges[0]) : ""} より
+                </span>
+              </h2>
+              <span className="text-gray-500 text-sm">
+                {relatedPageInfo.total}件
               </span>
-            </h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-              {related.map((edge) => (
-                <RelatedCharacterCard key={edge.node.id} edge={edge} />
-              ))}
+              {relatedPageInfo.lastPage > 1 && (
+                <span className="text-gray-500 text-sm">
+                  · {charactersPage} / {relatedPageInfo.lastPage} ページ
+                </span>
+              )}
             </div>
+            {related.length === 0 ? (
+              <p className="text-gray-500 text-sm">
+                このページに表示するキャラはない
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                {related.map((edge) => (
+                  <RelatedCharacterCard key={edge.node.id} edge={edge} />
+                ))}
+              </div>
+            )}
+            <Pagination
+              currentPage={charactersPage}
+              totalPages={relatedPageInfo.lastPage}
+              pageUrl={(p) => `/characters/${id}?cpage=${p}#related-characters`}
+            />
           </section>
         )}
       </div>

@@ -100,6 +100,14 @@ export interface AniListCharacterDetailResponse {
 
 // --- 関連キャラクター（Media.characters 経由） ---
 
+export interface AniListPageInfo {
+  total: number;
+  currentPage: number;
+  lastPage: number;
+  hasNextPage: boolean;
+  perPage: number;
+}
+
 export interface AniListRelatedCharacterNode {
   id: number;
   name: {
@@ -118,6 +126,7 @@ export interface AniListMediaCharactersResponse {
   data?: {
     Media?: {
       characters?: {
+        pageInfo: AniListPageInfo;
         edges: AniListRelatedCharacterEdge[];
       } | null;
     } | null;
@@ -212,6 +221,7 @@ export interface AniListStaffSearchResponse {
           native: string | null;
         };
         characters?: {
+          pageInfo: AniListPageInfo;
           edges: AniListStaffCharacterEdge[];
         } | null;
       }>;

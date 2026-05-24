@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { getAniListMediaCharacters, searchAniListMedia } from "@/lib/anilist";
 import { stripSeasonSuffix } from "@/lib/title-strip";
+import Pagination from "@/components/Pagination";
 import type {
   AniListMediaType,
   AniListRelatedCharacterEdge,
@@ -22,16 +23,16 @@ interface RelatedCharactersProps {
   originalTitle?: string | null;
   /** TV か映画か */
   mediaType: AniListMediaType;
-  /** 最大表示件数 */
+  /** 現在のページ番号（1 始まり） */
+  currentPage?: number;
+  /** 1ページあたり件数 */
   perPage?: number;
+  /** ページ番号 → URL を組み立てる関数（呼び出し側でアンカー・既存クエリを管理） */
+  pageUrl: (page: number) => string;
+  /** ページネーション位置からスクロール対象にするためのアンカー id */
+  sectionId?: string;
 }
 
-/**
- * AniList の native / romaji / english タイトルから「メディア ID」を解決する。
- *
- * 同じシリーズの複数期が AniList に登録されているケース（例: 「進撃の巨人」「進撃の巨人 Season 2」）が
- * あるため、popularity 最大を採用する。
- */
 /** TMDb の表示名にだけ付く修飾語（AniList 側にはない）を剥がす */
 function stripMediaPrefix(title: string): string {
   return title
@@ -40,6 +41,12 @@ function stripMediaPrefix(title: string): string {
     .trim();
 }
 
+/**
+ * AniList の native / romaji / english タイトルから「メディア ID」を解決する。
+ *
+ * 同じシリーズの複数期が AniList に登録されているケース（例: 「進撃の巨人」「進撃の巨人 Season 2」）が
+ * あるため、popularity 最大を採用する。
+ */
 async function resolveAniListMediaId(
   title: string,
   originalTitle: string | null | undefined,
@@ -87,70 +94,85 @@ function pickCharacterImage(edge: AniListRelatedCharacterEdge): string | null {
   return img && !img.includes("/default.") ? img : null;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  MAIN: "主役",
-  SUPPORTING: "脇役",
-  BACKGROUND: "モブ",
-};
-
 export default async function RelatedCharacters({
   title,
   originalTitle,
   mediaType,
-  perPage = 18,
+  currentPage = 1,
+  perPage = 24,
+  pageUrl,
+  sectionId = "related-characters",
 }: RelatedCharactersProps) {
   const mediaId = await resolveAniListMediaId(title, originalTitle, mediaType);
   if (mediaId == null) return null;
 
-  let edges: AniListRelatedCharacterEdge[] = [];
+  let result: {
+    edges: AniListRelatedCharacterEdge[];
+    pageInfo: { lastPage: number; total: number };
+  };
   try {
-    edges = await getAniListMediaCharacters(mediaId, perPage);
+    result = await getAniListMediaCharacters(mediaId, currentPage, perPage);
   } catch {
     return null;
   }
-  if (edges.length === 0) return null;
+
+  const { edges, pageInfo } = result;
+  if (pageInfo.total === 0) return null;
 
   return (
-    <section className="mt-10">
-      <h2 className="text-white font-bold text-lg mb-4">関連キャラクター</h2>
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-        {edges.map((edge) => {
-          const name = pickCharacterName(edge);
-          const img = pickCharacterImage(edge);
-          const roleLabel = edge.role ? ROLE_LABEL[edge.role] : null;
-          return (
-            <Link
-              key={edge.node.id}
-              href={`/characters/${edge.node.id}`}
-              className="group block"
-            >
-              <div className="relative aspect-[2/3] rounded overflow-hidden bg-gray-900">
-                {img ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={img}
-                    alt={name}
-                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
-                    No Image
-                  </div>
-                )}
-                {roleLabel && (
-                  <span className="absolute top-1 left-1 bg-black/70 text-[10px] text-gray-200 px-1.5 py-0.5 rounded">
-                    {roleLabel}
-                  </span>
-                )}
-              </div>
-              <p className="text-white text-xs font-semibold leading-tight line-clamp-2 mt-1.5 group-hover:text-[#54b9c5] transition-colors">
-                {name}
-              </p>
-            </Link>
-          );
-        })}
+    <section id={sectionId} className="mt-10 scroll-mt-24">
+      <div className="flex items-baseline gap-3 mb-4">
+        <h2 className="text-white font-bold text-lg">関連キャラクター</h2>
+        <span className="text-gray-500 text-sm">{pageInfo.total}件</span>
+        {pageInfo.lastPage > 1 && (
+          <span className="text-gray-500 text-sm">
+            · {currentPage} / {pageInfo.lastPage} ページ
+          </span>
+        )}
       </div>
+      {edges.length === 0 ? (
+        <p className="text-gray-500 text-sm">
+          このページに表示するキャラはない
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+          {edges.map((edge) => {
+            const name = pickCharacterName(edge);
+            const img = pickCharacterImage(edge);
+            return (
+              <Link
+                key={edge.node.id}
+                href={`/characters/${edge.node.id}`}
+                className="group block"
+              >
+                <div className="relative aspect-[2/3] rounded overflow-hidden bg-gray-900">
+                  {img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={img}
+                      alt={name}
+                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">
+                      No Image
+                    </div>
+                  )}
+                </div>
+                <p className="text-white text-xs font-semibold leading-tight line-clamp-2 mt-1.5 group-hover:text-[#54b9c5] transition-colors">
+                  {name}
+                </p>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={pageInfo.lastPage}
+        pageUrl={pageUrl}
+      />
     </section>
   );
 }

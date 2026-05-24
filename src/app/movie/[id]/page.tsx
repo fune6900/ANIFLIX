@@ -24,6 +24,7 @@ import WatchProviders, {
 
 interface MovieDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ cpage?: string }>;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -86,10 +87,13 @@ function formatRuntime(minutes: number | null): string {
 
 export default async function MovieDetailPage({
   params,
+  searchParams,
 }: MovieDetailPageProps) {
   const { id } = await params;
+  const { cpage: cpageStr } = await searchParams;
   const numId = parseInt(id, 10);
   if (isNaN(numId)) notFound();
+  const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
 
   let movie;
   let watchProviders: TMDbWatchProvidersResponse | null = null;
@@ -459,6 +463,8 @@ export default async function MovieDetailPage({
             title={movie.title}
             originalTitle={movie.original_title}
             mediaType="MOVIE"
+            currentPage={charactersPage}
+            pageUrl={(p) => `/movie/${numId}?cpage=${p}#related-characters`}
           />
 
           {/* 関連映画 */}
