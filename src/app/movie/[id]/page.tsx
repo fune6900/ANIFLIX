@@ -24,7 +24,7 @@ import WatchProviders, {
 
 interface MovieDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cpage?: string }>;
+  searchParams: Promise<{ cpage?: string | string[] }>;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -90,7 +90,8 @@ export default async function MovieDetailPage({
   searchParams,
 }: MovieDetailPageProps) {
   const { id } = await params;
-  const { cpage: cpageStr } = await searchParams;
+  const { cpage } = await searchParams;
+  const cpageStr = Array.isArray(cpage) ? cpage[0] : cpage;
   const numId = parseInt(id, 10);
   if (isNaN(numId)) notFound();
   const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);

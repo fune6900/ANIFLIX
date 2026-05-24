@@ -10,6 +10,7 @@
 //   2) ヒットしなければ TMDb の翻訳名 (name) で再検索
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getAniListStaffCharactersByName } from "@/lib/anilist";
 import Pagination from "@/components/Pagination";
 import type {
@@ -108,6 +109,11 @@ export default async function VoicedCharacters({
 
   const hit = await resolveStaffCharacters(candidates, currentPage, perPage);
   if (!hit) return null;
+
+  // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
+  if (hit.pageInfo.lastPage >= 1 && currentPage > hit.pageInfo.lastPage) {
+    redirect(pageUrl(hit.pageInfo.lastPage));
+  }
 
   return (
     <section id={sectionId} className="mt-10 scroll-mt-24">

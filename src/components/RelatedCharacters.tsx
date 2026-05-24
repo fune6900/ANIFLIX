@@ -8,6 +8,7 @@
 // ヒットしなければ null を返して非表示にする（部分的に欠落しても他の詳細ページ要素は出す）。
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getAniListMediaCharacters, searchAniListMedia } from "@/lib/anilist";
 import { stripSeasonSuffix } from "@/lib/title-strip";
 import Pagination from "@/components/Pagination";
@@ -118,6 +119,11 @@ export default async function RelatedCharacters({
 
   const { edges, pageInfo } = result;
   if (pageInfo.total === 0) return null;
+
+  // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
+  if (pageInfo.lastPage >= 1 && currentPage > pageInfo.lastPage) {
+    redirect(pageUrl(pageInfo.lastPage));
+  }
 
   return (
     <section id={sectionId} className="mt-10 scroll-mt-24">

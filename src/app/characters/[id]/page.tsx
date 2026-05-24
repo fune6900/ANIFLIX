@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAniListCharacter, getAniListMediaCharacters } from "@/lib/anilist";
 import { searchAnnictCharacterByName } from "@/lib/annict";
 import { translateManyToJa } from "@/lib/translate";
@@ -17,7 +17,7 @@ const RELATED_PER_PAGE = 24;
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cpage?: string }>;
+  searchParams: Promise<{ cpage?: string | string[] }>;
 }
 
 const GENDER_MAP: Record<string, string> = {
@@ -211,7 +211,8 @@ export default async function CharacterDetailPage({
   searchParams,
 }: PageProps) {
   const { id: rawId } = await params;
-  const { cpage: cpageStr } = await searchParams;
+  const { cpage } = await searchParams;
+  const cpageStr = Array.isArray(cpage) ? cpage[0] : cpage;
   const id = parseInt(rawId, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
   const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
@@ -220,6 +221,17 @@ export default async function CharacterDetailPage({
   if (!data) notFound();
 
   const { detail, annict, related, relatedPageInfo } = data;
+
+  // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
+  if (
+    relatedPageInfo &&
+    relatedPageInfo.lastPage >= 1 &&
+    charactersPage > relatedPageInfo.lastPage
+  ) {
+    redirect(
+      `/characters/${id}?cpage=${relatedPageInfo.lastPage}#related-characters`,
+    );
+  }
   const display = pickName(detail);
   const characterImage = detail.image.large || detail.image.medium || null;
   const safeImage =
