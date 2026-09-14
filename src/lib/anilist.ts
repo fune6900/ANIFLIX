@@ -29,6 +29,20 @@ const EMPTY_PAGE_INFO: AniListPageInfo = {
 
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
+/**
+ * AniList への共通リクエストヘッダー。
+ *
+ * Cloudflare Workers の fetch は User-Agent をデフォルトで送らない。
+ * AniList は Cloudflare の背後にあり、UA 無しのリクエストは本番の Worker から
+ * 403 Forbidden で弾かれていた（ローカル Node 実行では undici が UA を付けるため再現しない）。
+ * 公開 API に対して呼び出し元を名乗るのは礼儀でもあるため、常に付与する。
+ */
+const ANILIST_HEADERS: Record<string, string> = {
+  "Content-Type": "application/json",
+  Accept: "application/json",
+  "User-Agent": "ANIFLIX/1.0 (+https://aniflex.riku-riku1019.workers.dev)",
+};
+
 export type AniListSeason = "WINTER" | "SPRING" | "SUMMER" | "FALL";
 
 export interface AniListMedia {
@@ -117,10 +131,7 @@ export async function getAniListSeasonAnime(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: SEASON_QUERY,
         variables: { year, season, page, perPage },
@@ -219,10 +230,7 @@ export async function searchAniListCharacters(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: SEARCH_CHARACTERS_QUERY,
         variables: { search, perPage },
@@ -339,10 +347,7 @@ export async function getAniListCharacter(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: CHARACTER_DETAIL_QUERY,
         variables: { id },
@@ -410,10 +415,7 @@ export async function getAniListMediaCharacters(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: MEDIA_CHARACTERS_QUERY,
         variables: { id: mediaId, page, perPage },
@@ -492,10 +494,7 @@ export async function searchAniListMedia(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: MEDIA_SEARCH_QUERY,
         variables: {
@@ -599,10 +598,7 @@ export async function getAniListStaffCharactersByName(
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: ANILIST_HEADERS,
       body: JSON.stringify({
         query: STAFF_CHARACTERS_QUERY,
         variables: { search, page, perPage },
