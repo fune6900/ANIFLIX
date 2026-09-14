@@ -12,7 +12,7 @@ NetflixのUI/UXを模倣したアニメ・声優発見プラットフォーム�
 | UI | React 19 + TypeScript 5 |
 | スタイリング | Tailwind CSS |
 | データソース | TMDb API (映画・TVデータベース) |
-| デプロイ | Docker / Docker Compose |
+| デプロイ | Cloudflare Workers (`@opennextjs/cloudflare`) / Docker Compose（開発用） |
 
 ---
 
@@ -122,6 +122,84 @@ docker-compose up
 | `npm run build` | 本番ビルド |
 | `npm run start` | 本番サーバー起動 |
 | `npm run lint` | ESLintによるコード検査 |
+| `npm run preview` | OpenNextでビルドし、ローカルのworkerd上で本番同等の動作確認 |
+| `npm run deploy` | OpenNextでビルドし、Cloudflare Workersへデプロイ |
+| `npm run cf-typegen` | `wrangler.jsonc` のバインディング型を `cloudflare-env.d.ts` に生成（任意） |
+
+---
+
+## デプロイ（Cloudflare Workers）
+
+デプロイ先は Cloudflare Workers + Static Assets です。
+アダプタには [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare) を使用します
+（`@cloudflare/next-on-pages` は deprecated であり Next.js 13/14 のみ対応のため採用していません）。
+
+### 初回セットアップ
+
+```bash
+# 1. Cloudflare にログイン
+npx wrangler login
+
+# 2. Incremental Cache 用の R2 バケットを作成
+npx wrangler r2 bucket create aniflex-inc-cache
+
+# 3. 本番シークレットを登録
+npx wrangler secret put TMDB_ACCESS_TOKEN
+npx wrangler secret put ANNICT_ACCESS_TOKEN
+npx wrangler secret put DEEPL_API_KEY
+
+# 4. ローカル実行用に .dev.vars を用意（.env.local と同じ値を入れる）
+cp .dev.vars.example .dev.vars
+```
+
+### ローカルでの本番同等プレビュー
+
+```bash
+npm run preview
+```
+
+`next dev` は `.env.local` を読みますが、workerd 上で動く `npm run preview` は `.dev.vars` を読みます。
+両方に同じ値を入れておいてください。
+
+> Durable Object バインディング（`NEXT_CACHE_DO_QUEUE`）はローカルでは動作しません。
+> ISR のバックグラウンド再生成は本番環境で確認してください。
+
+### デプロイ
+
+`main` ブランチへのマージで GitHub Actions が自動デプロイします。
+手動で実行する場合:
+
+```bash
+npm run deploy
+```
+
+CI に必要なリポジトリ Secrets:
+`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `TMDB_ACCESS_TOKEN` / `ANNICT_ACCESS_TOKEN` / `DEEPL_API_KEY`
+
+> `/browse/airing` などの静的ページはビルド時に TMDb / AniList を呼び出すため、
+> ビルド段階でも認証情報が必要です。
+
+### キャッシュ構成
+
+| 項目 | バインディング | 用途 |
+|------|----------------|------|
+| Incremental Cache | `NEXT_INC_CACHE_R2_BUCKET` (R2) | SSG/ISR ページと `fetch` データキャッシュの保存先 |
+| Revalidation Queue | `NEXT_CACHE_DO_QUEUE` (Durable Object) | 時間ベース再生成の重複排除つきキュー |
+
+`revalidateTag` / `revalidatePath` を使用していないため Tag Cache は設定していません。
+
+### `npm run cf-typegen` について
+
+アプリケーションコードは `getCloudflareContext()` を使っていないため、通常は実行不要です。
+生成される `cloudflare-env.d.ts` は次の理由からコミットせず、`.gitignore` と `tsconfig.json` の
+`exclude` の両方で除外しています。
+
+- ビルド成果物である `.open-next/worker` を参照するため、未ビルドの環境では型解決に失敗する
+- workerd のランタイム型をグローバルに持ち込み、`Response.json()` の戻り値が `unknown` になって
+  既存のクライアントコンポーネントの型検査が壊れる
+
+将来 Cloudflare バインディングをアプリケーションコードから直接触る場合は、
+`tsconfig.json` の `exclude` から外したうえで影響範囲を確認してください。
 
 ---
 

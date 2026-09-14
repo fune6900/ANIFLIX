@@ -44,3 +44,31 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run build
+
+  deploy:
+    name: Deploy (Cloudflare Workers)
+    # main への push のみ。PR ではプレビューを作らない
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint, typecheck, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+      - run: npm ci
+      # browse/airing・eras・genres・seasons はビルド時に TMDb / AniList を叩いて
+      # プリレンダリングされるため、ビルド段階でも認証情報が要る
+      - name: Build with OpenNext
+        run: npx opennextjs-cloudflare build
+        env:
+          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          ANNICT_ACCESS_TOKEN: ${{ secrets.ANNICT_ACCESS_TOKEN }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

@@ -1,0 +1,59 @@
+/**
+ * ANIFLIX - Cloudflare Workers 設定
+ *
+ * @opennextjs/cloudflare が生成した Worker（.open-next/worker.js）をデプロイする。
+ * Cloudflare Pages ではなく Workers + Static Assets を使う
+ * （@cloudflare/next-on-pages は deprecated かつ Next 13/14 のみ対応のため）。
+ *
+ * 参照: https://opennext.js.org/cloudflare/get-started
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aniflex",
+  "main": ".open-next/worker.js",
+
+  // OpenNext の要件は 2024-09-23 以降。
+  // インストール済み workerd (1.20260911.x) が解釈できる上限に合わせている。
+  "compatibility_date": "2026-09-11",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // 静的アセット（_next/static、public/ 配下の icons・manifest.json 等）
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // ISR の再生成リクエストを自分自身へ投げ返すための自己参照
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "aniflex"
+    }
+  ],
+
+  // Incremental Cache（SSG/ISR + fetch データキャッシュ）の保存先。
+  // src/lib/{tmdb,anilist,annict}.ts の next.revalidate をここで効かせ、
+  // TMDb / AniList のレート制限を避ける。
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "aniflex-inc-cache"
+    }
+  ],
+
+  // 時間ベース revalidation のバックグラウンド再生成キュー（重複排除つき）
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler"]
+    }
+  ]
+}

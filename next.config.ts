@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
   images: {
@@ -27,3 +28,9 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// OpenNext (Cloudflare) のローカル開発サポート。
+// `next dev` から Cloudflare のバインディング（R2 / Durable Object）へアクセスできるようにする。
+// 本番ビルド・デプロイには影響しない。
+// 参照: https://opennext.js.org/cloudflare/get-started
+initOpenNextCloudflareForDev();
