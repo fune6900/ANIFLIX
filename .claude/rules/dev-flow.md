@@ -246,5 +246,20 @@ gh pr merge <PR番号> --squash --delete-branch
 
 main ブランチへのマージ = リリース。
 
-現状は Docker / Vercel での手動デプロイ。Vercel の自動デプロイが設定されれば自動化される。
+デプロイ先は **Cloudflare Workers**（`@opennextjs/cloudflare`）。
+`main` への push で CI の `Deploy (Cloudflare Workers)` ジョブが走り、自動デプロイされる。
+
+手動デプロイが必要な場合:
+
+```bash
+npm run preview   # workerd 上で本番同等の動作確認
+npm run deploy    # Cloudflare Workers へデプロイ
+```
+
+デプロイ前提条件:
+
+- GitHub Secrets: `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `TMDB_ACCESS_TOKEN` / `ANNICT_ACCESS_TOKEN` / `DEEPL_API_KEY`
+- Worker シークレット: `npx wrangler secret put <KEY>`（`.dev.vars` と同じキー）
+- R2 バケット `aniflex-inc-cache`（ISR / fetch キャッシュ）
+
 マージ後に本番環境で TMDb データが正常に表示されることを確認すること（API キー切れ・レート制限の早期検知）。
