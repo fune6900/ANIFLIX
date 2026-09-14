@@ -90,7 +90,8 @@ export default function ContentRow(props: any) { ... }
 - TMDb 呼び出しは **必ず `src/lib/tmdb.ts` 経由**。コンポーネントから直接 `fetch("https://api.themoviedb.org/...")` しない
 - 画像 URL は `getImageUrl(path, size)` を使う。`image.tmdb.org` 直 URL の散在禁止
 - `next/image` の `unoptimized: true` を維持する。Cloudflare 側の画像変換も使わない
-- キャッシュ秒数 `cacheTime` は `fetchTMDb` の第3引数で明示する。トレーラー候補のように頻繁に変わらないものは 3600 以上、検索系は 0（`no-store`）
+- キャッシュ秒数 `cacheTime` は `fetchTMDb` の第3引数で明示する。トレーラー候補のように頻繁に変わらないものは 3600 以上、ユーザー入力によるキーワード検索は 0（`no-store`）
+- discover 系（ジャンル列・新着・トレンド）は `DISCOVER_CACHE_TIME`（1800 秒）を使う。ランダム性は `randomPage()` が URL を変えること（= 別キャッシュエントリ）と、レンダリング時に走る `shuffle()` が担保するため、キャッシュを効かせても表示の多様性は失われない
 
 ---
 

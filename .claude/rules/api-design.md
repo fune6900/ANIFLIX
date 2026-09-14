@@ -138,11 +138,19 @@ const data = await fetch("https://api.themoviedb.org/3/tv/1");
 | 用途                     | `cacheTime` | 理由                         |
 | ------------------------ | ----------- | ---------------------------- |
 | 検索 (`/search/*`)       | 0           | リアルタイム性重視           |
-| 一覧 (`/discover/*`)     | 0           | ホームでランダム表示するため |
+| ホーム系 discover        | 1800        | `getAnimeByGenre` / `getAnimeByKeyword` / `getNewAnime` / `getJapaneseTrendingAnime`。ランダム性は `randomPage()` と `shuffle()` が担保 |
+| ユーザー入力を含む discover | **0 必須**  | `discoverAnime` / `discoverAnimeMovie`。任意のクエリ値がそのままキャッシュキーになるため絶対にキャッシュしない |
+| その他の一覧 discover    | 0           | `getPopularAnime` / `getAnimeByEra` / `getAnimeBySeason` / `getAiringAnime` / `getAnimeByStudio` / `getAnimeMovies` / `getAnimeMovieByKeyword`。未計測のため据え置き。導線がボトルネック化したら個別に見直す |
 | 詳細 (`/tv/{id}` etc.)   | 0 〜 3600   | 内容更新を反映               |
 | 動画 (`/tv/{id}/videos`) | 3600        | OP/ED は頻繁に変わらない     |
 | 外部 ID                  | 86400       | ほぼ不変                     |
 | キーワード ID 解決       | 86400       | TMDb 側でほぼ不変            |
+
+> **キャッシュキー汚染に注意**: `cacheTime > 0` の関数へ渡すクエリ値は、
+> 呼び出し側で必ず範囲・列挙を検証すること。無検証の値は TMDb の URL に乗り、
+> そのまま R2 の Data Cache に新規エントリを作る（無制限なキー膨張 = 課金増幅）。
+> ページ番号は `parsePageParam()`（1〜`TMDB_MAX_PAGE`）、
+> ソート順は呼び出し側のホワイトリスト照合を通す。
 
 ---
 

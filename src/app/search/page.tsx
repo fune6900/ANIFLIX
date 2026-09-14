@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { discoverAnime, getAnimeByKeywords } from "@/lib/tmdb";
+import {
+  discoverAnime,
+  getAnimeByKeywords,
+  parsePageParam,
+  TMDB_MAX_PAGE,
+} from "@/lib/tmdb";
 import { searchAnimeKeyword } from "@/lib/anime-search";
 import type { TMDbAnime } from "@/types/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
@@ -32,8 +37,10 @@ interface SearchPageProps {
   }>;
 }
 
+const DEFAULT_SORT = "popularity.desc";
+
 const SORT_OPTIONS = [
-  { value: "popularity.desc", label: "人気順（高い）" },
+  { value: DEFAULT_SORT, label: "人気順（高い）" },
   { value: "vote_average.desc", label: "評価順（高い）" },
   { value: "first_air_date.desc", label: "放送日順（新しい）" },
   { value: "first_air_date.asc", label: "放送日順（古い）" },
@@ -141,7 +148,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const rawQuery = params.q ?? "";
   const query = sanitize(rawQuery);
   const mode = params.mode === "filter" ? "filter" : "keyword";
-  const currentPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  const currentPage = parsePageParam(params.page);
 
   // フィルター値
   const genreIdParsed = params.genre ? parseInt(params.genre, 10) : NaN;
@@ -149,7 +156,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const selectedGenre = genreId ? findGenre(genreId) : undefined;
   const seasonParam = params.season ?? "";
   const selectedSeason = parseSeasonParam(seasonParam);
-  const sort = params.sort ?? "popularity.desc";
+  // sort は TMDb の sort_by にそのまま乗り、discover のキャッシュキーの一部になる。
+  // 無検証だと任意の文字列で R2 の Data Cache にエントリを作られるため、
+  // UI が提供する選択肢だけを通す。
+  const sortParam = params.sort ?? DEFAULT_SORT;
+  const sort = SORT_OPTIONS.some((o) => o.value === sortParam)
+    ? sortParam
+    : DEFAULT_SORT;
 
   // フィルターが 1 つでも設定されているか
   const hasFilters = !!(selectedGenre || selectedSeason);
@@ -175,7 +188,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         });
         results = data.results;
         totalResults = data.total_results;
-        totalPages = Math.min(data.total_pages, 500);
+        totalPages = Math.min(data.total_pages, TMDB_MAX_PAGE);
       } else {
         const data = await discoverAnime({
           genreId: selectedGenre?.id,
@@ -186,7 +199,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         });
         results = data.results;
         totalResults = data.total_results;
-        totalPages = Math.min(data.total_pages, 500);
+        totalPages = Math.min(data.total_pages, TMDB_MAX_PAGE);
       }
     } catch {
       error = "検索中にエラーが発生しました";
@@ -198,7 +211,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       const data = await searchAnimeKeyword(query, currentPage);
       results = data.results;
       totalResults = data.totalResults;
-      totalPages = Math.min(data.totalPages, 500);
+      totalPages = Math.min(data.totalPages, TMDB_MAX_PAGE);
     } catch {
       error = "検索中にエラーが発生しました";
     }
@@ -210,7 +223,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   if (query) baseParams.q = query;
   if (selectedGenre) baseParams.genre = String(selectedGenre.id);
   if (selectedSeason) baseParams.season = seasonParam;
-  if (sort !== "popularity.desc") baseParams.sort = sort;
+  if (sort !== DEFAULT_SORT) baseParams.sort = sort;
 
   const isFilterMode = mode === "filter";
 
@@ -220,7 +233,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       ? [{ name: "genre", value: String(selectedGenre.id) }]
       : []),
     ...(selectedSeason ? [{ name: "season", value: seasonParam }] : []),
-    ...(sort !== "popularity.desc" ? [{ name: "sort", value: sort }] : []),
+    ...(sort !== DEFAULT_SORT ? [{ name: "sort", value: sort }] : []),
   ];
 
   return (
@@ -364,7 +377,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                     {selectedSeason.emoji} {selectedSeason.label}
                   </span>
                 )}
-                {sort !== "popularity.desc" && (
+                {sort !== DEFAULT_SORT && (
                   <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
                     {SORT_OPTIONS.find((o) => o.value === sort)?.label}
                   </span>

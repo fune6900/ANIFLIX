@@ -21,6 +21,33 @@ const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
 // アニメーションジャンルID
 const ANIMATION_GENRE_ID = 16;
 
+/**
+ * discover 系（ホームのジャンル列・新着・トレンド）のキャッシュ秒数。
+ *
+ * これらは fetchTMDb のデフォルト（0 = no-store）で動いていたため、
+ * ホーム 1 リクエストにつき TMDb へ 21 回以上の往復が発生していた。
+ * ランダム性は randomPage() が URL を変えること（= 別キャッシュエントリ）と、
+ * レンダリング時に走る shuffle() が担保するため、キャッシュを効かせても
+ * 表示の多様性は失われない。
+ */
+const DISCOVER_CACHE_TIME = 1800;
+
+/** TMDb の discover / search が受け付けるページ番号の上限 */
+export const TMDB_MAX_PAGE = 500;
+
+/**
+ * クエリ文字列のページ番号を 1〜TMDB_MAX_PAGE に正規化する。
+ *
+ * 上限が無いと任意のページ番号がそのまま discover の URL に乗る。
+ * discover 系をキャッシュした今、それは TMDb への無駄打ちでは済まず、
+ * R2 の Data Cache に無制限のエントリを作られることを意味する。
+ */
+export function parsePageParam(raw: string | null | undefined): number {
+  const n = parseInt(raw ?? "1", 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, TMDB_MAX_PAGE);
+}
+
 // ──────────────────────────────────────────
 // アニメ判定フィルター（実写ドラマ・洋画の混入を除外）
 // ──────────────────────────────────────────
@@ -326,15 +353,19 @@ export async function getNewAnime(
   const threeMonthsAgo = new Date(now);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: "first_air_date.desc",
-    "first_air_date.lte": now.toISOString().split("T")[0],
-    "first_air_date.gte": threeMonthsAgo.toISOString().split("T")[0],
-    "vote_count.gte": "5",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "first_air_date.desc",
+      "first_air_date.lte": now.toISOString().split("T")[0],
+      "first_air_date.gte": threeMonthsAgo.toISOString().split("T")[0],
+      "vote_count.gte": "5",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // トレンドアニメ（週間・日本アニメフィルタ）
@@ -358,15 +389,19 @@ export async function getJapaneseTrendingAnime(
   const now = new Date();
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    "first_air_date.gte": sixMonthsAgo.toISOString().split("T")[0],
-    "first_air_date.lte": now.toISOString().split("T")[0],
-    "vote_count.gte": "10",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      "first_air_date.gte": sixMonthsAgo.toISOString().split("T")[0],
+      "first_air_date.lte": now.toISOString().split("T")[0],
+      "vote_count.gte": "10",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -406,14 +441,18 @@ export async function getAnimeByGenre(
   genreId: number,
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    // アニメーション(16) AND 指定ジャンル を組み合わせ
-    with_genres: `${ANIMATION_GENRE_ID},${genreId}`,
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    "vote_count.gte": "5",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      // アニメーション(16) AND 指定ジャンル を組み合わせ
+      with_genres: `${ANIMATION_GENRE_ID},${genreId}`,
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      "vote_count.gte": "5",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -464,7 +503,11 @@ export async function getAnimeByKeyword(
   };
   if (options?.dateFrom) query["first_air_date.gte"] = options.dateFrom;
   if (options?.dateTo) query["first_air_date.lte"] = options.dateTo;
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query);
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    query,
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */

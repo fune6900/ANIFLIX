@@ -3,6 +3,8 @@ import {
   getAnimeMovies,
   getAnimeByGenre,
   getAnimeByKeywords,
+  parsePageParam,
+  TMDB_MAX_PAGE,
 } from "@/lib/tmdb";
 import { findGenre } from "@/lib/genres";
 import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
@@ -57,7 +59,7 @@ function normalizeMovie(m: TMDbMovie): NormalizedGridItem {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const type = searchParams.get("type") ?? "";
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+  const page = parsePageParam(searchParams.get("page"));
 
   try {
     let items: NormalizedGridItem[] = [];
@@ -72,11 +74,23 @@ export async function GET(req: NextRequest) {
     } else if (type === "genre") {
       const genreId = parseInt(searchParams.get("genreId") ?? "", 10);
       if (isNaN(genreId)) {
-        return NextResponse.json({ error: "Invalid genreId" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Invalid genreId" },
+          { status: 400, headers: SECURITY_HEADERS },
+        );
       }
+      // ANIME_GENRES に無い ID は弾く。getAnimeByGenre は 1800 秒キャッシュ対象で、
+      // 未検証の整数がそのまま with_genres としてキャッシュキーになるため、
+      // 任意の ID で R2 の Data Cache にエントリを作られてしまう。
       const genre = findGenre(genreId);
+      if (!genre) {
+        return NextResponse.json(
+          { error: "Invalid genreId" },
+          { status: 400, headers: SECURITY_HEADERS },
+        );
+      }
       let data;
-      if (genre?.filterType === "keyword" && genre.keyword) {
+      if (genre.filterType === "keyword" && genre.keyword) {
         const allKeywords = [genre.keyword, ...(genre.extraKeywords ?? [])];
         data = await getAnimeByKeywords(allKeywords, page);
       } else {
@@ -88,13 +102,16 @@ export async function GET(req: NextRequest) {
         totalResults = data.total_results;
       }
     } else {
-      return NextResponse.json({ error: "Unknown type" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unknown type" },
+        { status: 400, headers: SECURITY_HEADERS },
+      );
     }
 
     const response: BrowseApiResponse = {
       items,
       page,
-      totalPages: Math.min(totalPages, 500),
+      totalPages: Math.min(totalPages, TMDB_MAX_PAGE),
       totalResults,
     };
 
