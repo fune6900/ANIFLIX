@@ -86,6 +86,22 @@ async function fetchGenreItems(genre: AnimeGenre): Promise<ContentRowItem[]> {
   }
 }
 
+/**
+ * ホームは毎リクエストでレンダリングする。
+ *
+ * 個々の fetch はキャッシュするが、ページ自体が静的プリレンダに倒れると
+ * shuffle() / randomPage() がビルド時に凍結して全ユーザーが同じ並びを見る。
+ * 現状は fetchSeasonalAnime が no-store のため結果的に dynamic だが、
+ * そこに依存せず契約として固定する。
+ *
+ * NOTE: Next のドキュメントは force-dynamic を「全 fetch を no-store にする」と
+ * 説明しているが、実装（next/dist/server/lib/patch-fetch.js の
+ * noFetchConfigAndForceDynamic）は `next.revalidate` を明示した fetch を除外する。
+ * fetchTMDb は明示しているため DISCOVER_CACHE_TIME は無効化されない（Next 15.5.25 で実測確認）。
+ * Next を上げる際はここが崩れていないか、ホームのウォーム応答で再計測すること。
+ */
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   // 現在のシーズンを取得
   const currentSeason = getRecentSeasons(1)[0];
@@ -120,13 +136,23 @@ export default async function Home() {
     .filter((a) => a.backdrop_path && a.name && a.overview)
     .slice(0, 6);
 
-  const trailerKeys = await Promise.all(
-    heroCandidates.map((a) =>
-      getAnimeVideos(a.id)
-        .then((vids) => vids[0]?.key ?? null)
-        .catch(() => null),
+  // Hero のトレーラーと人気声優の集約は、どちらも currentSeasonAnime にしか
+  // 依存しておらず互いに独立している。直列に await すると往復が1段分まるごと
+  // 無駄になるため、同一の Promise.all にまとめて段数を 3 → 2 に減らす。
+  const [trailerKeys, aggregatedCast] = await Promise.all([
+    Promise.all(
+      heroCandidates.map((a) =>
+        getAnimeVideos(a.id)
+          .then((vids) => vids[0]?.key ?? null)
+          .catch(() => null),
+      ),
     ),
-  );
+    // 人気声優: シーズン人気アニメ上位 12 作品のキャストを並列取得し集約。
+    // /person/popular はワールドワイドで Hollywood に偏り、日本人声優がほぼ
+    // 取れないため、「今期人気アニメに出演している声優」を出演本数順に並べる
+    // 方が信頼性が高い。
+    aggregateSeasonalCast(currentSeasonAnime.slice(0, 12).map((a) => a.id)),
+  ]);
 
   const heroAnime: HeroItem[] = heroCandidates.map((a, i) => ({
     id: a.id,
@@ -164,12 +190,6 @@ export default async function Home() {
     .slice(0, 20)
     .map(toCardItem);
 
-  // 人気声優: シーズン人気アニメ上位 12 作品のキャストを並列取得し集約。
-  // /person/popular はワールドワイドで Hollywood に偏り、日本人声優がほぼ取れないため、
-  // 「今期人気アニメに出演している声優」を出演本数順に並べる方が信頼性が高い。
-  const aggregatedCast = await aggregateSeasonalCast(
-    currentSeasonAnime.slice(0, 12).map((a) => a.id),
-  );
   const voiceActors: ContentRowItem[] = aggregatedCast
     .slice(0, 20)
     .map(toCastCardItem);

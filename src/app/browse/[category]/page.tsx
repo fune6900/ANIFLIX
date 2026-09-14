@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { getPopularAnime, getNewAnime, getTrendingAnime } from "@/lib/tmdb";
+import {
+  getPopularAnime,
+  getNewAnime,
+  getTrendingAnime,
+  parsePageParam,
+} from "@/lib/tmdb";
 import { detectDevice, itemsPerPage } from "@/lib/device";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
@@ -42,7 +47,7 @@ export default async function BrowsePage({
   if (!(category in CATEGORY_CONFIG)) notFound();
 
   const config = CATEGORY_CONFIG[category as Category];
-  const currentPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const currentPage = parsePageParam(sp.page);
 
   const ua = (await headers()).get("user-agent") ?? "";
   const device = detectDevice(ua);

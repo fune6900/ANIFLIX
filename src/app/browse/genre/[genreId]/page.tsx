@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { getAnimeByGenre, getAnimeByKeywords } from "@/lib/tmdb";
+import {
+  getAnimeByGenre,
+  getAnimeByKeywords,
+  parsePageParam,
+} from "@/lib/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
 import { detectDevice, itemsPerPage } from "@/lib/device";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -25,7 +29,7 @@ export default async function GenrePage({
   const genre = findGenre(genreId);
   if (!genre) notFound();
 
-  const currentPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const currentPage = parsePageParam(sp.page);
 
   const ua = (await headers()).get("user-agent") ?? "";
   const device = detectDevice(ua);
