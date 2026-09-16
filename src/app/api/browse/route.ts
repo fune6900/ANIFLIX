@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       }
       // ANIME_GENRES に無い ID は弾く。getAnimeByGenre は 1800 秒キャッシュ対象で、
       // 未検証の整数がそのまま with_genres としてキャッシュキーになるため、
-      // 任意の ID で R2 の Data Cache にエントリを作られてしまう。
+      // 任意の ID で Data Cache にエントリを作られてしまう。
       const genre = findGenre(genreId);
       if (!genre) {
         return NextResponse.json(

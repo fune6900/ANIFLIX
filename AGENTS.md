@@ -14,23 +14,20 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 - **Styling**: Tailwind CSS（`#141414` 黒地 + `#E50914` レッド、Netflix Sans）
 - **Data**: TMDb API（Bearer / v3 API キー両対応、`src/lib/tmdb.ts`）
 - **Image**: `image.tmdb.org` 直配信（`next.config.ts` で `unoptimized: true`）
-- **Deploy**: Cloudflare Workers + Static Assets（`@opennextjs/cloudflare`）。開発用に Docker / Docker Compose
+- **Deploy**: Docker / Docker Compose、Vercel 想定
 - **CI**: GitHub Actions（lint / typecheck / build）
 
 > DB（Prisma/Supabase）・Server Actions・Zod・テストフレームワーク（Vitest/Playwright）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
 
 ## 💻 主要コマンド
 
-| コマンド             | 内容                                      |
-| -------------------- | ----------------------------------------- |
-| `npm run dev`        | 開発サーバー起動（http://localhost:3000） |
-| `npm run build`      | 本番用ビルド                              |
-| `npm run start`      | 本番サーバー起動                          |
-| `npm run lint`       | ESLint                                    |
-| `docker compose up`  | Docker での開発起動                       |
-| `npm run preview`    | workerd 上で本番同等のプレビュー          |
-| `npm run deploy`     | Cloudflare Workers へデプロイ             |
-| `npm run cf-typegen` | バインディング型を生成                    |
+| コマンド            | 内容                                  |
+| ------------------- | ------------------------------------- |
+| `npm run dev`       | 開発サーバー起動（http://localhost:3000） |
+| `npm run build`     | 本番用ビルド                          |
+| `npm run start`     | 本番サーバー起動                      |
+| `npm run lint`      | ESLint                                |
+| `docker compose up` | Docker での開発起動                   |
 
 > `npm run typecheck` / `npm test` / `npm run e2e` は **未設定**。導入は `@.Codex/rules/testing.md` に従う。
 
@@ -88,9 +85,6 @@ TMDB_ACCESS_TOKEN=...
 
 未設定の場合、ホームの動的セクションは表示されない。
 
-`npm run preview`（workerd 実行）は `.env.local` ではなく `.dev.vars` を読む。両方に同じ値を入れること。
-本番（Cloudflare Workers）へは `npx wrangler secret put <KEY>` で登録する。いずれも Git 管理外。
-
 ## 🔄 開発フロー
 
 **全ての実装はこの順序を厳守する。**
@@ -106,13 +100,13 @@ Plan Mode → ISSUE作成 → ブランチ作成
 
 ## 📋 ルール一覧
 
-| ファイル                      | 内容                                                   |
-| ----------------------------- | ------------------------------------------------------ |
-| @.Codex/rules/conventions.md  | コーディング規約（命名・TS・ディレクトリ）             |
+| ファイル                       | 内容                                                  |
+| ------------------------------ | ----------------------------------------------------- |
+| @.Codex/rules/conventions.md  | コーディング規約（命名・TS・ディレクトリ）            |
 | @.Codex/rules/security.md     | セキュリティ（入力サニタイズ・XSS・機密情報・APIキー） |
 | @.Codex/rules/testing.md      | テスト方針（TDD・導入計画）                            |
 | @.Codex/rules/git-strategy.md | Git／ブランチ戦略（命名・コミット・マージ）            |
-| @.Codex/rules/api-design.md   | API 設計（Route Handlers・TMDb クライアント）          |
+| @.Codex/rules/api-design.md   | API 設計（Route Handlers・TMDb クライアント）         |
 | @.Codex/rules/agents.md       | サブエージェント呼び出し規則（責務・順序）             |
 
 ## 🤖 エージェント・オーケストレーション
@@ -130,16 +124,16 @@ Plan Mode → ISSUE作成 → ブランチ作成
 
 ## 🛠 スラッシュコマンド
 
-| コマンド             | 用途                                          |
-| -------------------- | --------------------------------------------- |
-| `/smart-commit`      | lint 通過後にコミット                         |
-| `/create-pr`         | PR テンプレートに従い PR 作成                 |
-| `/review-pr`         | AI によるコードレビュー（Evaluator 起動）     |
-| `/merge-and-sync`    | PR を main にマージしてローカルを main に同期 |
-| `/coderabbit-fix`    | CodeRabbit の指摘を取得・分析して自動修正     |
-| `/e2e-test`          | E2E テスト実行（QA エージェント）             |
-| `/visual-regression` | 視覚的整合性検証（Designer エージェント）     |
-| `/perf-audit`        | Lighthouse / パフォーマンス計測               |
+| コマンド             | 用途                                              |
+| -------------------- | ------------------------------------------------- |
+| `/smart-commit`      | lint 通過後にコミット                              |
+| `/create-pr`         | PR テンプレートに従い PR 作成                      |
+| `/review-pr`         | AI によるコードレビュー（Evaluator 起動）          |
+| `/merge-and-sync`    | PR を main にマージしてローカルを main に同期       |
+| `/coderabbit-fix`    | CodeRabbit の指摘を取得・分析して自動修正          |
+| `/e2e-test`          | E2E テスト実行（QA エージェント）                  |
+| `/visual-regression` | 視覚的整合性検証（Designer エージェント）          |
+| `/perf-audit`        | Lighthouse / パフォーマンス計測                    |
 
 ## 🧠 行動原則
 
@@ -148,8 +142,8 @@ Plan Mode → ISSUE作成 → ブランチ作成
 - **計画優先**: Plan モードを使え。手当たり次第に動くな。
 - **PR 至上主義**: 全ての変更はブランチを切り、PR を通す。
 - **後片付け強制**: 検証用スクショ（PNG・JPEG）は撮影 → 確認 → 削除を1セット。リポジトリに残骸を残さない。
-- **API キー死守**: TMDb のキーは `.env.local`（`next dev` 用）と `.dev.vars`（`npm run preview` 用）のみ。どちらも Git 管理外。コード直書き禁止。本番は `wrangler secret put`。
-- **画像最適化禁止**: TMDb は既に最適化済み。`next/image` の `unoptimized: true` を維持する。Cloudflare 側の画像変換も使わない。
+- **API キー死守**: TMDb のキーは `.env.local` のみ。コード直書き禁止。
+- **画像最適化禁止**: TMDb は既に最適化済み。`next/image` の `unoptimized: true` を維持し、Vercel の変換枠を消費しない。
 
 ## 👥 役割
 

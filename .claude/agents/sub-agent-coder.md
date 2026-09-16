@@ -29,7 +29,7 @@ model: sonnet
    - Route Handler は `sanitizeQuery` 等で入力検証してから TMDb クライアントを呼ぶ
    - レスポンスにセキュリティヘッダー（`X-Content-Type-Options` / `X-Frame-Options` / `Cache-Control`）を付ける
    - 画像は `next/image` + `getImageUrl(path, size)`。直 URL の散在禁止
-   - `next/image` の `unoptimized: true` 設定を維持（Cloudflare 側の画像変換も使わない）
+   - `next/image` の `unoptimized: true` 設定を維持（Vercel 最適化枠を消費しない）
 4. **品質管理**: 重複を排除し、他者が再利用可能なレベルのクリーンなコードを最低限の工数で `Write` する。
 5. **タスク完了**: 実装が完了したら「終わりました」とだけ報告し、速やかに次のタスクを待機する。
 

@@ -32,15 +32,16 @@ const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 /**
  * AniList への共通リクエストヘッダー。
  *
- * Cloudflare Workers の fetch は User-Agent をデフォルトで送らない。
- * AniList は Cloudflare の背後にあり、UA 無しのリクエストは本番の Worker から
- * 403 Forbidden で弾かれていた（ローカル Node 実行では undici が UA を付けるため再現しない）。
- * 公開 API に対して呼び出し元を名乗るのは礼儀でもあるため、常に付与する。
+ * AniList は Cloudflare の背後にあり、User-Agent を名乗らないリクエストを
+ * 403 Forbidden で弾くことがある。ランタイムによっては fetch がデフォルトの
+ * User-Agent を送らないため（Node の undici は自動付与するが、エッジランタイムは
+ * 送らないものがある）、実行環境に依存しないよう明示的に付与する。
+ * 公開 API に対して呼び出し元を名乗るのは礼儀でもある。
  */
 const ANILIST_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   Accept: "application/json",
-  "User-Agent": "ANIFLIX/1.0 (+https://aniflex.riku-riku1019.workers.dev)",
+  "User-Agent": "ANIFLIX/1.0 (+https://github.com/fune6900/ANIFLIX)",
 };
 
 export type AniListSeason = "WINTER" | "SPRING" | "SUMMER" | "FALL";

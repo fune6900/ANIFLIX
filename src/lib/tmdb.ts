@@ -40,7 +40,7 @@ export const TMDB_MAX_PAGE = 500;
  *
  * 上限が無いと任意のページ番号がそのまま discover の URL に乗る。
  * discover 系をキャッシュした今、それは TMDb への無駄打ちでは済まず、
- * R2 の Data Cache に無制限のエントリを作られることを意味する。
+ * Data Cache に無制限のエントリを作られることを意味する。
  */
 export function parsePageParam(raw: string | null | undefined): number {
   const n = parseInt(raw ?? "1", 10);

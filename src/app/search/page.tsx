@@ -157,7 +157,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const seasonParam = params.season ?? "";
   const selectedSeason = parseSeasonParam(seasonParam);
   // sort は TMDb の sort_by にそのまま乗り、discover のキャッシュキーの一部になる。
-  // 無検証だと任意の文字列で R2 の Data Cache にエントリを作られるため、
+  // 無検証だと任意の文字列で Data Cache にエントリを作られるため、
   // UI が提供する選択肢だけを通す。
   const sortParam = params.sort ?? DEFAULT_SORT;
   const sort = SORT_OPTIONS.some((o) => o.value === sortParam)
