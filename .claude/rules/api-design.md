@@ -148,7 +148,7 @@ const data = await fetch("https://api.themoviedb.org/3/tv/1");
 
 > **キャッシュキー汚染に注意**: `cacheTime > 0` の関数へ渡すクエリ値は、
 > 呼び出し側で必ず範囲・列挙を検証すること。無検証の値は TMDb の URL に乗り、
-> そのまま R2 の Data Cache に新規エントリを作る（無制限なキー膨張 = 課金増幅）。
+> そのまま Data Cache に新規エントリを作る（無制限なキー膨張 = ストレージ / 課金の増幅）。
 > ページ番号は `parsePageParam()`（1〜`TMDB_MAX_PAGE`）、
 > ソート順は呼び出し側のホワイトリスト照合を通す。
 

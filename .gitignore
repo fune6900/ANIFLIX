@@ -28,17 +28,12 @@ yarn-error.log*
 # local env files (APIキーなど機密情報を含むため必ずGit管理外に)
 .env*.local
 .env
-# Cloudflare Workers ローカル実行用のシークレット（.dev.vars.example のみコミットする）
+# Cloudflare 撤去後もローカルに残り得るシークレットファイル。
+# 誤コミット防止のため無視指定だけは残す
 .dev.vars
 
-# vercel（Cloudflare へ完全移行し Vercel プロジェクトを削除したら除去する）
+# vercel
 .vercel
-
-# cloudflare (OpenNext ビルド成果物・wrangler ローカル状態)
-/.open-next/
-/.wrangler/
-# `npm run cf-typegen` の生成物。.open-next/worker を参照するためコミットしない
-/cloudflare-env.d.ts
 
 # typescript
 *.tsbuildinfo
