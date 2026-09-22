@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAnimeByStudio } from "@/lib/tmdb";
+import { getAnimeByStudio, parsePageParam } from "@/lib/tmdb";
 import { ANIME_STUDIOS, findStudio } from "@/lib/studios";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
@@ -105,7 +105,7 @@ export default async function StudioPage({
   const studio = findStudio(studioId);
   if (!studio) notFound();
 
-  const currentPage = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
+  const currentPage = parsePageParam(pageStr);
 
   const data = await getAnimeByStudio(studioId, currentPage).catch(() => null);
   const anime: TMDbAnime[] = data?.results ?? [];

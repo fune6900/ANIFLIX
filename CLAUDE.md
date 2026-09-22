@@ -17,7 +17,7 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 - **Auth**: Auth.js v5（NextAuth）+ Google OAuth。JWT セッション（DB / アダプタなし）。`src/middleware.ts` でサイト全体をログイン必須にする bot 対策
 - **Image**: `image.tmdb.org` 直配信（`next.config.ts` で `unoptimized: true`）
 - **Deploy**: Docker / Docker Compose、Vercel 想定
-- **CI**: GitHub Actions（lint / typecheck / build）
+- **CI**: GitHub Actions（lint / typecheck / test / build）
 
 > DB（Prisma/Supabase）・Zod・Playwright（E2E）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
 > Server Actions は**認証操作に限って導入済み**（`src/app/actions/auth.ts`・`src/app/login/page.tsx`）。他用途へ広げる場合も ISSUE を起票すること。詳細は `@.claude/rules/api-design.md`。

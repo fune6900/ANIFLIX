@@ -164,7 +164,7 @@ const data = await fetch("https://api.themoviedb.org/3/tv/1");
 
 | 用途                     | `cacheTime` | 理由                         |
 | ------------------------ | ----------- | ---------------------------- |
-| 検索 (`/search/*`)       | **0 必須**  | `searchAnime` / `searchPerson` / `searchMovie` / `searchTVByPage`。キーワードがそのままキャッシュキーになる |
+| 検索 (`/search/*`)       | **既定 0**  | `searchAnime` / `searchPerson` / `searchMovie` / `searchTVByPage`。**利用者が入力したキーワードでは必ず 0**（キーワードがそのままキャッシュキーになる）。呼び出し側が固定の語彙しか渡さない場合に限り明示的な上書きを許す（例: `src/lib/seasonal-anime.ts` は AniList 由来の作品名で `searchAnime(query, 86400)` を呼ぶ） |
 | ユーザー入力を含む discover | **0 必須**  | `discoverAnime` / `discoverAnimeMovie`。任意のクエリ値がそのままキャッシュキーになるため絶対にキャッシュしない |
 | 一覧 discover            | 1800 (`DISCOVER_CACHE_TIME`) | `getAnimeByGenre` / `getAnimeByKeyword` / `getNewAnime` / `getJapaneseTrendingAnime` / `getPopularAnime` / `getTrendingAnime` / `getAnimeByEra` / `getAnimeBySeason` / `getAiringAnime` / `getAnimeByStudio` / `getAnimeMovies` / `getAnimeMovieByKeyword`。ランダム性は `randomPage()` と `shuffle()` が担保 |
 | 詳細・動画               | 3600 (`DETAIL_CACHE_TIME`) | `getAnimeDetail` / `getMovieDetail` / `getPersonDetail` / `getJapaneseVoiceActors` / `getAnimeSeasonEpisodes` / `getAnimeVideos` / `getAnimeCredits` |

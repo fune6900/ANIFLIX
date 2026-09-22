@@ -3,8 +3,8 @@
 12 ステップの開発フロー。全ての機能実装はこの順序を厳守すること。
 各ステップに参照ルールを明記する。違反はメイド長（Benz）が差し戻す。
 
-> テスト基盤（Vitest/Playwright）は未導入のため、Step 4 のテスト関連手順は基盤導入後に有効化される。
-> 導入までの暫定運用では、QA は **テスト方針の文書化** と **手動検証手順の整備** を担当する。
+> ユニットテスト基盤（Vitest）は **導入済み**（ISSUE #54）。Step 4 の TDD サイクルは常に適用される。
+> E2E（Playwright）は未導入のため、`/e2e-test` は Playwright MCP による手動シナリオで代替する。
 
 ---
 
@@ -68,7 +68,7 @@ git checkout -b feat/<issue番号>-<機能名の短縮>
 
 - 検閲のメイド（QA）がテストを書く
 - `npm test -- --run` でテストが**失敗する**ことを確認してから次へ
-- 基盤未導入のうちは、ISSUE に **手動検証チェックリスト** を貼ることで代替
+- E2E が必要でユニットテストに落とせない場合のみ、ISSUE に **手動検証チェックリスト** を貼ることで代替する
 
 ### 4-2. 型・ドメイン定義（Architect）
 
@@ -98,7 +98,7 @@ git checkout -b feat/<issue番号>-<機能名の短縮>
 
 **Coder/Designer の実装完了後、必ず評価のメイド（Evaluator）を呼び出す。**
 
-- `npm run lint` / `npm run build` を実行して評価する（基盤導入後は `typecheck` / `test` も追加）
+- `npm run lint` / `npm run typecheck` / `npm test -- --run` / `npm run build` を実行して評価する
 - セキュリティ・コード規約をガードレールに照らして確認する
 - **PASS** → 4-6 へ進む
 - **FAIL** → 差し戻し事項を Coder/Designer に渡し、4-3 または 4-4 に戻る（ループ）
@@ -126,7 +126,7 @@ git checkout -b feat/<issue番号>-<機能名の短縮>
 
 Evaluator が PASS を出した後、`/smart-commit` でコミットする。
 
-- lint を通過したもののみコミット可（typecheck / test は基盤導入後に必須化）
+- lint / typecheck / test を通過したもののみコミット可
 - コミットメッセージは変更の「理由」（why）を書く
 
 **参照**: `@.claude/rules/git-strategy.md`（コミット規約）
@@ -150,11 +150,10 @@ Evaluator が PASS を出した後、`/smart-commit` でコミットする。
 PR 作成前後に必ずローカルで確認する。
 
 ```bash
-npm run lint       # ESLint（conventions.md 準拠チェック）
-npm run build      # ビルド成功確認
-# 基盤導入後:
-# npm run typecheck
-# npm test -- --run
+npm run lint        # ESLint（conventions.md 準拠チェック）
+npm run typecheck   # 型チェック
+npm test -- --run   # ユニットテスト
+npm run build       # ビルド成功確認
 ```
 
 UI 変更がある場合は `/visual-regression` を実行する。
@@ -191,6 +190,7 @@ push 後、GitHub Actions の全ジョブがグリーンになることを確認
 | ---------- | ----------------- | ---------------- |
 | Lint       | ESLint エラーなし | `conventions.md` |
 | Type Check | 型エラーなし      | `conventions.md` |
+| Test       | ユニットテスト全件パス | `testing.md`  |
 | Build      | ビルド成功        | —                |
 
 **CI が red の場合はマージしない。** 原因を特定して修正する。

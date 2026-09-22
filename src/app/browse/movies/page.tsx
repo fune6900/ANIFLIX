@@ -3,6 +3,7 @@ import {
   discoverAnimeMovie,
   getAnimeMovieByKeywords,
   getAnimeMovies,
+  parsePageParam,
 } from "@/lib/tmdb";
 import { searchMovieKeyword } from "@/lib/anime-search";
 import type { TMDbMovie } from "@/types/tmdb";
@@ -29,8 +30,10 @@ interface MoviesPageProps {
   }>;
 }
 
+const DEFAULT_SORT = "popularity.desc";
+
 const SORT_OPTIONS = [
-  { value: "popularity.desc", label: "人気順（高い）" },
+  { value: DEFAULT_SORT, label: "人気順（高い）" },
   { value: "vote_average.desc", label: "評価順（高い）" },
   { value: "primary_release_date.desc", label: "放送日（新しい）" },
   { value: "primary_release_date.asc", label: "放送日（古い）" },
@@ -126,14 +129,19 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
   const rawQuery = params.q ?? "";
   const query = sanitize(rawQuery);
   const mode = params.mode === "filter" ? "filter" : "keyword";
-  const currentPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  const currentPage = parsePageParam(params.page);
 
   const genreIdParsed = params.genre ? parseInt(params.genre, 10) : NaN;
   const genreId = Number.isFinite(genreIdParsed) ? genreIdParsed : undefined;
   const selectedGenre = genreId ? findGenre(genreId) : undefined;
-  const sort = params.sort ?? "popularity.desc";
+  // sort は TMDb の sort_by にそのまま乗り、discover のキャッシュキーの一部になる。
+  // 未検証の値を通すとキャッシュエントリが無制限に増えるためホワイトリスト照合する
+  const sortParam = params.sort ?? DEFAULT_SORT;
+  const sort = SORT_OPTIONS.some((o) => o.value === sortParam)
+    ? sortParam
+    : DEFAULT_SORT;
 
-  const hasFilters = !!selectedGenre || sort !== "popularity.desc";
+  const hasFilters = !!selectedGenre || sort !== DEFAULT_SORT;
   const isFilterMode = mode === "filter";
 
   let results: TMDbMovie[] = [];
@@ -196,14 +204,14 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
   if (isFilterMode) baseParams.mode = "filter";
   if (query) baseParams.q = query;
   if (selectedGenre) baseParams.genre = String(selectedGenre.id);
-  if (sort !== "popularity.desc") baseParams.sort = sort;
+  if (sort !== DEFAULT_SORT) baseParams.sort = sort;
 
   // キーワードモード用の hidden fields（フィルター値の引き継ぎ）
   const keywordHiddenFields = [
     ...(selectedGenre
       ? [{ name: "genre", value: String(selectedGenre.id) }]
       : []),
-    ...(sort !== "popularity.desc" ? [{ name: "sort", value: sort }] : []),
+    ...(sort !== DEFAULT_SORT ? [{ name: "sort", value: sort }] : []),
   ];
 
   return (
@@ -326,7 +334,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
                     {selectedGenre.emoji} {selectedGenre.name}
                   </span>
                 )}
-                {sort !== "popularity.desc" && (
+                {sort !== DEFAULT_SORT && (
                   <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
                     {SORT_OPTIONS.find((o) => o.value === sort)?.label}
                   </span>

@@ -1,5 +1,5 @@
 # ---- 開発用 Dockerfile ----
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # 依存関係インストール用ステージ
 FROM base AS deps

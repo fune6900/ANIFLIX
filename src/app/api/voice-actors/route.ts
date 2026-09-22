@@ -3,6 +3,7 @@ import {
   searchPerson,
   getJapaneseVoiceActors,
   isJapaneseVoiceActor,
+  parsePageParam,
 } from "@/lib/tmdb";
 
 // 入力サニタイズ: HTMLタグ・危険文字除去、長さ制限
@@ -28,10 +29,7 @@ export async function GET(request: NextRequest) {
 
   // クエリなし → 日本の声優一覧（ページング）
   if (!rawQuery) {
-    const page = Math.max(
-      1,
-      parseInt(searchParams.get("page") ?? "1", 10) || 1,
-    );
+    const page = parsePageParam(searchParams.get("page"));
     try {
       const data = await getJapaneseVoiceActors(page);
       return NextResponse.json(data, { headers: securityHeaders });

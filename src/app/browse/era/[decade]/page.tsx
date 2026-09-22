@@ -6,6 +6,7 @@ import {
   getAnimeByEra,
   getImageUrl,
   isJapaneseAnimeTV,
+  parsePageParam,
   searchTVByPage,
 } from "@/lib/tmdb";
 import { ANIME_ERAS, findEra } from "@/lib/eras";
@@ -106,7 +107,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   const era = findEra(decade);
   if (!era) notFound();
 
-  const currentPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const currentPage = parsePageParam(sp.page);
   const sort = sp.sort === "date" ? "first_air_date.asc" : "popularity.desc";
   const sortLabel = sort === "first_air_date.asc" ? "date" : "popular";
   const query = (sp.q ?? "").trim();
