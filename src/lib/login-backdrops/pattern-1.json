@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": "TMDb /discover/tv (with_genres=16, with_origin_country=JP, sort_by=popularity.desc, vote_count.gte=100)",
+  "items": [
+    {
+      "id": 65733,
+      "title": "ドラえもん",
+      "backdropPath": "/c2oiRa7V3bQzof4wVGzLXtWJ5QU.jpg"
+    },
+    {
+      "id": 95479,
+      "title": "呪術廻戦",
+      "backdropPath": "/qpin8cASXEVtwhzNsprHYFiOAGk.jpg"
+    },
+    {
+      "id": 65942,
+      "title": "Re:ゼロから始める異世界生活",
+      "backdropPath": "/7ZruEnSnHD6Jx5mF0hBt1E306Vt.jpg"
+    },
+    {
+      "id": 30981,
+      "title": "MONSTER",
+      "backdropPath": "/6T19aRp9zLMghZo1dTEwoNyreNZ.jpg"
+    },
+    {
+      "id": 220150,
+      "title": "ポケットモンスター",
+      "backdropPath": "/d0axpGojOqDag5lDa0eNSEtw11l.jpg"
+    },
+    {
+      "id": 207468,
+      "title": "怪獣８号",
+      "backdropPath": "/htGeuCcNhlBe8GTx3izKOsd8frw.jpg"
+    }
+  ]
+}
