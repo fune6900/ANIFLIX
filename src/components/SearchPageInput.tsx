@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { TMDbAnime, TMDbMovie, TMDbPerson } from "@/types/tmdb";
 import type { CharacterSearchResult } from "@/types/anilist";
 import { getImageUrl } from "@/lib/tmdb";
+import { assertApiOk, isSessionExpired } from "@/lib/api-client";
 
 interface HiddenField {
   name: string;
@@ -189,6 +190,8 @@ export default function SearchPageInput({
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [open, setOpen] = useState(false);
+  // セッション切れなど、利用者に伝える必要のあるエラー文言
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -277,7 +280,7 @@ export default function SearchPageInput({
             ]),
           },
         );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        assertApiOk(res);
 
         const raw: unknown = await res.json();
         if (!raw || typeof raw !== "object") throw new Error("不正な応答");
@@ -310,11 +313,19 @@ export default function SearchPageInput({
         }
 
         setSuggestions(mapped);
+        setError(null);
         setOpen(mapped.length > 0 || q.trim().length > 0);
         setActiveIndex(-1);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setSuggestions([]);
+        // セッション切れを無言で握りつぶすと「検索結果 0 件」に見えてしまう
+        if (isSessionExpired(err)) {
+          setError(err.message);
+          setOpen(true);
+        } else {
+          setError(null);
+        }
       } finally {
         if (abortRef.current === controller) {
           setLoading(false);
@@ -469,6 +480,14 @@ export default function SearchPageInput({
       {/* サジェストドロップダウン */}
       {open && (
         <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-[#1f1f1f] border border-gray-700 rounded-lg shadow-2xl overflow-hidden">
+          {error && (
+            <p
+              role="alert"
+              className="px-4 py-3 text-sm text-gray-300 border-b border-gray-700"
+            >
+              {error}
+            </p>
+          )}
           <ul
             ref={listRef}
             id={listId}

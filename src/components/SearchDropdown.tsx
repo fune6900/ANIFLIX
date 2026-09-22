@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { TMDbAnime, TMDbMovie, TMDbPerson } from "@/types/tmdb";
 import type { CharacterSearchResult } from "@/types/anilist";
 import { getImageUrl } from "@/lib/tmdb";
+import { assertApiOk } from "@/lib/api-client";
 
 type SearchMode = "anime" | "movie" | "voice-actor" | "character";
 
@@ -163,12 +164,8 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
             AbortSignal.timeout(5000),
           ]),
         });
-        // セッション切れ時は Middleware が 401 JSON を返す（src/auth.ts の authorized）。
-        // 生の "HTTP 401" を出しても利用者には伝わらないため文言を差し替える
-        if (res.status === 401) {
-          throw new Error("セッションが切れました。ページを再読み込みしてください");
-        }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // セッション切れ（401）とその他の失敗を切り分ける
+        assertApiOk(res);
         // res.json() は any 相当を返すため unknown で受けて型ガードする
         const raw: unknown = await res.json();
         if (!raw || typeof raw !== "object") {
