@@ -2,28 +2,12 @@ import { signIn } from "@/auth";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import LoginBackdrop from "@/components/LoginBackdrop";
 import { pickRandomLoginBackdrops } from "@/lib/login-backdrops";
+import { safeCallbackUrl } from "@/lib/safe-callback-url";
 
 // ページコンポーネントの Props 型定義。
 // Next.js 15 以降、searchParams は Promise で渡されるため Promise 型で定義
 interface LoginPageProps {
   searchParams: Promise<{ callbackUrl?: string }>;
-}
-
-/**
- * リダイレクト先 URL のオープンリダイレクト脆弱性を防止する安全化関数。
- * Auth.js の middleware は callbackUrl に絶対 URL を入れてくるため、
- * オリジンを捨ててパス部分だけを採用し、必ず自サイト内へ閉じる。
- */
-function safeCallbackUrl(raw: string | undefined): string {
-  if (!raw) return "/";
-  try {
-    const { pathname, search } = new URL(raw, "http://localhost");
-    return pathname.startsWith("/") && !pathname.startsWith("//")
-      ? `${pathname}${search}`
-      : "/";
-  } catch {
-    return "/";
-  }
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
