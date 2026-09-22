@@ -43,6 +43,8 @@ const data: any = await fetch(...).then(r => r.json());
 
 ```
 src/
+  middleware.ts                 認証ガード（全ルート）
+  auth.ts                       Auth.js 設定
   app/
     layout.tsx                  ルートレイアウト
     page.tsx                    ホーム
@@ -53,13 +55,17 @@ src/
     voice-actors/[id]/page.tsx  声優詳細
     search/page.tsx             検索
     browse/                     カテゴリ別ブラウズ
+    login/                      ログイン画面・認証エラー画面
+    actions/                    Server Actions（認証操作のみ）
     api/                        Route Handlers
   components/                   UI コンポーネント（Navbar, ContentRow, …）
   lib/                          TMDb クライアント・ドメイン定義（genres / eras / seasons / studios / device）
+                                + 認証周辺（auth-routes / api-client / login-backdrops）
   types/                        TMDb API 型定義
 ```
 
 > 現状 `src/hooks/` / `src/services/` は未使用。導入は ISSUE を起票してから。
+> `src/app/actions/` は認証操作専用。他用途へ広げる場合は ISSUE を起票すること（`@.claude/rules/api-design.md`）。
 
 ---
 
