@@ -164,14 +164,20 @@ const data = await fetch("https://api.themoviedb.org/3/tv/1");
 
 | 用途                     | `cacheTime` | 理由                         |
 | ------------------------ | ----------- | ---------------------------- |
-| 検索 (`/search/*`)       | 0           | リアルタイム性重視           |
-| ホーム系 discover        | 1800        | `getAnimeByGenre` / `getAnimeByKeyword` / `getNewAnime` / `getJapaneseTrendingAnime`。ランダム性は `randomPage()` と `shuffle()` が担保 |
+| 検索 (`/search/*`)       | **0 必須**  | `searchAnime` / `searchPerson` / `searchMovie` / `searchTVByPage`。キーワードがそのままキャッシュキーになる |
 | ユーザー入力を含む discover | **0 必須**  | `discoverAnime` / `discoverAnimeMovie`。任意のクエリ値がそのままキャッシュキーになるため絶対にキャッシュしない |
-| その他の一覧 discover    | 0           | `getPopularAnime` / `getAnimeByEra` / `getAnimeBySeason` / `getAiringAnime` / `getAnimeByStudio` / `getAnimeMovies` / `getAnimeMovieByKeyword`。未計測のため据え置き。導線がボトルネック化したら個別に見直す |
-| 詳細 (`/tv/{id}` etc.)   | 0 〜 3600   | 内容更新を反映               |
-| 動画 (`/tv/{id}/videos`) | 3600        | OP/ED は頻繁に変わらない     |
-| 外部 ID                  | 86400       | ほぼ不変                     |
+| 一覧 discover            | 1800 (`DISCOVER_CACHE_TIME`) | `getAnimeByGenre` / `getAnimeByKeyword` / `getNewAnime` / `getJapaneseTrendingAnime` / `getPopularAnime` / `getTrendingAnime` / `getAnimeByEra` / `getAnimeBySeason` / `getAiringAnime` / `getAnimeByStudio` / `getAnimeMovies` / `getAnimeMovieByKeyword`。ランダム性は `randomPage()` と `shuffle()` が担保 |
+| 詳細・動画               | 3600 (`DETAIL_CACHE_TIME`) | `getAnimeDetail` / `getMovieDetail` / `getPersonDetail` / `getJapaneseVoiceActors` / `getAnimeSeasonEpisodes` / `getAnimeVideos` / `getAnimeCredits` |
+| 外部 ID / 配信情報       | 86400       | ほぼ不変                     |
 | キーワード ID 解決       | 86400       | TMDb 側でほぼ不変            |
+
+> **なぜ一覧・詳細をキャッシュするか**: ほとんどのページは `searchParams`（ページング）を
+> await するため動的レンダリングから外せない。関数呼び出し自体は毎回発生するが、その
+> 実行時間は TMDb への往復が支配的であり、Data Cache を効かせれば実行時間と TMDb 側の
+> 負荷が同時に下がる。Vercel は関数の実行時間も課金対象のため、ここが最も費用対効果が高い。
+>
+> この表は `tests/unit/lib/tmdb-cache.test.ts` で実行可能な契約として固定してある。
+> 値を変える場合はテストも合わせて更新すること。
 
 > **キャッシュキー汚染に注意**: `cacheTime > 0` の関数へ渡すクエリ値は、
 > 呼び出し側で必ず範囲・列挙を検証すること。無検証の値は TMDb の URL に乗り、
