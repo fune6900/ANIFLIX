@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { assertApiOk } from "@/lib/api-client";
 
 export interface ContentRowItem {
   id: number;
@@ -231,7 +232,12 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
 
     setVideoKey(undefined); // フェッチ中
     fetch(`/api/videos?id=${item.id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        // セッション切れ（401）やエラー応答の本文を正常データとして読まない。
+        // ホバープレビューは付加機能のため、失敗時は黙ってプレビューを無効化する
+        assertApiOk(r);
+        return r.json();
+      })
       .then((data) => {
         const key = data.key ?? null;
         videoCache.set(item.id, key);

@@ -1,7 +1,13 @@
 # API 設計ルール
 
 ANIFLIX は **Route Handlers + TMDb クライアント関数** で構成される。
-DB を持たないため Server Actions は使わない（書き込みが発生したら検討）。
+DB を持たないため、データ取得は Route Handler、書き込み系 API は存在しない。
+
+**Server Actions は認証操作に限って使う**（`src/app/actions/auth.ts` のログアウト、
+`src/app/login/page.tsx` のログイン）。Auth.js が `signIn()` / `signOut()` を
+サーバー側実行前提で提供しており、これをクライアントから叩く形にすると
+セッション Cookie の発行経路が増えるため。**それ以外の用途で Server Actions を
+増やす場合は ISSUE を起票すること。**
 
 ---
 
@@ -98,7 +104,28 @@ export async function GET(request: NextRequest) {
 }
 ```
 
-### HTTP メソッドとステータスコード
+#### 認証
+
+`/api/**` は `src/middleware.ts` のガード対象に入る。未認証のリクエストには
+Middleware（`src/auth.ts` の `authorized`）が **401 JSON** を返し、Route Handler
+自体は実行されない。したがって Route Handler 側に認証チェックを書く必要はない。
+
+ただしクライアント側は 401 を自前で判定しないこと。**`src/lib/api-client.ts` の
+`assertApiOk()` を必ず通す**。各所でステータスコードを見る方式は配線漏れを生み、
+セッション切れが「検索結果 0 件」として無言表示される事故につながる。
+
+```ts
+// OK
+const res = await fetch("/api/search?q=...");
+assertApiOk(res); // 401 は SessionExpiredError、それ以外の失敗は汎用エラー
+
+// NG: 401 が汎用エラーに丸められ、再ログインが必要だと伝わらない
+if (!res.ok) throw new Error(`HTTP ${res.status}`);
+```
+
+---
+
+## HTTP メソッドとステータスコード
 
 | 操作       | メソッド | 成功時ステータス |
 | ---------- | -------- | ---------------- |
@@ -199,3 +226,5 @@ try {
 - [ ] HTTP メソッドとステータスコードが規約に従っているか
 - [ ] キャッシュ秒数が用途に適しているか
 - [ ] エンドポイントのテスト（基盤導入後）が存在するか
+- [ ] クライアントの `fetch("/api/...")` が `assertApiOk()` を通っているか
+- [ ] Server Actions を認証以外の用途で増やしていないか（増やす場合は ISSUE）

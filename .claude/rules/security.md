@@ -42,6 +42,53 @@ if (query.length < 1) return NextResponse.json({ results: [] });
 
 ---
 
+## 認証・認可
+
+サイト全体を Google ログイン必須にして bot を遮断している（Auth.js v5 / JWT セッション）。
+認可判定は `src/middleware.ts` の 1 箇所に集約する。Route Handler や Server Component へ
+個別の認証チェックを散らさないこと。
+
+### matcher の除外は必ず境界を付ける
+
+`src/middleware.ts` の matcher で除外を増やす際、**前方一致で終わらせてはならない**。
+
+```ts
+// NG: /logindq /loginx /api/authors /manifestXjson が認証ガードを素通りする
+"/((?!api/auth|login|manifest.json).*)"
+
+// OK: 境界（$ / /）を付け、ドットをエスケープする（TS の文字列リテラルなので \\. と書く）
+"/((?!api/auth(?:/|$)|login$|manifest\\.json$).*)"
+```
+
+この失敗は **エラーを出さずに静かに素通りする**。未ログインのまま存在しないページが
+描画され、ログイン済み向けの UI（ログアウトボタン等）が未認証の利用者に見える。
+除外を変更したら、必ず経路テーブルで「ガード対象／素通り」を実測すること。
+
+認証画面を増やす場合は `src/lib/auth-routes.ts` の `AUTH_ROUTES` と matcher を
+**対で更新**する。片方だけ変えると「ガードは外れているのにサイト共通の UI が出る」
+という中途半端な状態になる。
+
+### 未認証レスポンスの返し分け
+
+- ページ: `pages.signIn`（`/login`）へリダイレクト
+- `/api/**`: **401 JSON を返す**。HTML へリダイレクトするとブラウザが追従して 200 を
+  受け取り、クライアントの `res.json()` が構文エラーで落ちる。セッション切れが
+  「機能が壊れた」ようにしか見えなくなる
+
+クライアント側は `src/lib/api-client.ts` の `assertApiOk()` を通すこと。
+
+### 認証情報
+
+- `AUTH_SECRET` は JWT の署名・暗号鍵。**本番と開発で必ず別の値**を使う
+- `AUTH_SECRET` の変更 = 全ユーザー強制ログアウト。ローテーション時は影響を織り込む
+- Vercel 以外（Docker / 自前ホスト）では `AUTH_TRUST_HOST=true` が必須。
+  開発モードでは自動で信頼されるが本番ビルドでは効かず、未設定だと `/api/auth/**` が
+  全て `UntrustedHost` で 500 になる
+- セッション Cookie は JWE（暗号化）で、氏名・メール・Google アカウント ID を含む。
+  サーバーには保存しない。ログにも出さない
+
+---
+
 ## 機密情報管理
 
 - **API キー・シークレットは環境変数のみ**。コードに直書き禁止
@@ -119,3 +166,6 @@ const securityHeaders = [
 - [ ] `NEXT_PUBLIC_` 以外の環境変数がクライアントバンドルに含まれていないか
 - [ ] Route Handler のレスポンスにセキュリティヘッダーが付いているか
 - [ ] `npm audit` で新たな脆弱性が発生していないか
+- [ ] `src/middleware.ts` の matcher の除外に境界（`$` / `/`）が付いているか
+- [ ] matcher と `src/lib/auth-routes.ts` の `AUTH_ROUTES` が対で更新されているか
+- [ ] クライアントの `fetch("/api/...")` が `assertApiOk()` を通っているか

@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": "TMDb /discover/tv (with_genres=16, with_origin_country=JP, sort_by=popularity.desc, vote_count.gte=100)",
+  "items": [
+    {
+      "id": 45857,
+      "title": "家庭教師ヒットマン REBORN!",
+      "backdropPath": "/3wztM15Bq7TX3Kc8IzApqsOQQjK.jpg"
+    },
+    {
+      "id": 45790,
+      "title": "ジョジョの奇妙な冒険",
+      "backdropPath": "/5mUYDoFjDlPmDvnUWSknhYjGBBh.jpg"
+    },
+    {
+      "id": 31910,
+      "title": "ナルト 疾風伝",
+      "backdropPath": "/z0YhJvomqedHF85bplUJEotkN5l.jpg"
+    },
+    {
+      "id": 37854,
+      "title": "ワンピース",
+      "backdropPath": "/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg"
+    },
+    {
+      "id": 40424,
+      "title": "頭文字D",
+      "backdropPath": "/zBIIyH8yfdlfvvpEiG9PLwoVXc6.jpg"
+    },
+    {
+      "id": 60863,
+      "title": "ハイキュー!!",
+      "backdropPath": "/zr1MDQCPVB5uJEHxiO6Tukn4OjH.jpg"
+    }
+  ]
+}

@@ -13,11 +13,13 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 - **Core**: Next.js 15 (App Router), React 19, TypeScript 5
 - **Styling**: Tailwind CSS（`#141414` 黒地 + `#E50914` レッド、Netflix Sans）
 - **Data**: TMDb API（Bearer / v3 API キー両対応、`src/lib/tmdb.ts`）
+- **Auth**: Auth.js v5（NextAuth）+ Google OAuth。JWT セッション（DB / アダプタなし）。`src/middleware.ts` でサイト全体をログイン必須にする bot 対策
 - **Image**: `image.tmdb.org` 直配信（`next.config.ts` で `unoptimized: true`）
 - **Deploy**: Docker / Docker Compose、Vercel 想定
 - **CI**: GitHub Actions（lint / typecheck / build）
 
-> DB（Prisma/Supabase）・Server Actions・Zod・テストフレームワーク（Vitest/Playwright）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
+> DB（Prisma/Supabase）・Zod・テストフレームワーク（Vitest/Playwright）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
+> Server Actions は**認証操作に限って導入済み**（`src/app/actions/auth.ts`・`src/app/login/page.tsx`）。他用途へ広げる場合も ISSUE を起票すること。詳細は `@.claude/rules/api-design.md`。
 
 ## 💻 主要コマンド
 
@@ -35,6 +37,8 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 
 ```
 src/
+├── middleware.ts               認証ガード（全ルート。除外は matcher で指定）
+├── auth.ts                     Auth.js 設定（Google / JWT / 認可判定）
 ├── app/
 │   ├── layout.tsx              ルートレイアウト（Navbar / BottomNav / Footer）
 │   ├── page.tsx                ホーム（Hero + ContentRow + 年代・ジャンルピル）
@@ -55,14 +59,18 @@ src/
 │   │   ├── genre/[genreId]/
 │   │   ├── era/[decade]/
 │   │   └── studio/[id]/
-│   └── api/                    Route Handlers（search / videos / season-episodes / voice-actors / browse）
+│   ├── login/                  ログイン画面・認証エラー画面（未認証で到達可）
+│   ├── actions/                Server Actions（認証操作のみ）
+│   └── api/                    Route Handlers（search / videos / season-episodes / voice-actors / browse / auth）
 ├── components/                 UI コンポーネント（Navbar, ContentRow, HeroSection, …）
 ├── lib/                        TMDb クライアント・ジャンル / 年代 / シーズン / スタジオ定義
+│                               + 認証周辺（auth-routes / api-client / login-backdrops）
 └── types/                      TMDb API 型定義（tmdb.ts）
 ```
 
 ## 🎯 主要機能
 
+- **認証**: Google ログイン必須（bot 対策）。未認証は `/login` へリダイレクト、`/api/**` には 401 JSON を返す。Googlebot も遮断されるため SEO は捨てている
 - **ホーム**: 現クール TOP10・今週のトレンド・新着・人気声優 + ジャンル別 / 年代別の動的セクション
 - **Hero スライダー**: 6 件クロスフェード + YouTube トレーラーモーダル
 - **ContentRow**: ホバー 800ms で YouTube プレビュー（`/api/videos` 経由、モジュールキャッシュ）
@@ -143,6 +151,7 @@ Plan Mode → ISSUE作成 → ブランチ作成
 - **PR 至上主義**: 全ての変更はブランチを切り、PR を通す。
 - **後片付け強制**: 検証用スクショ（PNG・JPEG）は撮影 → 確認 → 削除を1セット。リポジトリに残骸を残さない。
 - **API キー死守**: TMDb のキーは `.env.local` のみ。コード直書き禁止。
+- **認可境界を緩めるな**: `src/middleware.ts` の matcher から除外を増やす時は必ず境界（`$` / `/`）を付ける。前方一致で終わらせると `/logindq` のような別パスが素通りする。
 - **画像最適化禁止**: TMDb は既に最適化済み。`next/image` の `unoptimized: true` を維持し、Vercel の変換枠を消費しない。
 
 ## 👥 役割

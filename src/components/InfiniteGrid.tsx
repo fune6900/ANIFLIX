@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { NormalizedGridItem } from "@/app/api/browse/route";
+import { assertApiOk, isSessionExpired } from "@/lib/api-client";
 
 interface InfiniteGridProps {
   initialItems: NormalizedGridItem[];
@@ -111,7 +112,7 @@ export default function InfiniteGrid({
     try {
       const separator = fetchUrl.includes("?") ? "&" : "?";
       const res = await fetch(`${fetchUrl}${separator}page=${nextPage}`);
-      if (!res.ok) throw new Error("fetch failed");
+      assertApiOk(res);
       const data = await res.json();
       setItems((prev) => {
         // 重複排除
@@ -124,6 +125,12 @@ export default function InfiniteGrid({
       setPage(nextPage);
       setHasMore(nextPage < data.totalPages);
     } catch (e) {
+      // セッション切れならこれ以上読み込んでも 401 が返るだけなので打ち切る。
+      // 監視を残すとスクロールのたびに無駄なリクエストが飛ぶ
+      if (isSessionExpired(e)) {
+        setHasMore(false);
+        return;
+      }
       console.error("InfiniteGrid load error:", e);
     } finally {
       setLoading(false);

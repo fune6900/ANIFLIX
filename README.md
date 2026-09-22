@@ -99,6 +99,69 @@ TMDb APIキー / アクセストークンは [https://www.themoviedb.org/setting
 
 > 認証情報が未設定の場合、ホームページのアニメセクション（声優カードを除く）は表示されません。
 
+---
+
+## 認証（Google ログイン）
+
+bot によるクローリングで外部 API のクォータが消費されるのを防ぐため、**サイト全体を Google ログイン必須**にしています（Auth.js v5 / NextAuth）。DB を持たないため JWT セッションで、ユーザー情報は保存しません。
+
+| ファイル | 役割 |
+|----------|------|
+| `src/auth.ts` | Auth.js の設定（プロバイダ・セッション・認可判定） |
+| `src/middleware.ts` | 全ルートのガード。除外パスは matcher で指定 |
+| `src/app/login/page.tsx` | ログイン画面 |
+| `src/app/login/error/page.tsx` | 認証エラー画面 |
+| `src/components/GoogleSignInButton.tsx` | Google 公式ガイドライン準拠のログインボタン |
+| `src/components/LoginBackdrop.tsx` | ログイン画面の背景スライドショー |
+| `src/lib/login-backdrops/` | 背景に使う静的 JSON（5 パターン） |
+| `src/app/api/auth/[...nextauth]/route.ts` | Auth.js のエンドポイント |
+| `src/app/actions/auth.ts` | ログアウト用 Server Action |
+
+### 必要な環境変数
+
+```env
+AUTH_SECRET=            # npx auth secret で生成。本番と開発で別の値を使う
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
+# AUTH_TRUST_HOST=true  # Vercel 以外（Docker / 自前ホスト）では必須
+```
+
+### Google Cloud Console の設定
+
+1. 「API とサービス」→「OAuth 同意画面」で User Type を **External** にする
+2. スコープは既定（`openid` / `email` / `profile`）のまま。追加しない
+3. **アプリを公開**する。テストモードのままだと登録したテストユーザー（上限 100 人）しかログインできない
+4. 「認証情報」→「OAuth クライアント ID」（ウェブアプリケーション）を作成し、以下を登録する
+   - 承認済みの JavaScript 生成元: `http://localhost:3000` / `https://<本番ドメイン>`
+   - 承認済みのリダイレクト URI: `http://localhost:3000/api/auth/callback/google` / `https://<本番ドメイン>/api/auth/callback/google`
+
+> リダイレクト URI のパスは Auth.js の規約で固定です。1 文字でも違うと `redirect_uri_mismatch` で失敗します。
+
+### ログイン画面の背景
+
+`src/lib/login-backdrops/pattern-1.json` 〜 `pattern-5.json` に人気アニメのバックドロップ（16:9 の横長画像）を 6 件ずつ固定しています。ページ表示のたびに 1 パターンをサーバー側で抽選し、クロスフェードで流します。SP / PC とも同じ横長画像を `object-cover` で敷きます。
+
+実行時に TMDb を叩かない設計です。ログイン画面は未認証で到達できるため、ここで外部 API を呼ぶと bot にクォータを消費させる余地が残ります。
+
+内容を差し替える場合は、各 JSON の `source` フィールドに記録されたクエリで TMDb を叩き直し、`{ id, title, backdropPath }` の形で書き換えてください。
+
+```
+GET https://api.themoviedb.org/3/discover/tv
+  ?language=ja-JP&with_genres=16&with_origin_country=JP
+  &sort_by=popularity.desc&vote_count.gte=100&page=1..4
+```
+
+> `backdropPath` は TMDb の `backdrop_path` をそのまま保存します。URL 化は `getImageUrl()` を通してください（`image.tmdb.org` の直 URL をコード内に散らさないため）。
+
+### 運用上の注意
+
+- **静的アセットを追加したら matcher を更新する**。`public/` へファイルを置いたり `robots.txt` / `sitemap.xml` を追加した場合、`src/middleware.ts` の除外リストへ追記しないとログイン必須になり、利用者からは 404 やアイコン欠けに見えます
+- **除外パターンには必ず境界（`$` または `/`）を付ける**。前方一致で終わらせると `login` の除外が `/logindq` まで通してしまい、存在しないページが未認証のまま描画されます（認可境界の穴）。ドットも `\.` でエスケープしてください
+- **認証画面を増やすときは `src/lib/auth-routes.ts` の `AUTH_ROUTES` と matcher を対で更新する**。片方だけ変えると「ガードは外れているのにサイト共通の UI が出る」状態になります
+- **`AUTH_SECRET` の変更 = 全ユーザー強制ログアウト**。JWT の署名鍵のため、ローテーション時は影響を織り込むこと
+- **セッション有効期限は 7 日**（`src/auth.ts` の `SESSION_MAX_AGE`）。期限切れ後の `/api/*` へのリクエストには 401 JSON が返るため、クライアント側は `res.status === 401` で判定できます
+- **Googlebot も遮断されます**。SEO と OGP 展開は機能しません（bot 遮断を優先した設計判断）
+
 ### ローカル開発
 
 ```bash

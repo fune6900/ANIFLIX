@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": "TMDb /discover/tv (with_genres=16, with_origin_country=JP, sort_by=popularity.desc, vote_count.gte=100)",
+  "items": [
+    {
+      "id": 94664,
+      "title": "無職転生 ～異世界行ったら本気だす～",
+      "backdropPath": "/j9fRIimor0AMFJR9kjZubXcABzZ.jpg"
+    },
+    {
+      "id": 30983,
+      "title": "名探偵コナン",
+      "backdropPath": "/z67lpMtm8YGykJO4p89meuNMvj8.jpg"
+    },
+    {
+      "id": 31911,
+      "title": "鋼の錬金術師 FULLMETAL ALCHEMIST",
+      "backdropPath": "/A6tMQAo6t6eRFCPhsrShmxZLqFB.jpg"
+    },
+    {
+      "id": 259140,
+      "title": "らんま1/2",
+      "backdropPath": "/xvD9urN8lUtWw5fm4a87Rl3dCZn.jpg"
+    },
+    {
+      "id": 131041,
+      "title": "ブルーロック",
+      "backdropPath": "/seMRyWVwIVBWbC9xaMzDMZJ8fUH.jpg"
+    },
+    {
+      "id": 46195,
+      "title": "化物語",
+      "backdropPath": "/cHII6sQ91q8H5EMONKCwCQMauCP.jpg"
+    }
+  ]
+}

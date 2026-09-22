@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
+import { isAuthRoute } from "@/lib/auth-routes";
 
 export default function BottomNav() {
   const router = useRouter();
@@ -9,6 +10,9 @@ export default function BottomNav() {
 
   const isActive = (path: string) =>
     pathname === path || pathname.startsWith(path + "/");
+
+  // 認証画面では出さない（サイト共通ナビは未ログインでは意味を持たない）
+  if (isAuthRoute(pathname)) return null;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#141414]/95 backdrop-blur-sm border-t border-gray-800">

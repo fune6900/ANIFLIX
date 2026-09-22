@@ -3,8 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import SearchDropdown from "@/components/SearchDropdown";
+import { usePathname } from "next/navigation";
+import { signOutAction } from "@/app/actions/auth";
+import { isAuthRoute } from "@/lib/auth-routes";
 
 export default function Navbar() {
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -14,6 +18,9 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // 認証画面では出さない。未ログインなのにログアウトや検索が並ぶのを防ぐ
+  if (isAuthRoute(pathname)) return null;
 
   return (
     <header
@@ -243,6 +250,14 @@ export default function Navbar() {
               />
             </svg>
           </button>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="text-sm text-gray-300 hover:text-white transition"
+            >
+              ログアウト
+            </button>
+          </form>
         </div>
       </div>
     </header>

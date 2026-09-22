@@ -9,6 +9,7 @@ import {
 } from "react";
 import Image from "next/image";
 import type { TMDbEpisode, TMDbSeason } from "@/types/tmdb";
+import { assertApiOk, isSessionExpired } from "@/lib/api-client";
 
 // SSR では useLayoutEffect が動かないので useEffect にフォールバック
 const useIsomorphicLayoutEffect =
@@ -137,23 +138,29 @@ export default function SeasonEpisodes({
   );
   const [episodes, setEpisodes] = useState<TMDbEpisode[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  // エラー文言。null はエラーなしを表す
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   const fetchEpisodes = useCallback(
     async (seasonNumber: number) => {
       setLoading(true);
-      setError(false);
+      setError(null);
       setEpisodes([]);
       try {
         const res = await fetch(
           `/api/season-episodes?animeId=${animeId}&season=${seasonNumber}`,
         );
-        if (!res.ok) throw new Error("fetch failed");
+        assertApiOk(res);
         const data = await res.json();
         setEpisodes(data.episodes ?? []);
-      } catch {
-        setError(true);
+      } catch (err) {
+        // セッション切れは専用の文言を出す。汎用メッセージだと原因が伝わらない
+        setError(
+          isSessionExpired(err)
+            ? err.message
+            : "エピソード情報を取得できませんでした",
+        );
       } finally {
         setLoading(false);
       }
@@ -226,8 +233,8 @@ export default function SeasonEpisodes({
         )}
 
         {error && (
-          <div className="text-center py-12 text-gray-500 text-sm">
-            エピソード情報を取得できませんでした
+          <div role="alert" className="text-center py-12 text-gray-500 text-sm">
+            {error}
           </div>
         )}
 
