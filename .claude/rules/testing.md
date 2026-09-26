@@ -2,29 +2,39 @@
 
 ## 現状
 
-**テスト基盤は未導入**。`package.json` に `test` / `e2e` / `typecheck` スクリプトは存在しない。
-そのため、当面は次の優先タスクとして基盤導入を進める。
+**Vitest + jsdom を導入済み**（ISSUE #54）。Playwright（E2E）は未導入。
 
-### 導入計画（推奨）
+| コマンド | 内容 |
+| -------- | ---- |
+| `npm test` | Vitest（watch） |
+| `npm test -- --run` | Vitest（1 回だけ実行。CI と同じ） |
+| `npm run typecheck` | `tsc --noEmit` |
 
-1. **Vitest + React Testing Library**（ユニット）
-   - `vitest`, `@vitest/ui`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`
-   - `package.json` に `"test": "vitest"`, `"typecheck": "tsc --noEmit"` を追加
-2. **Playwright**（E2E）
+構成:
+
+- `vitest.config.ts` — jsdom 環境、`@` エイリアスは `tsconfig.json` の `paths` と対応させる
+- `tests/setup.ts` — `@testing-library/jest-dom/vitest` のマッチャを有効化
+- `tests/unit/**/*.test.{ts,tsx}` のみを対象にする
+- CI（`.github/workflows/ci.yml`）に `test` ジョブがあり、`build` の前提条件に入っている
+
+### 残りの導入計画
+
+1. **Playwright**（E2E）
    - `@playwright/test`、`playwright.config.ts`
    - `package.json` に `"e2e": "playwright test"` を追加
-3. CI（`.github/workflows/ci.yml`）に `test` ジョブを追加
+   - CI では `npx playwright install --with-deps` の後に実行する
+2. コンポーネントテスト（React Testing Library は導入済みだが未使用）
 
-導入する PR は `chore/<issue>-introduce-vitest` のように切り出すこと。
+導入する PR は `chore/<issue>-introduce-playwright` のように切り出すこと。
 
 ---
 
 ## 基本原則
 
-- **No Test, No Code**: テストのないコードはレビュー対象外（基盤導入後）
+- **No Test, No Code**: テストのないコードはレビュー対象外
 - **TDD 必須**: 実装より先にテストを書く。Red → Green → Refactor の順を崩さない
 - **テストは仕様書**: テスト名を読めば何をするコードか分かるように書く
-- **モックは最小限**: TMDb API・時刻・乱数のみモック許可
+- **モックは最小限**: TMDb API・時刻・乱数のみモック許可。例外は下の「モック方針」を参照
 
 ---
 
@@ -143,8 +153,23 @@ vi.setSystemTime(new Date("2026-05-11"));
 // OK: 乱数のモック（shuffle の挙動確認）
 vi.spyOn(Math, "random").mockReturnValue(0.5);
 
-// NG: fetch を素で叩く（必ず @/lib/tmdb を経由してそこをモックする）
+// NG: コンポーネントやページのテストで fetch を素でモックする
+//     （必ず @/lib/tmdb を経由し、そこをモックする）
 ```
+
+### 例外
+
+以下の 2 つに限り、上記より低いレイヤーのモックを許可する。
+どちらも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
+
+1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
+   キャッシュ方針（`cache: "no-store"` / `next.revalidate`）は `fetchTMDb` が
+   組み立てる `RequestInit` にしか現れない。`@/lib/tmdb` をモックすると
+   検証対象ごと消える。例: `tests/unit/lib/tmdb-cache.test.ts`
+
+2. **`src/middleware.ts` のテストで `@/auth` をモックする**
+   matcher の検証に Auth.js 本体は不要で、読み込むと next-auth が Vitest 環境で
+   解決できず落ちる。例: `tests/unit/middleware.test.ts`
 
 ---
 
@@ -170,8 +195,8 @@ E2E は `npx playwright install --with-deps` の後に `npm run e2e` を実行�
 
 ## `/review-pr` でのチェック項目
 
-- [ ] 新規機能に対応するユニットテストが存在するか（基盤導入後）
+- [ ] 新規機能に対応するユニットテストが存在するか
 - [ ] バグ修正に対応する回帰テストが追加されているか
 - [ ] テスト名が「何をすべきか」を表しているか
-- [ ] TMDb 以外の `fetch` を直接モックしていないか（`@/lib/tmdb` をモックする）
+- [ ] `fetch` の直接モックが「モック方針 > 例外」に該当する場合のみか（通常は `@/lib/tmdb` をモックする）
 - [ ] `npm test -- --run` が全件グリーンか

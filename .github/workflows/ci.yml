@@ -29,13 +29,24 @@ jobs:
           node-version: 22
           cache: "npm"
       - run: npm ci
-      # package.json に typecheck スクリプトを追加するまでは `tsc --noEmit` を直接実行する
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+      - run: npm ci
+      - run: npm test -- --run
 
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: [lint, typecheck, test]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -32,6 +32,13 @@ const ANIMATION_GENRE_ID = 16;
  */
 const DISCOVER_CACHE_TIME = 1800;
 
+/**
+ * 詳細系（作品・人物・エピソード・動画）のキャッシュ秒数。
+ * 内容がほぼ変わらない一方、これらは動的ルートから毎リクエスト呼ばれるため、
+ * キャッシュしないと関数の実行時間が TMDb の往復で支配される。
+ */
+const DETAIL_CACHE_TIME = 3600;
+
 /** TMDb の discover / search が受け付けるページ番号の上限 */
 export const TMDB_MAX_PAGE = 500;
 
@@ -305,9 +312,11 @@ export async function searchTVByPage(
 
 // アニメ詳細取得
 export async function getAnimeDetail(id: number): Promise<TMDbTVDetail> {
-  return fetchTMDb<TMDbTVDetail>(`/tv/${id}`, {
-    append_to_response: "credits",
-  });
+  return fetchTMDb<TMDbTVDetail>(
+    `/tv/${id}`,
+    { append_to_response: "credits" },
+    DETAIL_CACHE_TIME,
+  );
 }
 
 /** TV 作品のキャストを取得（声優一覧用） */
@@ -329,6 +338,7 @@ export async function getAnimeSeasonEpisodes(
   return fetchTMDb<TMDbSeasonDetail>(
     `/tv/${animeId}/season/${seasonNumber}`,
     {},
+    DETAIL_CACHE_TIME,
   );
 }
 
@@ -336,13 +346,17 @@ export async function getAnimeSeasonEpisodes(
 export async function getPopularAnime(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    "vote_count.gte": "100",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      "vote_count.gte": "100",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // 新着アニメ（直近3ヶ月）
@@ -372,9 +386,11 @@ export async function getNewAnime(
 export async function getTrendingAnime(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/trending/tv/week", {
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/trending/tv/week",
+    { page: String(page) },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 /**
@@ -422,18 +438,22 @@ export async function searchPerson(
 
 // 声優詳細取得（出演作付き）
 export async function getPersonDetail(id: number): Promise<TMDbPersonDetail> {
-  return fetchTMDb<TMDbPersonDetail>(`/person/${id}`, {
-    append_to_response: "combined_credits",
-  });
+  return fetchTMDb<TMDbPersonDetail>(
+    `/person/${id}`,
+    { append_to_response: "combined_credits" },
+    DETAIL_CACHE_TIME,
+  );
 }
 
 /** 日本の声優一覧（language=ja-JP で人気人物を取得） */
 export async function getJapaneseVoiceActors(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbPerson>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbPerson>>("/person/popular", {
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbPerson>>(
+    "/person/popular",
+    { page: String(page) },
+    DETAIL_CACHE_TIME,
+  );
 }
 
 // ジャンル別アニメ（日本アニメ + 指定ジャンル）
@@ -542,7 +562,11 @@ export async function getAnimeMovieByKeyword(
   };
   if (options?.dateFrom) query["primary_release_date.gte"] = options.dateFrom;
   if (options?.dateTo) query["primary_release_date.lte"] = options.dateTo;
-  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query);
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    query,
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 /** 複数キーワード名から ID を解決し OR 検索で日本アニメ映画を取得 */
@@ -575,14 +599,18 @@ export async function getAnimeByEra(
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   const startDate = `${decade}-01-01`;
   const endDate = `${decade + 9}-12-31`;
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    "first_air_date.gte": startDate,
-    "first_air_date.lte": endDate,
-    sort_by: sortBy,
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      "first_air_date.gte": startDate,
+      "first_air_date.lte": endDate,
+      sort_by: sortBy,
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -593,13 +621,17 @@ export async function getAnimeByEra(
 export async function getAnimeMovies(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    "vote_count.gte": "10",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      "vote_count.gte": "10",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -611,7 +643,7 @@ export async function getAnimeBySeason(
   dateFrom: string,
   dateTo: string,
   page = 1,
-  cacheTime = 0,
+  cacheTime = DISCOVER_CACHE_TIME,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/discover/tv",
@@ -635,14 +667,18 @@ export async function getAnimeBySeason(
 export async function getAiringAnime(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    with_status: "0", // Returning Series (連続放送中)
-    "air_date.lte": new Date().toISOString().split("T")[0],
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      with_status: "0", // Returning Series (連続放送中)
+      "air_date.lte": new Date().toISOString().split("T")[0],
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -654,12 +690,16 @@ export async function getAnimeByStudio(
   companyId: number,
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", {
-    with_companies: String(companyId),
-    with_genres: String(ANIMATION_GENRE_ID),
-    sort_by: "popularity.desc",
-    page: String(page),
-  });
+  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
+    "/discover/tv",
+    {
+      with_companies: String(companyId),
+      with_genres: String(ANIMATION_GENRE_ID),
+      sort_by: "popularity.desc",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -668,9 +708,11 @@ export async function getAnimeByStudio(
 
 /** 映画詳細取得（クレジット・動画・外部ID付き） */
 export async function getMovieDetail(id: number): Promise<TMDbMovieDetail> {
-  return fetchTMDb<TMDbMovieDetail>(`/movie/${id}`, {
-    append_to_response: "credits,videos,external_ids,recommendations",
-  });
+  return fetchTMDb<TMDbMovieDetail>(
+    `/movie/${id}`,
+    { append_to_response: "credits,videos,external_ids,recommendations" },
+    DETAIL_CACHE_TIME,
+  );
 }
 
 // ──────────────────────────────────────────
@@ -732,7 +774,11 @@ export async function getMovieWatchProviders(
 
 /** アニメの YouTube 動画一覧を取得し優先度順にソートして返す */
 export async function getAnimeVideos(animeId: number): Promise<TMDbVideo[]> {
-  const data = await fetchTMDb<TMDbVideosResponse>(`/tv/${animeId}/videos`, {});
+  const data = await fetchTMDb<TMDbVideosResponse>(
+    `/tv/${animeId}/videos`,
+    {},
+    DETAIL_CACHE_TIME,
+  );
   const yt = data.results.filter((v) => v.site === "YouTube");
   // 優先度: 公式Trailer > 公式Teaser > Trailer > Opening Credits > その他
   const order = ["Trailer", "Teaser", "Opening Credits", "Clip", "Featurette"];

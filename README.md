@@ -185,6 +185,8 @@ docker-compose up
 | `npm run build` | 本番ビルド |
 | `npm run start` | 本番サーバー起動 |
 | `npm run lint` | ESLintによるコード検査 |
+| `npm run typecheck` | 型チェック（`tsc --noEmit`） |
+| `npm test` | Vitest（`npm test -- --run` で1回だけ実行） |
 
 ---
 

@@ -13,12 +13,13 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 - **Core**: Next.js 15 (App Router), React 19, TypeScript 5
 - **Styling**: Tailwind CSS（`#141414` 黒地 + `#E50914` レッド、Netflix Sans）
 - **Data**: TMDb API（Bearer / v3 API キー両対応、`src/lib/tmdb.ts`）
+- **Test**: Vitest + jsdom + React Testing Library（`tests/unit/`）
 - **Auth**: Auth.js v5（NextAuth）+ Google OAuth。JWT セッション（DB / アダプタなし）。`src/middleware.ts` でサイト全体をログイン必須にする bot 対策
 - **Image**: `image.tmdb.org` 直配信（`next.config.ts` で `unoptimized: true`）
 - **Deploy**: Docker / Docker Compose、Vercel 想定
-- **CI**: GitHub Actions（lint / typecheck / build）
+- **CI**: GitHub Actions（lint / typecheck / test / build）
 
-> DB（Prisma/Supabase）・Zod・テストフレームワーク（Vitest/Playwright）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
+> DB（Prisma/Supabase）・Zod・Playwright（E2E）は**未導入**。導入する場合は ISSUE を起票してから着手すること。
 > Server Actions は**認証操作に限って導入済み**（`src/app/actions/auth.ts`・`src/app/login/page.tsx`）。他用途へ広げる場合も ISSUE を起票すること。詳細は `@.claude/rules/api-design.md`。
 
 ## 💻 主要コマンド
@@ -29,9 +30,11 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 | `npm run build`     | 本番用ビルド                          |
 | `npm run start`     | 本番サーバー起動                      |
 | `npm run lint`      | ESLint                                |
+| `npm run typecheck` | 型チェック（`tsc --noEmit`）          |
+| `npm test`          | Vitest（`-- --run` で 1 回だけ実行）  |
 | `docker compose up` | Docker での開発起動                   |
 
-> `npm run typecheck` / `npm test` / `npm run e2e` は **未設定**。導入は `@.claude/rules/testing.md` に従う。
+> `npm run e2e`（Playwright / E2E）は **未設定**。導入は `@.claude/rules/testing.md` に従う。
 
 ## 📁 ディレクトリ構造
 
@@ -145,7 +148,7 @@ Plan Mode → ISSUE作成 → ブランチ作成
 
 ## 🧠 行動原則
 
-- **No Test, No Code**: テストのないコードは存在しない。テスト基盤未導入の今こそ導入を優先。
+- **No Test, No Code**: テストのないコードは存在しない。Vitest は導入済み。書かない言い訳はもう無い。
 - **型安全の強制**: `any` は怠慢。即刻排除する。
 - **計画優先**: Plan モードを使え。手当たり次第に動くな。
 - **PR 至上主義**: 全ての変更はブランチを切り、PR を通す。
