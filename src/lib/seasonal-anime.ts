@@ -10,14 +10,39 @@
 //   - ホーム「現クール TOP10」
 
 import {
+  getAniListAnimeAiringInRange,
   getAniListSeasonAnime,
   toAniListSeason,
   type AniListMedia,
+  type AniListMediaPage,
 } from "@/lib/anilist";
 import { getAnimeBySeason, searchAnime } from "@/lib/tmdb";
 import { getSeasonDateRange, type SeasonSlug } from "@/lib/seasons";
 import { stripSeasonSuffix } from "@/lib/title-strip";
 import type { TMDbAnime } from "@/types/tmdb";
+
+// ──────────────────────────────────────────
+// 定数
+// ──────────────────────────────────────────
+
+/** AniList の 1 ページあたり取得件数（API 上限が 50） */
+const ANILIST_PAGE_SIZE = 50;
+
+/**
+ * AniList を辿る最大ページ数。
+ * 1 シーズンは 120 件前後（2026 SUMMER は 119 件）なので 3 ページで足りる。
+ * 上限を設けるのは、AniList 側の想定外の応答で無限にページを辿らないため。
+ */
+const MAX_ANILIST_PAGES = 3;
+
+/**
+ * 「話数未定」の作品を長寿作品とみなす基準（対象年から遡る年数）。
+ *
+ * ONE PIECE / 名探偵コナン / サザエさん のような終わりの無い作品は、
+ * 人気順の上位を占有して当季の新作を押し出してしまう。
+ * 実データでこの条件が該当 9 件を正確に落とすことを確認している。
+ */
+const LONG_RUNNER_START_YEARS_AGO = 1;
 
 // ──────────────────────────────────────────
 // 公開 API
@@ -47,15 +72,22 @@ export interface SeasonalAnimeResult {
  * 指定シーズンの作品を AniList ベースで取得し、TMDb の作品データで返す。
  *
  * 流れ:
- *   1. AniList の季別人気作品リストを取得（最大 limit 件、2ページ並列）
+ *   1. AniList を **2 系統** で引き、和集合を取る
+ *      - シーズンクエリ: その季に開始した作品
+ *      - 期間クエリ: 放送期間がその季と重なる作品（前クールからの継続を拾う）
  *   2. 同季の TMDb プールも並列で取得（Step A 一次マッチ用）
- *   3. 各 AniList 作品を TMDb と突き合わせ:
+ *   3. 常時放送の長寿作品を落とし、人気順に並べる
+ *   4. 各 AniList 作品を TMDb と突き合わせ:
  *      A. TMDb プール内で title 完全一致を探す
  *      B. ヒット無ければ /search/tv で名前検索 → 結果を検証して採用
  *      C. それでも不一致は表示しない
- *   4. AniList 人気順を維持して TMDbAnime[] を返す
  *
- * AniList が失敗した場合は fallbackToTmdbDiscover=true なら従来通り TMDb discover に倒す。
+ * **2 系統で引く理由**: シーズンクエリだけだと 2 クール作品が前の季に属したまま
+ * 当季のリストから消える（転生したらスライムだった件 第4期 は 2026 SPRING 所属）。
+ * 逆に期間クエリだけだと、終了日が未定の作品が AniList 側の絞り込みから外れ、
+ * これから始まる季のページがほぼ空になる（2026 FALL は 67 件中 6 件しか返らない）。
+ *
+ * AniList が両系統とも失敗した場合は fallbackToTmdbDiscover=true なら TMDb discover に倒す。
  */
 export async function fetchSeasonalAnime(
   year: number,
@@ -67,32 +99,43 @@ export async function fetchSeasonalAnime(
   const fallbackToTmdbDiscover = options.fallbackToTmdbDiscover ?? true;
 
   const { from, to } = getSeasonDateRange(year, season);
+  const { start, end } = seasonBoundsToFuzzyInts(from, to);
 
-  // 1 & 2. AniList と TMDb プールを並列取得
-  const [anilistP1, anilistP2, tmdbP1, tmdbP2] = await Promise.allSettled([
-    getAniListSeasonAnime(year, toAniListSeason(season), 1, 50),
-    getAniListSeasonAnime(year, toAniListSeason(season), 2, 50),
+  // 1 & 2. AniList（2 系統）と TMDb プールを並列取得
+  const [seasonPages, rangePages, tmdbP1, tmdbP2] = await Promise.allSettled([
+    collectAniListPages((page) =>
+      getAniListSeasonAnime(
+        year,
+        toAniListSeason(season),
+        page,
+        ANILIST_PAGE_SIZE,
+      ),
+    ),
+    collectAniListPages((page) =>
+      getAniListAnimeAiringInRange(start, end, page, ANILIST_PAGE_SIZE),
+    ),
     // TMDb プールはマッチ用に 6h キャッシュ
     getAnimeBySeason(from, to, 1, 21600),
     getAnimeBySeason(from, to, 2, 21600),
   ]);
 
-  const anilistResults: AniListMedia[] = [];
-  if (anilistP1.status === "fulfilled") {
-    anilistResults.push(...anilistP1.value.results);
+  // 和集合（AniList の id で重複排除）
+  const merged = new Map<number, AniListMedia>();
+  for (const settled of [seasonPages, rangePages]) {
+    if (settled.status !== "fulfilled") continue;
+    for (const m of settled.value) {
+      if (!merged.has(m.id)) merged.set(m.id, m);
+    }
   }
-  if (anilistP2.status === "fulfilled") {
-    anilistResults.push(...anilistP2.value.results);
-  }
-  const anilistTotal = anilistResults.length;
+  const anilistTotal = merged.size;
 
-  const tmdbPool: TMDbAnime[] = [
+  const tmdbPool = dedupeById([
     ...(tmdbP1.status === "fulfilled" ? tmdbP1.value.results : []),
     ...(tmdbP2.status === "fulfilled" ? tmdbP2.value.results : []),
-  ];
+  ]);
 
-  // AniList が両方失敗 → フォールバック判定
-  if (anilistResults.length === 0) {
+  // AniList が両系統とも失敗 → フォールバック判定
+  if (anilistTotal === 0) {
     if (fallbackToTmdbDiscover && tmdbPool.length > 0) {
       return {
         items: tmdbPool.slice(0, limit),
@@ -109,9 +152,15 @@ export async function fetchSeasonalAnime(
     };
   }
 
-  // 3. 各 AniList 作品を TMDb と突き合わせ
+  // 3. 長寿作品を落として人気順に並べる
+  const candidates = Array.from(merged.values())
+    .filter((m) => !isPerpetualLongRunner(m, year))
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, limit);
+
+  // 4. 各 AniList 作品を TMDb と突き合わせ
   const resolved = await pMapLimit(
-    anilistResults.slice(0, limit),
+    candidates,
     concurrency,
     async (media): Promise<{ anime: TMDbAnime | null; title: string }> => {
       const title = pickDisplayTitle(media);
@@ -120,7 +169,7 @@ export async function fetchSeasonalAnime(
     },
   );
 
-  // 4. 重複排除（同じ TMDb id に複数 AniList 作品がマッチした場合は先着優先）
+  // 重複排除（同じ TMDb id に複数 AniList 作品がマッチした場合は人気の高い方を優先）
   const dedupedMap = new Map<number, TMDbAnime>();
   const unmatchedTitles: string[] = [];
   for (const { anime, title } of resolved) {
@@ -141,9 +190,85 @@ export async function fetchSeasonalAnime(
   };
 }
 
+/**
+ * AniList の FuzzyDate を `YYYYMMDD` の整数に変換する。
+ * 月日が欠けている場合は 1 で埋め、大小比較できる値にする。
+ */
+export function toFuzzyDateInt(date: {
+  year: number | null;
+  month: number | null;
+  day: number | null;
+}): number | null {
+  if (date.year === null) return null;
+  return date.year * 10000 + (date.month ?? 1) * 100 + (date.day ?? 1);
+}
+
+/**
+ * シーズンの開始・終了日（`YYYY-MM-DD`）を、期間クエリに渡す FuzzyDateInt にする。
+ *
+ * AniList の `startDate_lesser` / `endDate_greater` は排他的な比較なので、
+ * 前後に 1 だけ広げないと「初日に始まる作品」「最終日に終わる作品」が落ちる。
+ */
+export function seasonBoundsToFuzzyInts(
+  from: string,
+  to: string,
+): { start: number; end: number } {
+  return {
+    start: dateStringToInt(from) - 1,
+    end: dateStringToInt(to) + 1,
+  };
+}
+
+/**
+ * 終わりの無い長寿作品か。
+ *
+ * 「話数が未定」かつ「開始が対象年より十分前」の両方を満たすものだけを落とす。
+ * **開始年が不明な作品は落とさない**。分類できないものを切ると、放送開始日が
+ * AniList に入っていないだけの新作（例: ジャンケットバンク）を巻き込む。
+ */
+export function isPerpetualLongRunner(
+  media: AniListMedia,
+  targetYear: number,
+): boolean {
+  if (media.episodes !== null) return false;
+  const startYear = media.startDate.year;
+  if (startYear === null) return false;
+  return startYear < targetYear - LONG_RUNNER_START_YEARS_AGO;
+}
+
 // ──────────────────────────────────────────
 // 内部ヘルパ
 // ──────────────────────────────────────────
+
+/** `YYYY-MM-DD` → `YYYYMMDD` の整数 */
+function dateStringToInt(date: string): number {
+  return Number(date.replace(/-/g, ""));
+}
+
+/** id で重複排除（先着優先） */
+function dedupeById(items: TMDbAnime[]): TMDbAnime[] {
+  const map = new Map<number, TMDbAnime>();
+  for (const item of items) {
+    if (!map.has(item.id)) map.set(item.id, item);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * 次ページが無くなるまで AniList を辿る（最大 MAX_ANILIST_PAGES ページ）。
+ * 1 ページで打ち切るとその季の後半が丸ごと落ちるため、必ず辿り切ること。
+ */
+async function collectAniListPages(
+  fetchPage: (page: number) => Promise<AniListMediaPage>,
+): Promise<AniListMedia[]> {
+  const acc: AniListMedia[] = [];
+  for (let page = 1; page <= MAX_ANILIST_PAGES; page++) {
+    const result = await fetchPage(page);
+    acc.push(...result.results);
+    if (!result.hasNextPage) break;
+  }
+  return acc;
+}
 
 /** 同時実行数を制限する並列 mapper（レートリミット対策） */
 async function pMapLimit<T, R>(
