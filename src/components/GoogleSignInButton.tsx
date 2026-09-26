@@ -10,11 +10,19 @@
  * 【変更禁止】「G」ロゴのサイズ（18x18）と配色はガイドラインで改変が禁止されている。
  * 色・パス・比率に手を入れないこと。
  */
-export default function GoogleSignInButton() {
+interface GoogleSignInButtonProps {
+  /** Turnstile 未通過・送信中は押させない */
+  disabled?: boolean;
+}
+
+export default function GoogleSignInButton({
+  disabled = false,
+}: GoogleSignInButtonProps) {
   return (
     <button
       type="submit"
-      className="flex h-10 w-full items-center justify-center rounded border border-[#8E918F] bg-[#131314] pl-3 pr-3 text-sm leading-5 text-[#E3E3E3] transition hover:bg-[#1e1f20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      disabled={disabled}
+      className="flex h-10 w-full items-center justify-center rounded border border-[#8E918F] bg-[#131314] pl-3 pr-3 text-sm leading-5 text-[#E3E3E3] transition hover:bg-[#1e1f20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#131314]"
       style={{ fontFamily: '"Roboto", "Helvetica Neue", Arial, sans-serif' }}
     >
       {/* Google 公式「G」ロゴ（18x18・配色改変禁止） */}

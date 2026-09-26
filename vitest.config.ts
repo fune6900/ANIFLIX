@@ -8,6 +8,12 @@ export default defineConfig({
     alias: {
       // tsconfig.json の paths と対応させること
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` は node_modules に実体が無く、Next のバンドラが内部 alias で
+      // 解決している。Vitest では解決できず import した時点でテストが落ちるため、
+      // 空スタブへ向ける（src/lib/turnstile.ts・src/lib/translate.ts が使用）
+      "server-only": fileURLToPath(
+        new URL("./tests/stubs/server-only.ts", import.meta.url),
+      ),
     },
   },
   test: {

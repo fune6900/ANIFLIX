@@ -15,6 +15,7 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 - **Data**: TMDb API（Bearer / v3 API キー両対応、`src/lib/tmdb.ts`）
 - **Test**: Vitest + jsdom + React Testing Library（`tests/unit/`）
 - **Auth**: Auth.js v5（NextAuth）+ Google OAuth。JWT セッション（DB / アダプタなし）。`src/middleware.ts` でサイト全体をログイン必須にする bot 対策
+- **Turnstile**: Cloudflare Turnstile（Managed）。`/login` だけはガード対象外で未認証到達できるため、フォーム送信を Server Action 内で検証する（`src/lib/turnstile.ts`）。npm 依存は追加していない
 - **Image**: `image.tmdb.org` 直配信（`next.config.ts` で `unoptimized: true`）
 - **Deploy**: Docker / Docker Compose、Vercel 想定
 - **CI**: GitHub Actions（lint / typecheck / test / build）
@@ -24,15 +25,15 @@ NetflixのUI/UXを模倣した**アニメ・声優発見プラットフォーム
 
 ## 💻 主要コマンド
 
-| コマンド            | 内容                                  |
-| ------------------- | ------------------------------------- |
+| コマンド            | 内容                                      |
+| ------------------- | ----------------------------------------- |
 | `npm run dev`       | 開発サーバー起動（http://localhost:3000） |
-| `npm run build`     | 本番用ビルド                          |
-| `npm run start`     | 本番サーバー起動                      |
-| `npm run lint`      | ESLint                                |
-| `npm run typecheck` | 型チェック（`tsc --noEmit`）          |
-| `npm test`          | Vitest（`-- --run` で 1 回だけ実行）  |
-| `docker compose up` | Docker での開発起動                   |
+| `npm run build`     | 本番用ビルド                              |
+| `npm run start`     | 本番サーバー起動                          |
+| `npm run lint`      | ESLint                                    |
+| `npm run typecheck` | 型チェック（`tsc --noEmit`）              |
+| `npm test`          | Vitest（`-- --run` で 1 回だけ実行）      |
+| `docker compose up` | Docker での開発起動                       |
 
 > `npm run e2e`（Playwright / E2E）は **未設定**。導入は `@.claude/rules/testing.md` に従う。
 
@@ -67,13 +68,15 @@ src/
 │   └── api/                    Route Handlers（search / videos / season-episodes / voice-actors / browse / auth）
 ├── components/                 UI コンポーネント（Navbar, ContentRow, HeroSection, …）
 ├── lib/                        TMDb クライアント・ジャンル / 年代 / シーズン / スタジオ定義
-│                               + 認証周辺（auth-routes / api-client / login-backdrops）
-└── types/                      TMDb API 型定義（tmdb.ts）
+│                               + 認証周辺（auth-routes / api-client / login-backdrops
+│                               / safe-callback-url / turnstile / turnstile-messages / login-action）
+└── types/                      TMDb / Turnstile の型定義（tmdb.ts, turnstile.ts）
 ```
 
 ## 🎯 主要機能
 
 - **認証**: Google ログイン必須（bot 対策）。未認証は `/login` へリダイレクト、`/api/**` には 401 JSON を返す。Googlebot も遮断されるため SEO は捨てている
+- **Turnstile**: ログインフォームの送信を Cloudflare Turnstile で保護。通過するまでボタンは無効。失敗時はインライン表示してウィジェットをリセットする（トークンは単回使用のため、リセットしないと永久に失敗し続ける）
 - **ホーム**: 現クール TOP10・今週のトレンド・新着・人気声優 + ジャンル別 / 年代別の動的セクション
 - **Hero スライダー**: 6 件クロスフェード + YouTube トレーラーモーダル
 - **ContentRow**: ホバー 800ms で YouTube プレビュー（`/api/videos` 経由、モジュールキャッシュ）
@@ -96,6 +99,17 @@ TMDB_ACCESS_TOKEN=...
 
 未設定の場合、ホームの動的セクションは表示されない。
 
+ログイン画面の Turnstile は以下を**セットで**設定する（片方だけだとログイン不能）:
+
+```env
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
+TURNSTILE_SECRET_KEY=...
+```
+
+未設定時、開発環境では検証をスキップし、本番では必ず検証失敗にする（fail-closed）。
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` は**ビルド時**にバンドルへ焼き込まれるため、
+実行時に足しても反映されない。
+
 ## 🔄 開発フロー
 
 **全ての実装はこの順序を厳守する。**
@@ -111,13 +125,13 @@ Plan Mode → ISSUE作成 → ブランチ作成
 
 ## 📋 ルール一覧
 
-| ファイル                       | 内容                                                  |
-| ------------------------------ | ----------------------------------------------------- |
-| @.claude/rules/conventions.md  | コーディング規約（命名・TS・ディレクトリ）            |
+| ファイル                       | 内容                                                   |
+| ------------------------------ | ------------------------------------------------------ |
+| @.claude/rules/conventions.md  | コーディング規約（命名・TS・ディレクトリ）             |
 | @.claude/rules/security.md     | セキュリティ（入力サニタイズ・XSS・機密情報・APIキー） |
 | @.claude/rules/testing.md      | テスト方針（TDD・導入計画）                            |
 | @.claude/rules/git-strategy.md | Git／ブランチ戦略（命名・コミット・マージ）            |
-| @.claude/rules/api-design.md   | API 設計（Route Handlers・TMDb クライアント）         |
+| @.claude/rules/api-design.md   | API 設計（Route Handlers・TMDb クライアント）          |
 | @.claude/rules/agents.md       | サブエージェント呼び出し規則（責務・順序）             |
 
 ## 🤖 エージェント・オーケストレーション
@@ -135,16 +149,16 @@ Plan Mode → ISSUE作成 → ブランチ作成
 
 ## 🛠 スラッシュコマンド
 
-| コマンド             | 用途                                              |
-| -------------------- | ------------------------------------------------- |
-| `/smart-commit`      | lint 通過後にコミット                              |
-| `/create-pr`         | PR テンプレートに従い PR 作成                      |
-| `/review-pr`         | AI によるコードレビュー（Evaluator 起動）          |
-| `/merge-and-sync`    | PR を main にマージしてローカルを main に同期       |
-| `/coderabbit-fix`    | CodeRabbit の指摘を取得・分析して自動修正          |
-| `/e2e-test`          | E2E テスト実行（QA エージェント）                  |
-| `/visual-regression` | 視覚的整合性検証（Designer エージェント）          |
-| `/perf-audit`        | Lighthouse / パフォーマンス計測                    |
+| コマンド             | 用途                                          |
+| -------------------- | --------------------------------------------- |
+| `/smart-commit`      | lint 通過後にコミット                         |
+| `/create-pr`         | PR テンプレートに従い PR 作成                 |
+| `/review-pr`         | AI によるコードレビュー（Evaluator 起動）     |
+| `/merge-and-sync`    | PR を main にマージしてローカルを main に同期 |
+| `/coderabbit-fix`    | CodeRabbit の指摘を取得・分析して自動修正     |
+| `/e2e-test`          | E2E テスト実行（QA エージェント）             |
+| `/visual-regression` | 視覚的整合性検証（Designer エージェント）     |
+| `/perf-audit`        | Lighthouse / パフォーマンス計測               |
 
 ## 🧠 行動原則
 
@@ -155,6 +169,7 @@ Plan Mode → ISSUE作成 → ブランチ作成
 - **後片付け強制**: 検証用スクショ（PNG・JPEG）は撮影 → 確認 → 削除を1セット。リポジトリに残骸を残さない。
 - **API キー死守**: TMDb のキーは `.env.local` のみ。コード直書き禁止。
 - **認可境界を緩めるな**: `src/middleware.ts` の matcher から除外を増やす時は必ず境界（`$` / `/`）を付ける。前方一致で終わらせると `/logindq` のような別パスが素通りする。
+- **Turnstile の検証を Route Handler に出すな**: `/api/**` は middleware のガード対象で、未認証には 401 JSON が返り本体が実行されない。ログイン前の利用者からは必ず失敗する。検証は Server Action 内に閉じること。matcher を緩めて回避するのは認可境界に穴を開ける行為。
 - **画像最適化禁止**: TMDb は既に最適化済み。`next/image` の `unoptimized: true` を維持し、Vercel の変換枠を消費しない。
 
 ## 👥 役割

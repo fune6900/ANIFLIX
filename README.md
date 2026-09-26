@@ -6,13 +6,13 @@ NetflixのUI/UXを模倣したアニメ・声優発見プラットフォーム�
 
 ## 技術スタック
 
-| 分野 | 技術 |
-|------|------|
-| フレームワーク | Next.js 15 (App Router) |
-| UI | React 19 + TypeScript 5 |
-| スタイリング | Tailwind CSS |
-| データソース | TMDb API (映画・TVデータベース) |
-| デプロイ | Docker / Docker Compose |
+| 分野           | 技術                            |
+| -------------- | ------------------------------- |
+| フレームワーク | Next.js 15 (App Router)         |
+| UI             | React 19 + TypeScript 5         |
+| スタイリング   | Tailwind CSS                    |
+| データソース   | TMDb API (映画・TVデータベース) |
+| デプロイ       | Docker / Docker Compose         |
 
 ---
 
@@ -48,6 +48,7 @@ src/
 ## 主な機能
 
 ### ホームページ
+
 TMDb APIから並行フェッチして3つのセクションを動的表示します（APIキー未設定時は非表示）。
 
 - **🔥 今期人気アニメ TOP10** - 日本アニメーション・人気順
@@ -56,17 +57,20 @@ TMDb APIから並行フェッチして3つのセクションを動的表示し�
 - **🎤 人気声優** - ハードコードされた声優カード（花江夏樹、悠木碧など6名）
 
 ### 検索機能
+
 - **Navbar インクリメンタル検索** - 300msデバウンスでリアルタイム候補表示（最大8件）
 - **検索ページ** (`/search?q=...`) - グリッド形式で全件表示
 - **検索APIルート** (`/api/search`) - XSS・入力サニタイズ、日本アニメ優先フィルタ、セキュリティヘッダー付き
 
 ### アニメ詳細ページ (`/anime/[id]`)
+
 - バックドロップ画像によるヒーロービジュアル
 - タイトル・評価スコア・ジャンル・放送ステータス・シーズン数・話数
 - キャスト・声優一覧（最大12名）
 - シーズン一覧（ポスター・話数・放映年）
 
 ### その他
+
 - **Navbar** - スクロール連動で背景変化、モバイルハンバーガーメニュー、通知アイコン
 - **ContentRow** - ホバーで詳細パネル（再生・追加・展開ボタン）、左右スクロール矢印
 
@@ -105,17 +109,21 @@ TMDb APIキー / アクセストークンは [https://www.themoviedb.org/setting
 
 bot によるクローリングで外部 API のクォータが消費されるのを防ぐため、**サイト全体を Google ログイン必須**にしています（Auth.js v5 / NextAuth）。DB を持たないため JWT セッションで、ユーザー情報は保存しません。
 
-| ファイル | 役割 |
-|----------|------|
-| `src/auth.ts` | Auth.js の設定（プロバイダ・セッション・認可判定） |
-| `src/middleware.ts` | 全ルートのガード。除外パスは matcher で指定 |
-| `src/app/login/page.tsx` | ログイン画面 |
-| `src/app/login/error/page.tsx` | 認証エラー画面 |
-| `src/components/GoogleSignInButton.tsx` | Google 公式ガイドライン準拠のログインボタン |
-| `src/components/LoginBackdrop.tsx` | ログイン画面の背景スライドショー |
-| `src/lib/login-backdrops/` | 背景に使う静的 JSON（5 パターン） |
-| `src/app/api/auth/[...nextauth]/route.ts` | Auth.js のエンドポイント |
-| `src/app/actions/auth.ts` | ログアウト用 Server Action |
+| ファイル                                  | 役割                                                         |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `src/auth.ts`                             | Auth.js の設定（プロバイダ・セッション・認可判定）           |
+| `src/middleware.ts`                       | 全ルートのガード。除外パスは matcher で指定                  |
+| `src/app/login/page.tsx`                  | ログイン画面                                                 |
+| `src/app/login/error/page.tsx`            | 認証エラー画面                                               |
+| `src/components/GoogleSignInButton.tsx`   | Google 公式ガイドライン準拠のログインボタン                  |
+| `src/components/LoginBackdrop.tsx`        | ログイン画面の背景スライドショー                             |
+| `src/lib/login-backdrops/`                | 背景に使う静的 JSON（5 パターン）                            |
+| `src/app/api/auth/[...nextauth]/route.ts` | Auth.js のエンドポイント                                     |
+| `src/app/actions/auth.ts`                 | ログイン／ログアウト用 Server Action（Turnstile 検証もここ） |
+| `src/components/LoginForm.tsx`            | ログインフォーム（Turnstile 通過まで送信を塞ぐ）             |
+| `src/components/TurnstileWidget.tsx`      | Turnstile ウィジェット（explicit render）                    |
+| `src/lib/turnstile.ts`                    | Turnstile の siteverify 呼び出し                             |
+| `src/lib/turnstile-messages.ts`           | 検証失敗の理由 → 利用者向け文言                              |
 
 ### 必要な環境変数
 
@@ -125,6 +133,59 @@ AUTH_GOOGLE_ID=
 AUTH_GOOGLE_SECRET=
 # AUTH_TRUST_HOST=true  # Vercel 以外（Docker / 自前ホスト）では必須
 ```
+
+### bot 対策（Cloudflare Turnstile）
+
+`/login` は Middleware のガード対象外で、未認証のまま無制限に到達できる唯一のページです。
+ログインフォームの送信に Cloudflare Turnstile（Managed モード）を挟み、Google の
+OAuth フローへ到達する前に自動化された送信を落とします。
+
+```env
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+```
+
+1. [Cloudflare ダッシュボード](https://dash.cloudflare.com/?to=/:account/turnstile) で
+   ウィジェットを作成する（**Widget Mode: Managed**）
+2. **開発用と本番用でウィジェットを分ける**。開発用のドメインに `localhost`、
+   本番用のドメインに本番ドメインだけを登録する
+3. 発行された Site Key / Secret Key を、環境ごとに上記 2 つへ設定する
+
+> **同じウィジェットに `localhost` と本番ドメインを同居させないでください。**
+> サイトキーは公開値なので、誰でも自分の `localhost` でチャレンジを解けます。
+> ドメインを同居させると、そこで得たトークンを本番の siteverify に通せてしまいます。
+> ウィジェットを分ければ、本番のシークレットは本番ドメイン発行のトークンしか受け付けません。
+
+> **2 つは必ずセットで設定してください。** 片方だけだとログインできなくなります。
+
+**未設定時の挙動**
+
+| 環境                             | 挙動                                                              |
+| -------------------------------- | ----------------------------------------------------------------- |
+| 開発（`NODE_ENV != production`） | ウィジェットを表示せず、検証をスキップしてログインできる          |
+| 本番                             | 検証を必ず失敗させる（設定漏れで bot 対策が無言で消えるのを防ぐ） |
+
+> **`NEXT_PUBLIC_TURNSTILE_SITE_KEY` はビルド時にバンドルへ埋め込まれます。**
+> 実行時に環境変数を足しても反映されないため、環境ごとにビルドし直してください。
+> Docker では `docker build --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=...` で渡します。
+> Vercel では Production / Preview の両方に登録してください。
+> CI（`.github/workflows/ci.yml`）のビルドは検証専用のため未設定のままで構いませんが、
+> CI の成果物をそのままデプロイする運用に変える場合は `env:` への追加が必須です。
+
+**動作確認用の公式テストキー**
+
+| ケース           | Site Key / Secret Key                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| 常に成功         | `1x00000000000000000000AA` / `1x0000000000000000000000000000000AA` |
+| 常に失敗         | `2x00000000000000000000AB` / `2x0000000000000000000000000000000AA` |
+| 使用済みトークン | `1x00000000000000000000AA` / `3x0000000000000000000000000000000AA` |
+| 強制チャレンジ   | `3x00000000000000000000FF` / 上記いずれか                          |
+
+> 広告ブロッカーや企業プロキシが `challenges.cloudflare.com` を遮断すると
+> ウィジェットが読み込めません。その場合は画面に案内を出しますが、
+> 利用者からの問い合わせが発生しうる点は織り込んでおいてください。
+> 将来 CSP を導入する場合は `script-src` / `frame-src` / `connect-src` に
+> `https://challenges.cloudflare.com` の許可が必要です。
 
 ### Google Cloud Console の設定
 
@@ -179,14 +240,14 @@ docker-compose up
 
 ### NPMスクリプト
 
-| コマンド | 説明 |
-|----------|------|
-| `npm run dev` | 開発サーバー起動 |
-| `npm run build` | 本番ビルド |
-| `npm run start` | 本番サーバー起動 |
-| `npm run lint` | ESLintによるコード検査 |
-| `npm run typecheck` | 型チェック（`tsc --noEmit`） |
-| `npm test` | Vitest（`npm test -- --run` で1回だけ実行） |
+| コマンド            | 説明                                        |
+| ------------------- | ------------------------------------------- |
+| `npm run dev`       | 開発サーバー起動                            |
+| `npm run build`     | 本番ビルド                                  |
+| `npm run start`     | 本番サーバー起動                            |
+| `npm run lint`      | ESLintによるコード検査                      |
+| `npm run typecheck` | 型チェック（`tsc --noEmit`）                |
+| `npm test`          | Vitest（`npm test -- --run` で1回だけ実行） |
 
 ---
 

@@ -60,8 +60,9 @@ src/
     api/                        Route Handlers
   components/                   UI コンポーネント（Navbar, ContentRow, …）
   lib/                          TMDb クライアント・ドメイン定義（genres / eras / seasons / studios / device）
-                                + 認証周辺（auth-routes / api-client / login-backdrops）
-  types/                        TMDb API 型定義
+                                + 認証周辺（auth-routes / api-client / login-backdrops
+                                / safe-callback-url / turnstile / turnstile-messages / login-action）
+  types/                        TMDb / Turnstile の型定義
 ```
 
 > 現状 `src/hooks/` / `src/services/` は未使用。導入は ISSUE を起票してから。
