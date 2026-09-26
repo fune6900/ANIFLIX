@@ -1,31 +1,36 @@
 import "server-only";
 
 /**
- * DeepL 翻訳クライアント
+ * Google Cloud Translation v2 クライアント
  *
- * DeepL API Free / Pro 両対応。`DEEPL_API_KEY` 環境変数で認証する。
- * キーが `:fx` で終わる場合は Free 版エンドポイント (api-free.deepl.com)、
- * それ以外は Pro 版エンドポイント (api.deepl.com) を優先する。
+ * `GOOGLE_TRANSLATE_API_KEY` 環境変数で認証する。
  *
  * - Server Component / Route Handler からのみ呼び出す（クライアント側での利用禁止）
- * - DEEPL_API_KEY 未設定時は原文をそのまま返す（throw しない）
- * - 鍵は trim + 引用符除去してから使う（`.env` の書き方で `:fx` 判定が崩れるため）
- * - 403 が返ったらもう一方のエンドポイントへ 1 度だけ入れ替えて再試行する
- * - 両方 403 なら 1 度だけ記録し、以後この実行では DeepL を呼ばない
- * - サーバープロセス内で in-memory LRU キャッシュ（最大 1000 件）を保持する
+ * - 鍵が未設定なら原文をそのまま返す（throw しない）
+ * - **GET で呼び `next.revalidate` を付ける**。同じ英文の訳は変わらないため、
+ *   Next の Data Cache に載せて同じテキストを二度と翻訳しない。プロセス内の
+ *   LRU だけだとサーバーレスのコールドスタートで消え、無料枠を焼き続ける
+ * - 鍵はクエリ文字列に載るため、**URL をそのままログへ出さない**
+ * - 認証失敗・枠超過を検知したら 1 度だけ記録し、以後この実行では呼ばない
  */
 
 // ──────────────────────────────────────────
-// DeepL API レスポンス型
+// API レスポンス型
 // ──────────────────────────────────────────
 
-interface DeepLTranslation {
-  detected_source_language: string;
-  text: string;
+interface GoogleTranslation {
+  translatedText: string;
+  detectedSourceLanguage?: string;
 }
 
-interface DeepLResponse {
-  translations: DeepLTranslation[];
+interface GoogleTranslateResponse {
+  data?: { translations?: GoogleTranslation[] };
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
+    errors?: Array<{ reason?: string }>;
+  };
 }
 
 // ──────────────────────────────────────────
@@ -37,6 +42,9 @@ const LRU_MAX = 1000;
 /**
  * Map は挿入順を保持するため、先頭が「最も古いエントリ」になる。
  * サイズ超過時は先頭から削除することで簡易 LRU を実現する。
+ *
+ * これは同一プロセス内の重複を潰すだけの一次キャッシュ。実質的な削減は
+ * Data Cache（`next.revalidate`）が担う。
  */
 const cache = new Map<string, string>();
 
@@ -68,161 +76,250 @@ function lruSet(key: string, value: string): void {
 
 /**
  * ひらがな・カタカナ・CJK 統合漢字を含む場合に日本語と判定する（簡易判定）。
- * すでに日本語のテキストを DeepL に送らないための早期リターン用。
+ * すでに日本語のテキストを翻訳 API に送らないための早期リターン用。
  */
 function isJapanese(text: string): boolean {
   return /[぀-ゟ゠-ヿ一-鿿]/.test(text);
 }
 
 // ──────────────────────────────────────────
-// 内部: 認証キーとエンドポイント解決
+// 内部: 定数と状態
 // ──────────────────────────────────────────
 
-const FREE_HOST = "api-free.deepl.com";
-const PRO_HOST = "api.deepl.com";
+const TRANSLATE_ENDPOINT =
+  "https://translation.googleapis.com/language/translate/v2";
 
-/** DeepL の鍵の最短長。Pro は 36 文字、Free は末尾 ":fx" を足して 39 文字 */
-const DEEPL_KEY_MIN_LENGTH = 36;
+/**
+ * 翻訳結果のキャッシュ秒数（30 日）。
+ * 同じ英文に対する訳は変わらないため長く持つ。ここが無料枠の消費量を決める。
+ */
+const TRANSLATION_CACHE_SECONDS = 2592000;
+
+/** GET のクエリに載せられる URL の上限。超える分はリクエストを分割する */
+const MAX_REQUEST_URL_LENGTH = 2000;
+
+/** Google の API キーの体裁（`AIza` + 英数字） */
+const GOOGLE_API_KEY_PATTERN = /^AIza[A-Za-z0-9_-]{30,}$/;
 
 /** 鍵の体裁がおかしい旨を警告済みか（プロセス内で 1 度だけ出す） */
 let keyShapeWarned = false;
 
-/** 認証失敗を記録済みか（プロセス内で 1 度だけ出す） */
-let authFailureLogged = false;
+/** 翻訳を止めた理由を記録済みか（プロセス内で 1 度だけ出す） */
+let disableLogged = false;
 
 /**
- * 両エンドポイントで認証を拒否された状態。
+ * 認証失敗・枠超過で翻訳を止めた状態。
  *
- * 鍵は実行中に変わらないため、以後叩き続けても同じ 403 を積むだけで、
- * リクエスト毎にログが膨らむ。立ったら DeepL を呼ばない。
+ * 鍵も残枠も実行中には直らない。叩き続けても同じエラーを積むだけで、
+ * リクエスト毎にログが膨らむ。立ったら API を呼ばない。
  */
-let deeplAuthFailed = false;
+let translationDisabled = false;
+
+// ──────────────────────────────────────────
+// 内部: 鍵の解決
+// ──────────────────────────────────────────
 
 /**
  * 環境変数から鍵を取り出す。
  *
  * 前後の空白と引用符を落とす。`.env` に値をクォートで囲って書いたり
- * 改行が紛れたりすると `:fx` 判定が崩れ、Free の鍵が Pro のエンドポイントへ
- * 送られて 403 になる。原因が見えにくい壊れ方なのでここで吸収する。
+ * 改行が紛れたりすると、そのままクエリに載って認証が通らない。
  */
-function resolveDeepLApiKey(): string | null {
-  const raw = process.env.DEEPL_API_KEY;
+function resolveApiKey(): string | null {
+  const raw = process.env.GOOGLE_TRANSLATE_API_KEY;
   if (!raw) return null;
 
   const key = raw.trim().replace(/^["']|["']$/g, "");
   if (!key) return null;
 
-  if (!keyShapeWarned && key.length < DEEPL_KEY_MIN_LENGTH) {
+  if (!keyShapeWarned && !GOOGLE_API_KEY_PATTERN.test(key)) {
     keyShapeWarned = true;
     // 鍵そのものは出さない。長さだけで設定ミスを見分けられる
     console.warn(
-      `[translate] DEEPL_API_KEY が DeepL の鍵の体裁を満たしていません（長さ ${key.length}、想定 ${DEEPL_KEY_MIN_LENGTH} 以上）。認証に失敗する可能性が高いです`,
+      `[translate] GOOGLE_TRANSLATE_API_KEY が Google の鍵の体裁（AIza で始まる英数字）を満たしていません（長さ ${key.length}）。認証に失敗する可能性が高いです`,
     );
   }
   return key;
 }
 
-/** 鍵の末尾で Free / Pro を判定し、[優先, 予備] の順にホストを返す */
-function resolveDeepLHosts(apiKey: string): [string, string] {
-  return apiKey.endsWith(":fx") ? [FREE_HOST, PRO_HOST] : [PRO_HOST, FREE_HOST];
-}
-
 // ──────────────────────────────────────────
-// 内部: DeepL API 呼び出し
+// 内部: API 呼び出し
 // ──────────────────────────────────────────
 
-/**
- * DeepL の `/v2/translate` を POST application/x-www-form-urlencoded で呼び出す。
- * `source_lang` は省略（自動検出）、`target_lang=JA` で固定。
- * 失敗した場合は null を返す（呼び出し元で原文にフォールバックする）。
- */
-async function callDeepL(
-  texts: string[],
-  apiKey: string,
-): Promise<DeepLResponse | null> {
-  if (deeplAuthFailed) return null;
-
-  const body = new URLSearchParams();
-  body.append("target_lang", "JA");
-  for (const text of texts) {
-    body.append("text", text);
-  }
-  const payload = body.toString();
-
-  const [primary, fallback] = resolveDeepLHosts(apiKey);
-
-  const first = await postToDeepL(primary, apiKey, payload);
-  if (first.kind === "ok") return first.data;
-  if (first.kind === "error") return null;
-
-  // 403 は認証失敗。Free の鍵に ":fx" が欠けている等の設定ミスを救うため、
-  // もう一方のエンドポイントへ **一度だけ** 入れ替えて試す
-  const second = await postToDeepL(fallback, apiKey, payload);
-  if (second.kind === "ok") return second.data;
-
-  if (second.kind === "forbidden") {
-    deeplAuthFailed = true;
-    if (!authFailureLogged) {
-      authFailureLogged = true;
-      console.error(
-        `[translate] DEEPL_API_KEY が ${primary} / ${fallback} のどちらでも拒否されました（403）。鍵を確認してください。以後この実行では翻訳をスキップします`,
-      );
-    }
-  }
-  return null;
-}
-
-/** 1 エンドポイントへの POST 結果。403 だけは呼び出し側で分岐したいので区別する */
-type DeepLAttempt =
-  | { kind: "ok"; data: DeepLResponse }
-  | { kind: "forbidden" }
+type TranslateOutcome =
+  | { kind: "ok"; texts: string[] }
+  | { kind: "auth" }
+  | { kind: "quota" }
   | { kind: "error" };
 
-async function postToDeepL(
-  host: string,
+/** 鍵と固定パラメータだけのクエリ。q は呼び出し側で足す */
+function baseParams(apiKey: string): URLSearchParams {
+  return new URLSearchParams({ target: "ja", format: "text", key: apiKey });
+}
+
+/**
+ * URL 長が上限を超えないようにテキストの添字をまとめる。
+ * 単独でも収まらないテキストはどの塊にも入れない（原文のまま返す）。
+ */
+function chunkIndices(texts: string[], apiKey: string): number[][] {
+  const baseLength = `${TRANSLATE_ENDPOINT}?${baseParams(apiKey).toString()}`
+    .length;
+
+  const chunks: number[][] = [];
+  let current: number[] = [];
+  let currentLength = baseLength;
+
+  for (let i = 0; i < texts.length; i++) {
+    const cost = `&q=${encodeURIComponent(texts[i])}`.length;
+    if (baseLength + cost > MAX_REQUEST_URL_LENGTH) continue;
+
+    if (current.length > 0 && currentLength + cost > MAX_REQUEST_URL_LENGTH) {
+      chunks.push(current);
+      current = [];
+      currentLength = baseLength;
+    }
+    current.push(i);
+    currentLength += cost;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/** 1 リクエスト分の翻訳。失敗の種類を呼び出し側へ返す */
+async function requestTranslation(
+  texts: string[],
   apiKey: string,
-  payload: string,
-): Promise<DeepLAttempt> {
+): Promise<TranslateOutcome> {
+  const params = baseParams(apiKey);
+  for (const text of texts) params.append("q", text);
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   let response: Response;
   try {
-    response = await fetch(`https://${host}/v2/translate`, {
-      method: "POST",
-      headers: {
-        Authorization: `DeepL-Auth-Key ${apiKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: payload,
+    response = await fetch(`${TRANSLATE_ENDPOINT}?${params.toString()}`, {
       signal: controller.signal,
+      // 同じ英文の訳は変わらない。Data Cache に載せて再翻訳を防ぐ
+      next: { revalidate: TRANSLATION_CACHE_SECONDS },
     });
   } catch (err) {
-    console.error("[translate] DeepL fetch error:", err);
+    // URL には鍵が載っているので、エラーは名前だけ出す
+    const name = err instanceof Error ? err.name : "unknown error";
+    console.error("[translate] リクエストに失敗しました:", name);
     return { kind: "error" };
   } finally {
     clearTimeout(timeoutId);
   }
 
-  // 認証失敗はログを出さずに返す。呼び出し側が再試行を挟んだうえで
-  // 最終的に 1 度だけ記録する
-  if (response.status === 403) return { kind: "forbidden" };
-
   if (!response.ok) {
-    console.error(
-      "[translate] DeepL API error:",
-      response.status,
-      response.statusText,
-    );
+    return classifyFailure(response);
+  }
+
+  let payload: GoogleTranslateResponse;
+  try {
+    payload = (await response.json()) as GoogleTranslateResponse;
+  } catch {
+    console.error("[translate] レスポンスを解釈できませんでした");
     return { kind: "error" };
   }
 
+  const translated = payload.data?.translations;
+  if (!translated || translated.length === 0) return { kind: "error" };
+
+  return {
+    kind: "ok",
+    texts: translated.map((t) => decodeHtmlEntities(t.translatedText)),
+  };
+}
+
+/** HTTP ステータスとエラー本文から、止めるべき失敗かを判定する */
+async function classifyFailure(response: Response): Promise<TranslateOutcome> {
+  let reason = "";
   try {
-    return { kind: "ok", data: (await response.json()) as DeepLResponse };
-  } catch (err) {
-    console.error("[translate] DeepL response parse error:", err);
-    return { kind: "error" };
+    const body = (await response.json()) as GoogleTranslateResponse;
+    reason = body.error?.errors?.[0]?.reason ?? body.error?.status ?? "";
+  } catch {
+    // 本文が読めなければステータスだけで判定する
   }
+
+  const quotaReasons = [
+    "dailyLimitExceeded",
+    "userRateLimitExceeded",
+    "rateLimitExceeded",
+    "quotaExceeded",
+    "RESOURCE_EXHAUSTED",
+  ];
+  if (response.status === 429 || quotaReasons.includes(reason)) {
+    return { kind: "quota" };
+  }
+  if ([400, 401, 403].includes(response.status)) {
+    return { kind: "auth" };
+  }
+
+  console.error("[translate] API エラー:", response.status, reason);
+  return { kind: "error" };
+}
+
+/** 翻訳を止め、理由を 1 度だけ記録する */
+function disableTranslation(kind: "auth" | "quota"): void {
+  translationDisabled = true;
+  if (disableLogged) return;
+  disableLogged = true;
+
+  // 鍵を含む URL は絶対に出さない
+  console.error(
+    kind === "auth"
+      ? "[translate] GOOGLE_TRANSLATE_API_KEY が拒否されました。鍵と Cloud Translation API の有効化を確認してください。以後この実行では翻訳をスキップします"
+      : "[translate] Google Cloud Translation の割り当てを使い切りました。以後この実行では翻訳をスキップします",
+  );
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  "&nbsp;": " ",
+};
+
+/** Google は format=text でも実体参照を返すことがある */
+function decodeHtmlEntities(text: string): string {
+  return text.replace(
+    /&(?:amp|lt|gt|quot|apos|nbsp);|&#(\d+);/g,
+    (match, code: string | undefined) =>
+      code
+        ? String.fromCodePoint(Number(code))
+        : (HTML_ENTITIES[match] ?? match),
+  );
+}
+
+/** 添字を保ったまま翻訳する。翻訳できなかった要素は null */
+async function translateTexts(
+  texts: string[],
+  apiKey: string,
+): Promise<Array<string | null>> {
+  const out: Array<string | null> = new Array(texts.length).fill(null);
+  if (translationDisabled) return out;
+
+  for (const indices of chunkIndices(texts, apiKey)) {
+    const outcome = await requestTranslation(
+      indices.map((i) => texts[i]),
+      apiKey,
+    );
+
+    if (outcome.kind === "auth" || outcome.kind === "quota") {
+      disableTranslation(outcome.kind);
+      break;
+    }
+    if (outcome.kind !== "ok") continue;
+
+    indices.forEach((index, position) => {
+      out[index] = outcome.texts[position] ?? null;
+    });
+  }
+  return out;
 }
 
 // ──────────────────────────────────────────
@@ -233,9 +330,8 @@ async function postToDeepL(
  * 単一テキストを日本語に翻訳して返す。
  *
  * - 元テキストが日本語（ひらがな / カタカナ / 漢字を含む）であればそのまま返す
- * - DEEPL_API_KEY 未設定時は原文を返す（throw しない）
- * - 翻訳失敗時は console.error してから原文を返す（画面全体が落ちないように）
- * - サーバー内で in-memory LRU キャッシュを参照 / 更新する
+ * - 鍵が未設定・翻訳が停止中なら原文を返す（throw しない）
+ * - 翻訳失敗時も原文を返す（画面全体が落ちないように）
  */
 export async function translateToJa(text: string): Promise<string> {
   if (!text || isJapanese(text)) return text;
@@ -243,22 +339,11 @@ export async function translateToJa(text: string): Promise<string> {
   const cached = lruGet(text);
   if (cached !== undefined) return cached;
 
-  const apiKey = resolveDeepLApiKey();
+  const apiKey = resolveApiKey();
   if (!apiKey) return text;
 
-  const result = await callDeepL([text], apiKey);
-  const translated = result?.translations?.[0]?.text ?? null;
-  if (!translated) {
-    // 認証が壊れている時は callDeepL 側で 1 度記録済み。ここで毎回出すと
-    // リクエスト毎に同じ内容がログへ積み上がる
-    if (!deeplAuthFailed) {
-      console.error(
-        "[translate] translateToJa: no translation returned for:",
-        text,
-      );
-    }
-    return text;
-  }
+  const [translated] = await translateTexts([text], apiKey);
+  if (!translated) return text;
 
   lruSet(text, translated);
   return translated;
@@ -274,7 +359,7 @@ export async function translateToJa(text: string): Promise<string> {
 export async function translateManyToJa(texts: string[]): Promise<string[]> {
   if (texts.length === 0) return [];
 
-  const apiKey = resolveDeepLApiKey();
+  const apiKey = resolveApiKey();
 
   // 各テキストのキャッシュ状態と送信対象インデックスを収集する
   const results: string[] = [...texts];
@@ -298,24 +383,13 @@ export async function translateManyToJa(texts: string[]): Promise<string[]> {
 
   if (missTexts.length === 0 || !apiKey) return results;
 
-  const apiResult = await callDeepL(missTexts, apiKey);
-  if (!apiResult) {
-    console.error(
-      "[translate] translateManyToJa: API call failed, returning originals for",
-      missTexts.length,
-      "texts",
-    );
-    return results;
-  }
-
-  for (let j = 0; j < missIndices.length; j++) {
-    const translated = apiResult.translations?.[j]?.text ?? null;
-    if (translated) {
-      const originalIndex = missIndices[j];
-      results[originalIndex] = translated;
-      lruSet(missTexts[j], translated);
-    }
-  }
+  const translated = await translateTexts(missTexts, apiKey);
+  translated.forEach((value, position) => {
+    if (!value) return;
+    const index = missIndices[position];
+    results[index] = value;
+    lruSet(texts[index], value);
+  });
 
   return results;
 }
