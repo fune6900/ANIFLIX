@@ -5,10 +5,13 @@ import "server-only";
  *
  * DeepL API Free / Pro 両対応。`DEEPL_API_KEY` 環境変数で認証する。
  * キーが `:fx` で終わる場合は Free 版エンドポイント (api-free.deepl.com)、
- * それ以外は Pro 版エンドポイント (api.deepl.com) を自動選択する。
+ * それ以外は Pro 版エンドポイント (api.deepl.com) を優先する。
  *
  * - Server Component / Route Handler からのみ呼び出す（クライアント側での利用禁止）
  * - DEEPL_API_KEY 未設定時は原文をそのまま返す（throw しない）
+ * - 鍵は trim + 引用符除去してから使う（`.env` の書き方で `:fx` 判定が崩れるため）
+ * - 403 が返ったらもう一方のエンドポイントへ 1 度だけ入れ替えて再試行する
+ * - 両方 403 なら 1 度だけ記録し、以後この実行では DeepL を呼ばない
  * - サーバープロセス内で in-memory LRU キャッシュ（最大 1000 件）を保持する
  */
 
@@ -72,12 +75,56 @@ function isJapanese(text: string): boolean {
 }
 
 // ──────────────────────────────────────────
-// 内部: エンドポイント解決
+// 内部: 認証キーとエンドポイント解決
 // ──────────────────────────────────────────
 
-function resolveDeepLEndpoint(apiKey: string): string {
-  const host = apiKey.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
-  return `https://${host}/v2/translate`;
+const FREE_HOST = "api-free.deepl.com";
+const PRO_HOST = "api.deepl.com";
+
+/** DeepL の鍵の最短長。Pro は 36 文字、Free は末尾 ":fx" を足して 39 文字 */
+const DEEPL_KEY_MIN_LENGTH = 36;
+
+/** 鍵の体裁がおかしい旨を警告済みか（プロセス内で 1 度だけ出す） */
+let keyShapeWarned = false;
+
+/** 認証失敗を記録済みか（プロセス内で 1 度だけ出す） */
+let authFailureLogged = false;
+
+/**
+ * 両エンドポイントで認証を拒否された状態。
+ *
+ * 鍵は実行中に変わらないため、以後叩き続けても同じ 403 を積むだけで、
+ * リクエスト毎にログが膨らむ。立ったら DeepL を呼ばない。
+ */
+let deeplAuthFailed = false;
+
+/**
+ * 環境変数から鍵を取り出す。
+ *
+ * 前後の空白と引用符を落とす。`.env` に値をクォートで囲って書いたり
+ * 改行が紛れたりすると `:fx` 判定が崩れ、Free の鍵が Pro のエンドポイントへ
+ * 送られて 403 になる。原因が見えにくい壊れ方なのでここで吸収する。
+ */
+function resolveDeepLApiKey(): string | null {
+  const raw = process.env.DEEPL_API_KEY;
+  if (!raw) return null;
+
+  const key = raw.trim().replace(/^["']|["']$/g, "");
+  if (!key) return null;
+
+  if (!keyShapeWarned && key.length < DEEPL_KEY_MIN_LENGTH) {
+    keyShapeWarned = true;
+    // 鍵そのものは出さない。長さだけで設定ミスを見分けられる
+    console.warn(
+      `[translate] DEEPL_API_KEY が DeepL の鍵の体裁を満たしていません（長さ ${key.length}、想定 ${DEEPL_KEY_MIN_LENGTH} 以上）。認証に失敗する可能性が高いです`,
+    );
+  }
+  return key;
+}
+
+/** 鍵の末尾で Free / Pro を判定し、[優先, 予備] の順にホストを返す */
+function resolveDeepLHosts(apiKey: string): [string, string] {
+  return apiKey.endsWith(":fx") ? [FREE_HOST, PRO_HOST] : [PRO_HOST, FREE_HOST];
 }
 
 // ──────────────────────────────────────────
@@ -93,34 +140,73 @@ async function callDeepL(
   texts: string[],
   apiKey: string,
 ): Promise<DeepLResponse | null> {
-  const endpoint = resolveDeepLEndpoint(apiKey);
+  if (deeplAuthFailed) return null;
 
   const body = new URLSearchParams();
   body.append("target_lang", "JA");
   for (const text of texts) {
     body.append("text", text);
   }
+  const payload = body.toString();
 
+  const [primary, fallback] = resolveDeepLHosts(apiKey);
+
+  const first = await postToDeepL(primary, apiKey, payload);
+  if (first.kind === "ok") return first.data;
+  if (first.kind === "error") return null;
+
+  // 403 は認証失敗。Free の鍵に ":fx" が欠けている等の設定ミスを救うため、
+  // もう一方のエンドポイントへ **一度だけ** 入れ替えて試す
+  const second = await postToDeepL(fallback, apiKey, payload);
+  if (second.kind === "ok") return second.data;
+
+  if (second.kind === "forbidden") {
+    deeplAuthFailed = true;
+    if (!authFailureLogged) {
+      authFailureLogged = true;
+      console.error(
+        `[translate] DEEPL_API_KEY が ${primary} / ${fallback} のどちらでも拒否されました（403）。鍵を確認してください。以後この実行では翻訳をスキップします`,
+      );
+    }
+  }
+  return null;
+}
+
+/** 1 エンドポイントへの POST 結果。403 だけは呼び出し側で分岐したいので区別する */
+type DeepLAttempt =
+  | { kind: "ok"; data: DeepLResponse }
+  | { kind: "forbidden" }
+  | { kind: "error" };
+
+async function postToDeepL(
+  host: string,
+  apiKey: string,
+  payload: string,
+): Promise<DeepLAttempt> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(`https://${host}/v2/translate`, {
       method: "POST",
       headers: {
         Authorization: `DeepL-Auth-Key ${apiKey}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: body.toString(),
+      body: payload,
       signal: controller.signal,
     });
   } catch (err) {
     console.error("[translate] DeepL fetch error:", err);
-    return null;
+    return { kind: "error" };
   } finally {
     clearTimeout(timeoutId);
   }
+
+  // 認証失敗はログを出さずに返す。呼び出し側が再試行を挟んだうえで
+  // 最終的に 1 度だけ記録する
+  if (response.status === 403) return { kind: "forbidden" };
 
   if (!response.ok) {
     console.error(
@@ -128,14 +214,14 @@ async function callDeepL(
       response.status,
       response.statusText,
     );
-    return null;
+    return { kind: "error" };
   }
 
   try {
-    return (await response.json()) as DeepLResponse;
+    return { kind: "ok", data: (await response.json()) as DeepLResponse };
   } catch (err) {
     console.error("[translate] DeepL response parse error:", err);
-    return null;
+    return { kind: "error" };
   }
 }
 
@@ -157,16 +243,20 @@ export async function translateToJa(text: string): Promise<string> {
   const cached = lruGet(text);
   if (cached !== undefined) return cached;
 
-  const apiKey = process.env.DEEPL_API_KEY;
+  const apiKey = resolveDeepLApiKey();
   if (!apiKey) return text;
 
   const result = await callDeepL([text], apiKey);
   const translated = result?.translations?.[0]?.text ?? null;
   if (!translated) {
-    console.error(
-      "[translate] translateToJa: no translation returned for:",
-      text,
-    );
+    // 認証が壊れている時は callDeepL 側で 1 度記録済み。ここで毎回出すと
+    // リクエスト毎に同じ内容がログへ積み上がる
+    if (!deeplAuthFailed) {
+      console.error(
+        "[translate] translateToJa: no translation returned for:",
+        text,
+      );
+    }
     return text;
   }
 
@@ -184,7 +274,7 @@ export async function translateToJa(text: string): Promise<string> {
 export async function translateManyToJa(texts: string[]): Promise<string[]> {
   if (texts.length === 0) return [];
 
-  const apiKey = process.env.DEEPL_API_KEY;
+  const apiKey = resolveDeepLApiKey();
 
   // 各テキストのキャッシュ状態と送信対象インデックスを収集する
   const results: string[] = [...texts];
