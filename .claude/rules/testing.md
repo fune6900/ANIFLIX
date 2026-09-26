@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 3 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 4 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -176,6 +176,11 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    時に素通りさせない fail-closed の分岐は `fetch` に渡る `RequestInit` にしか
    現れない。`@/lib/turnstile` をモックすると検証対象ごと消える。
    例外 1（`tmdb.ts`）と同じ構造。例: `tests/unit/lib/turnstile.test.ts`
+
+4. **`src/lib/translate.ts` 自身のテストでグローバル `fetch` をスタブする**
+   どのエンドポイントを選ぶか、403 のときにもう一方へ再試行するか、認証失敗を
+   何度ログに出すかは `fetch` の呼ばれ方にしか現れない。`@/lib/translate` を
+   モックすると検証対象ごと消える。例: `tests/unit/lib/translate.test.ts`
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して
