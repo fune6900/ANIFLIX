@@ -4,11 +4,11 @@
 
 **Vitest + jsdom を導入済み**（ISSUE #54）。Playwright（E2E）は未導入。
 
-| コマンド | 内容 |
-| -------- | ---- |
-| `npm test` | Vitest（watch） |
+| コマンド            | 内容                              |
+| ------------------- | --------------------------------- |
+| `npm test`          | Vitest（watch）                   |
 | `npm test -- --run` | Vitest（1 回だけ実行。CI と同じ） |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsc --noEmit`                    |
 
 構成:
 
@@ -159,8 +159,8 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 2 つに限り、上記より低いレイヤーのモックを許可する。
-どちらも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
+以下の 3 つに限り、上記より低いレイヤーのモックを許可する。
+いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
    キャッシュ方針（`cache: "no-store"` / `next.revalidate`）は `fetchTMDb` が
@@ -170,6 +170,18 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 2. **`src/middleware.ts` のテストで `@/auth` をモックする**
    matcher の検証に Auth.js 本体は不要で、読み込むと next-auth が Vitest 環境で
    解決できず落ちる。例: `tests/unit/middleware.test.ts`
+
+3. **`src/lib/turnstile.ts` 自身のテストでグローバル `fetch` をスタブする**
+   siteverify へ送る body（`secret` / `response` / `remoteip`）と、到達できなかった
+   時に素通りさせない fail-closed の分岐は `fetch` に渡る `RequestInit` にしか
+   現れない。`@/lib/turnstile` をモックすると検証対象ごと消える。
+   例外 1（`tmdb.ts`）と同じ構造。例: `tests/unit/lib/turnstile.test.ts`
+
+> `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
+> `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して
+> いるため、Vitest では解決できない。`vitest.config.ts` の `resolve.alias` で
+> `tests/stubs/server-only.ts` へ向けてある。サーバー専用モジュールのテストを
+> 追加する時はこの alias が前提になる。
 
 ---
 
