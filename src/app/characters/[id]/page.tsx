@@ -3,6 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { getAniListCharacter, getAniListMediaCharacters } from "@/lib/anilist";
 import { searchAnnictCharacterByName } from "@/lib/annict";
 import { translateManyToJa } from "@/lib/translate";
+import {
+  cleanCharacterDescription,
+  truncateAtSentence,
+  DESCRIPTION_MAX_CHARS,
+} from "@/lib/description";
 import Pagination from "@/components/Pagination";
 import type {
   AniListCharacterDetail,
@@ -43,11 +48,6 @@ function formatBirthday(d: AniListFuzzyDate | null): string | null {
   const day = d.day ? `${d.day}日` : "";
   const year = d.year ? `${d.year}年` : "";
   return `${year}${m}${day}` || null;
-}
-
-function sanitizeText(raw: string | null | undefined): string {
-  if (!raw) return "";
-  return raw.replace(/<[^>]*>/g, "").trim();
 }
 
 function workTitle(edge: AniListCharacterDetailMediaEdge): string {
@@ -239,20 +239,24 @@ export default async function CharacterDetailPage({
       ? characterImage
       : null;
   const aniListBirthday = formatBirthday(detail.dateOfBirth);
-  const aniListDescription = sanitizeText(detail.description);
+  const aniListDescription = cleanCharacterDescription(detail.description);
 
   // Annict 値を優先、無ければ AniList で埋める（翻訳前の原文フィールド）
   const rawGender = normalizeGender(detail.gender || "");
   const rawHeight = annict?.height || "";
   const rawWeight = annict?.weight || "";
   const rawNationality = annict?.nationality || "";
-  const rawDescription =
-    sanitizeText(annict?.description) || aniListDescription;
+  // スポイラー・リンク・先頭のメタデータを落としてから文の区切りで打ち切る。
+  // マークアップまで翻訳 API に送ると、そのぶん従量枠を払うことになる
+  const rawDescription = truncateAtSentence(
+    cleanCharacterDescription(annict?.description) || aniListDescription,
+    DESCRIPTION_MAX_CHARS,
+  );
   const rawAliases = (detail.name.alternative ?? []).filter(
     (a) => a && a.trim().length > 0,
   );
 
-  // 翻訳対象テキストをまとめて DeepL へ送る
+  // 翻訳対象テキストをまとめて翻訳 API へ送る
   // 順序: [height, weight, nationality, description, ...aliases]
   // 性別は GENDER_MAP で静的マッピング済みのため翻訳 API には渡さない
   const textsToTranslate = [
