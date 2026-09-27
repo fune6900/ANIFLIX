@@ -173,6 +173,49 @@ describe("translateToJa", () => {
       expect(fetchMock.mock.calls.length).toBe(after);
     });
 
+    it("Google が返した理由をログに含める", async () => {
+      // 理由を握り潰すと「鍵が拒否された」としか分からず原因に辿り着けない
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      stubFetchSequence([
+        {
+          status: 403,
+          body: {
+            error: {
+              message: "Requests from referer <empty> are blocked.",
+              details: [{ reason: "API_KEY_HTTP_REFERRER_BLOCKED" }],
+            },
+          },
+        },
+      ]);
+      const { translateToJa } = await loadTranslate();
+
+      await translateToJa("hello");
+
+      const logged = error.mock.calls.flat().map(String).join(" ");
+      expect(logged).toContain("API_KEY_HTTP_REFERRER_BLOCKED");
+      expect(logged).not.toContain(KEY);
+    });
+
+    it("リファラー制限には具体的な直し方を添える", async () => {
+      // サーバーからの呼び出しにリファラーは付かない。最も踏みやすい罠
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      stubFetchSequence([
+        {
+          status: 403,
+          body: {
+            error: { details: [{ reason: "API_KEY_HTTP_REFERRER_BLOCKED" }] },
+          },
+        },
+      ]);
+      const { translateToJa } = await loadTranslate();
+
+      await translateToJa("hello");
+
+      const logged = error.mock.calls.flat().map(String).join(" ");
+      expect(logged).toContain("リファラー");
+      expect(logged).toContain("アプリケーションの制限");
+    });
+
     it("枠を使い切ったら以後叩かず一度だけ記録する", async () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => {});
       stubFetchSequence([{ status: 429 }]);
