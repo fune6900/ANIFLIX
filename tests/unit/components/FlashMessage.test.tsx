@@ -6,7 +6,10 @@ import {
   act,
   fireEvent,
 } from "@testing-library/react";
-import FlashMessage from "@/components/FlashMessage";
+import FlashMessage, {
+  AUTO_DISMISS_MS,
+  EXIT_MS,
+} from "@/components/FlashMessage";
 
 /**
  * フラッシュメッセージの表示。
@@ -20,6 +23,25 @@ let params = new URLSearchParams();
 vi.mock("next/navigation", () => ({
   useSearchParams: () => params,
 }));
+
+/**
+ * 退出アニメーションの分だけ時間を進める。
+ * 表示 → 退出 → DOM から除去 の 2 段階なので、まとめて進めるだけでは足りない
+ * （退出タイマーは表示が終わってから仕掛けられる）。
+ */
+function runExit() {
+  act(() => {
+    vi.advanceTimersByTime(EXIT_MS);
+  });
+}
+
+/** 自動消滅から DOM 除去までを一気に進める */
+function runAutoDismiss() {
+  act(() => {
+    vi.advanceTimersByTime(AUTO_DISMISS_MS);
+  });
+  runExit();
+}
 
 /** クエリと現在のパスを整える */
 function setLocation(pathname: string, query: string) {
@@ -115,11 +137,13 @@ describe("FlashMessage", () => {
 
     it("閉じたらパラメータを URL から落とす", () => {
       // 残したままだと再読み込みの度に同じ通知が出る
+      vi.useFakeTimers();
       setLocation("/anime/1429", "flash=signed-in");
       const replaceState = vi.spyOn(window.history, "replaceState");
 
       render(<FlashMessage />);
       fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+      runExit();
 
       expect(replaceState).toHaveBeenCalledWith(null, "", "/anime/1429");
     });
@@ -130,19 +154,19 @@ describe("FlashMessage", () => {
       const replaceState = vi.spyOn(window.history, "replaceState");
 
       render(<FlashMessage />);
-      act(() => {
-        vi.advanceTimersByTime(10000);
-      });
+      runAutoDismiss();
 
       expect(replaceState).toHaveBeenCalledWith(null, "", "/");
     });
 
     it("フラッシュ以外のクエリは残す", () => {
+      vi.useFakeTimers();
       setLocation("/search", "q=naruto&flash=signed-in&reason=X");
       const replaceState = vi.spyOn(window.history, "replaceState");
 
       render(<FlashMessage />);
       fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+      runExit();
 
       expect(replaceState).toHaveBeenCalledWith(null, "", "/search?q=naruto");
     });
@@ -169,20 +193,96 @@ describe("FlashMessage", () => {
 
       expect(screen.getByRole("status")).toBeInTheDocument();
 
-      act(() => {
-        vi.advanceTimersByTime(10000);
-      });
+      runAutoDismiss();
 
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
     it("閉じるボタンで消せる", () => {
+      vi.useFakeTimers();
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
+      runExit();
+
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("見た目と動き", () => {
+    /** トーストの外枠（位置とスライドを担う要素） */
+    function toast() {
+      return screen.getByRole("status");
+    }
+
+    it("右上に表示する", () => {
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      const className = toast().className;
+      expect(className).toContain("right-");
+      expect(className).toContain("top-");
+      // 中央寄せの名残が残っていないこと
+      expect(className).not.toContain("left-1/2");
+    });
+
+    it("右からスライドして入る", () => {
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      const className = toast().className;
+      // 画面外（translate-x-full）から 0 へ動かすための土台
+      expect(className).toContain("transition");
+      expect(className).toContain("translate-x-0");
+    });
+
+    it("閉じる時は右へスライドして出る", () => {
+      vi.useFakeTimers();
       setLocation("/", "flash=signed-in");
       render(<FlashMessage />);
 
       fireEvent.click(screen.getByRole("button", { name: "閉じる" }));
 
-      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      // まだ DOM には居て、画面外へ移動している途中
+      expect(toast().className).toContain("translate-x-full");
+    });
+
+    it("残り時間のバーを出す", () => {
+      setLocation("/", "flash=signed-in");
+      const { container } = render(<FlashMessage />);
+
+      const bar = container.querySelector("[data-flash-timer]");
+      expect(bar).not.toBeNull();
+    });
+
+    it("バーは読み上げ対象にしない", () => {
+      // 文言そのものは role=status / role=alert で伝わる。
+      // 残り時間まで読み上げると邪魔になる
+      setLocation("/", "flash=signed-in");
+      const { container } = render(<FlashMessage />);
+
+      const wrapper =
+        container.querySelector("[data-flash-timer]")?.parentElement;
+      expect(wrapper).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("バーの所要時間が自動消滅の時間と一致する", () => {
+      // ずれると「バーが空なのに消えない」「消えたのにバーが残る」が起きる
+      setLocation("/", "flash=signed-in");
+      const { container } = render(<FlashMessage />);
+
+      const bar = container.querySelector<HTMLElement>("[data-flash-timer]");
+      expect(bar?.style.transitionDuration).toBe(`${AUTO_DISMISS_MS}ms`);
+    });
+
+    it("バーは時間とともに減る向きに動かす", () => {
+      setLocation("/", "flash=signed-in");
+      const { container } = render(<FlashMessage />);
+
+      const bar = container.querySelector<HTMLElement>("[data-flash-timer]");
+      // 入場後は 0% へ向かって縮む
+      expect(bar?.style.width).toBe("0%");
     });
   });
 });
