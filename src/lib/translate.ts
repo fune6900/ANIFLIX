@@ -30,6 +30,8 @@ interface GoogleTranslateResponse {
     message?: string;
     status?: string;
     errors?: Array<{ reason?: string }>;
+    /** `API_KEY_HTTP_REFERRER_BLOCKED` 等、具体的な理由が入る */
+    details?: Array<{ reason?: string }>;
   };
 }
 
@@ -148,8 +150,9 @@ function resolveApiKey(): string | null {
 
 type TranslateOutcome =
   | { kind: "ok"; texts: string[] }
-  | { kind: "auth" }
-  | { kind: "quota" }
+  /** `detail` は Google が返した理由。鍵は含まれないのでそのまま記録してよい */
+  | { kind: "auth"; detail: string }
+  | { kind: "quota"; detail: string }
   | { kind: "error" };
 
 /** 鍵と固定パラメータだけのクエリ。q は呼び出し側で足す */
@@ -233,15 +236,32 @@ async function requestTranslation(
   };
 }
 
-/** HTTP ステータスとエラー本文から、止めるべき失敗かを判定する */
+/**
+ * HTTP ステータスとエラー本文から、止めるべき失敗かを判定する。
+ *
+ * Google の返す `reason` / `message` はそのまま記録する。ここを握り潰すと
+ * 「鍵が拒否された」としか分からず、原因の特定に無駄な時間がかかる。
+ * 例: `API_KEY_HTTP_REFERRER_BLOCKED`（リファラー制限がサーバーからの呼び出しを弾いている）
+ */
 async function classifyFailure(response: Response): Promise<TranslateOutcome> {
   let reason = "";
+  let message = "";
   try {
     const body = (await response.json()) as GoogleTranslateResponse;
-    reason = body.error?.errors?.[0]?.reason ?? body.error?.status ?? "";
+    reason =
+      body.error?.details?.[0]?.reason ??
+      body.error?.errors?.[0]?.reason ??
+      body.error?.status ??
+      "";
+    message = body.error?.message ?? "";
   } catch {
     // 本文が読めなければステータスだけで判定する
   }
+
+  // 本文にも URL にも鍵は含まれないが、念のため理由と説明だけを拾う
+  const detail = [response.status, reason, message]
+    .filter((v) => v !== "" && v !== undefined)
+    .join(" / ");
 
   const quotaReasons = [
     "dailyLimitExceeded",
@@ -251,27 +271,47 @@ async function classifyFailure(response: Response): Promise<TranslateOutcome> {
     "RESOURCE_EXHAUSTED",
   ];
   if (response.status === 429 || quotaReasons.includes(reason)) {
-    return { kind: "quota" };
+    return { kind: "quota", detail };
   }
   if ([400, 401, 403].includes(response.status)) {
-    return { kind: "auth" };
+    return { kind: "auth", detail };
   }
 
-  console.error("[translate] API エラー:", response.status, reason);
+  console.error("[translate] API エラー:", detail);
   return { kind: "error" };
 }
 
+/** よくある設定ミスに対する手当て。理由コードから具体的な直し方を案内する */
+const AUTH_HINTS: Record<string, string> = {
+  API_KEY_HTTP_REFERRER_BLOCKED:
+    "API キーに HTTP リファラー制限が掛かっています。翻訳はサーバー側から呼ぶためリファラーが付きません。GCP の認証情報で「アプリケーションの制限」を「なし」にし、代わりに「API の制限」で Cloud Translation API だけを許可してください",
+  API_KEY_IP_ADDRESS_BLOCKED:
+    "API キーに IP アドレス制限が掛かっています。サーバーの送信元 IP が固定でない環境（Vercel 等）では通りません",
+  API_KEY_SERVICE_BLOCKED:
+    "API キーの「API の制限」に Cloud Translation API が含まれていません",
+  SERVICE_DISABLED:
+    "プロジェクトで Cloud Translation API が有効化されていません",
+  API_KEY_INVALID: "API キーの値が正しくありません",
+};
+
 /** 翻訳を止め、理由を 1 度だけ記録する */
-function disableTranslation(kind: "auth" | "quota"): void {
+function disableTranslation(kind: "auth" | "quota", detail: string): void {
   translationDisabled = true;
   if (disableLogged) return;
   disableLogged = true;
 
-  // 鍵を含む URL は絶対に出さない
+  if (kind === "quota") {
+    // 鍵を含む URL は絶対に出さない
+    console.error(
+      `[translate] Google Cloud Translation の割り当てを使い切りました（${detail}）。以後この実行では翻訳をスキップします`,
+    );
+    return;
+  }
+
+  const hintKey = Object.keys(AUTH_HINTS).find((k) => detail.includes(k));
+  const hint = hintKey ? ` → ${AUTH_HINTS[hintKey]}` : "";
   console.error(
-    kind === "auth"
-      ? "[translate] GOOGLE_TRANSLATE_API_KEY が拒否されました。鍵と Cloud Translation API の有効化を確認してください。以後この実行では翻訳をスキップします"
-      : "[translate] Google Cloud Translation の割り当てを使い切りました。以後この実行では翻訳をスキップします",
+    `[translate] GOOGLE_TRANSLATE_API_KEY が拒否されました（${detail}）${hint}。以後この実行では翻訳をスキップします`,
   );
 }
 
@@ -310,7 +350,7 @@ async function translateTexts(
     );
 
     if (outcome.kind === "auth" || outcome.kind === "quota") {
-      disableTranslation(outcome.kind);
+      disableTranslation(outcome.kind, outcome.detail);
       break;
     }
     if (outcome.kind !== "ok") continue;
