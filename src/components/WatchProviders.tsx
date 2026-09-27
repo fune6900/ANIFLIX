@@ -188,7 +188,7 @@ export default function WatchProviders({
 
   return (
     <section className="mt-10">
-      <h2 className="text-white font-bold text-lg mb-3">配信中のサービス</h2>
+      <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl mb-3">配信中のサービス</h2>
 
       <div className="space-y-4">
         {dedupedGroups.map((group) => (

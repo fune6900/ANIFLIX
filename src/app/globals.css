@@ -21,6 +21,14 @@ body {
   .site-container {
     @apply w-full px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 4xl:px-24 5xl:px-32;
   }
+
+  /* 詳細ページの本文ブロック（ヒーロー・動画・あらすじ）。
+     本文が左に寄って見えるので中央へ寄せる。上限は画面幅に対して単調に増やす。
+     一覧グリッド（キャスト・出演作）には被せない。あちらは幅いっぱいのまま。
+     1535px 以下では上限が効かないため、既存の見た目は変わらない */
+  .detail-block {
+    @apply mx-auto w-full 2xl:max-w-[1400px] 3xl:max-w-[1440px] 4xl:max-w-[1520px] 5xl:max-w-[1600px];
+  }
 }
 
 /* スクロールバー非表示 */

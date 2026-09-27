@@ -118,7 +118,7 @@ export default async function VoicedCharacters({
   return (
     <section id={sectionId} className="mt-10 scroll-mt-24">
       <div className="flex items-baseline gap-3 mb-4">
-        <h2 className="text-white font-bold text-lg">演じたキャラクター</h2>
+        <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">演じたキャラクター</h2>
         <span className="text-gray-500 text-sm">{hit.pageInfo.total}件</span>
         {hit.pageInfo.lastPage > 1 && (
           <span className="text-gray-500 text-sm">

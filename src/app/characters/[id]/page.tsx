@@ -76,11 +76,13 @@ interface InfoRowProps {
 }
 function InfoRow({ label, children }: InfoRowProps) {
   return (
-    <div className="grid grid-cols-[88px_1fr] sm:grid-cols-[120px_1fr] gap-x-3 py-2 border-b border-gray-800">
-      <span className="text-gray-500 text-xs font-semibold pt-0.5">
+    <div className="grid grid-cols-[88px_1fr] sm:grid-cols-[120px_1fr] 4xl:grid-cols-[140px_1fr] 5xl:grid-cols-[160px_1fr] gap-x-3 py-2 xl:py-2.5 border-b border-gray-800">
+      <span className="text-gray-500 text-xs xl:text-sm font-semibold pt-0.5">
         {label}
       </span>
-      <span className="text-gray-200 text-sm leading-relaxed">{children}</span>
+      <span className="text-gray-200 text-sm xl:text-base leading-relaxed">
+        {children}
+      </span>
     </div>
   );
 }
@@ -114,19 +116,21 @@ function MediaEdgeCard({ edge }: { edge: AniListCharacterDetailMediaEdge }) {
 
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
 
-        <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-[11px] font-semibold truncate">
+        <div className="absolute bottom-0 left-0 right-0 p-2 xl:p-2.5">
+          <p className="text-white text-[11px] xl:text-sm font-semibold truncate">
             {title}
           </p>
           {edge.node.seasonYear && (
-            <p className="text-gray-400 text-[10px]">{edge.node.seasonYear}</p>
+            <p className="text-gray-400 text-[10px] xl:text-xs">
+              {edge.node.seasonYear}
+            </p>
           )}
         </div>
       </Link>
       {va && (
         <Link
           href={vaHref(va.name.native || va.name.full || "")}
-          className="block mt-1 px-0.5 text-purple-300 text-[11px] truncate hover:text-purple-200 transition"
+          className="block mt-1 px-0.5 text-purple-300 text-[11px] xl:text-xs truncate hover:text-purple-200 transition"
         >
           CV: {va.name.native || va.name.full}
         </Link>
@@ -305,7 +309,7 @@ export default async function CharacterDetailPage({
         </nav>
 
         {/* ヒーロー */}
-        <section className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] 3xl:grid-cols-[320px_minmax(0,1400px)] 4xl:grid-cols-[400px_minmax(0,1400px)] 5xl:grid-cols-[480px_minmax(0,1600px)] gap-6 md:gap-10 mb-12">
+        <section className="detail-block grid grid-cols-1 md:grid-cols-[300px_1fr] lg:grid-cols-[360px_1fr] 3xl:grid-cols-[400px_1fr] 4xl:grid-cols-[440px_1fr] 5xl:grid-cols-[480px_1fr] gap-6 md:gap-10 xl:gap-12 mb-12">
           {/* キャラ画像 */}
           <div className="relative aspect-[3/4] bg-gray-900 rounded-lg overflow-hidden shadow-2xl">
             {safeImage ? (
@@ -324,14 +328,18 @@ export default async function CharacterDetailPage({
 
           {/* メタ */}
           <div>
-            <h1 className="text-white text-3xl md:text-4xl font-extrabold leading-tight">
+            <h1 className="text-white text-3xl md:text-4xl xl:text-5xl font-extrabold leading-tight">
               {fields.name}
             </h1>
             {hasValue(fields.nameKana) && (
-              <p className="text-gray-400 text-sm mt-1">{fields.nameKana}</p>
+              <p className="text-gray-400 text-sm xl:text-base mt-1">
+                {fields.nameKana}
+              </p>
             )}
             {hasValue(fields.nameEn) && fields.nameEn !== fields.name && (
-              <p className="text-gray-500 text-sm">{fields.nameEn}</p>
+              <p className="text-gray-500 text-sm xl:text-base">
+                {fields.nameEn}
+              </p>
             )}
 
             {/* 詳細フィールド */}
@@ -392,10 +400,10 @@ export default async function CharacterDetailPage({
             {/* キャラ紹介 */}
             {hasValue(fields.description) && (
               <div className="mt-6">
-                <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1.5">
+                <p className="text-gray-500 text-xs xl:text-sm font-semibold uppercase tracking-wider mb-1.5">
                   キャラ紹介
                 </p>
-                <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-gray-300 text-sm lg:text-base 3xl:text-lg leading-relaxed whitespace-pre-wrap">
                   {fields.description}
                 </p>
                 {hasValue(fields.descriptionSource) && (
@@ -410,9 +418,9 @@ export default async function CharacterDetailPage({
 
         {/* 出演作品 */}
         <section className="mb-12">
-          <h2 className="text-white text-xl font-bold mb-4">
+          <h2 className="text-white text-xl xl:text-2xl 3xl:text-3xl font-bold mb-4">
             出演作品
-            <span className="text-gray-500 text-sm font-normal ml-2">
+            <span className="text-gray-500 text-sm xl:text-base font-normal ml-2">
               {edges.length}件
             </span>
           </h2>
@@ -431,9 +439,9 @@ export default async function CharacterDetailPage({
         {relatedPageInfo && relatedPageInfo.total > 0 && (
           <section id="related-characters" className="scroll-mt-24">
             <div className="flex items-baseline gap-3 mb-4 flex-wrap">
-              <h2 className="text-white text-xl font-bold">
+              <h2 className="text-white text-xl xl:text-2xl 3xl:text-3xl font-bold">
                 関連キャラクター
-                <span className="text-gray-500 text-sm font-normal ml-2">
+                <span className="text-gray-500 text-sm xl:text-base font-normal ml-2">
                   {edges[0] ? workTitle(edges[0]) : ""} より
                 </span>
               </h2>

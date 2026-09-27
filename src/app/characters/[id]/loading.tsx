@@ -3,7 +3,7 @@ export default function Loading() {
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
       <div className="site-container">
         <div className="h-4 w-40 bg-gray-800 rounded mb-6 animate-pulse" />
-        <section className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] 3xl:grid-cols-[320px_minmax(0,1400px)] 4xl:grid-cols-[400px_minmax(0,1400px)] 5xl:grid-cols-[480px_minmax(0,1600px)] gap-6 md:gap-10 mb-12">
+        <section className="detail-block grid grid-cols-1 md:grid-cols-[300px_1fr] lg:grid-cols-[360px_1fr] 3xl:grid-cols-[400px_1fr] 4xl:grid-cols-[440px_1fr] 5xl:grid-cols-[480px_1fr] gap-6 md:gap-10 xl:gap-12 mb-12">
           <div className="aspect-[3/4] bg-gray-800 rounded-lg animate-pulse" />
           <div>
             <div className="h-10 w-2/3 bg-gray-800 rounded mb-3 animate-pulse" />

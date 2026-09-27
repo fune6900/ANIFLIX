@@ -83,6 +83,7 @@ src/
 - **検索**: Navbar ドロップダウン（アニメ / 映画 / 声優、300ms デバウンス、最近の検索、矢印キー操作）+ 検索ページ（キーワード or 詳細フィルター）
 - **アニメ詳細**: メタ・あらすじ・トレーラー・OP/ED・キャスト・**ヒストリー年表**（SeasonTimeline）・**エピソード一覧**（SeasonEpisodes）・関連作品
 - **ウルトラワイド対応**: 横幅の上限なし。ガターは `.site-container`、1920px 超のグリッドは `auto-fill`（`3xl` / `4xl` / `5xl` = 1920 / 2560 / 3200px）
+- **詳細ページ**: ヒーロー・動画・あらすじは `.detail-block` で中央寄せ（上限 1400〜1600px）。キャスト・出演作の一覧グリッドは幅いっぱいのまま
 - **デバイス別件数**: UA 判定で mobile=10 / tablet=16 / desktop=20（`lib/device.ts`）
 - **無限スクロール**: IntersectionObserver で追加読み込み（`InfiniteGrid` / `VoiceActorInfiniteGrid`）
 

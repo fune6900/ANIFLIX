@@ -128,7 +128,7 @@ export default async function RelatedCharacters({
   return (
     <section id={sectionId} className="mt-10 scroll-mt-24">
       <div className="flex items-baseline gap-3 mb-4">
-        <h2 className="text-white font-bold text-lg">関連キャラクター</h2>
+        <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">関連キャラクター</h2>
         <span className="text-gray-500 text-sm">{pageInfo.total}件</span>
         {pageInfo.lastPage > 1 && (
           <span className="text-gray-500 text-sm">
