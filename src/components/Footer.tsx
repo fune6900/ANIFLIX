@@ -3,6 +3,17 @@
 import { usePathname } from "next/navigation";
 import { isAuthRoute } from "@/lib/auth-routes";
 
+/**
+ * サイト共通のフッター。
+ *
+ * かつて Netflix を模したメニュー（ヘルプセンター・利用規約 等）を並べていたが、
+ * 全て `href="#"` の張りぼてで、押しても何も起きないまま利用者に選択肢があるかの
+ * ように見せていたため撤去した。
+ *
+ * 代わりに TMDb の帰属表示を置く。TMDb の利用規約は API 利用者に対して
+ * 「TMDb を利用しているが TMDb による承認・認証を受けたものではない」旨の
+ * 明示を求めており、これまでサイト内のどこにも無かった。
+ */
 export default function Footer() {
   const pathname = usePathname();
 
@@ -12,31 +23,12 @@ export default function Footer() {
   return (
     <footer className="py-10 text-gray-500 text-xs">
       <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
-        <div className="max-w-4xl">
-          <div className="flex gap-5 mb-4 flex-wrap">
-            {[
-              "音声説明",
-              "ヘルプセンター",
-              "ギフトカード",
-              "メディアセンター",
-              "投資家向け情報",
-              "採用情報",
-              "利用規約",
-              "プライバシー",
-              "法的事項",
-              "Cookie設定",
-              "会社概要",
-              "お問い合わせ",
-            ].map((item) => (
-              <a key={item} href="#" className="hover:underline">
-                {item}
-              </a>
-            ))}
-          </div>
-          <button className="border border-gray-500 text-gray-400 px-4 py-2 text-sm hover:text-white hover:border-white transition mb-4">
-            サービスコード
-          </button>
+        <div className="max-w-4xl space-y-2">
           <p>© 2026 ANIFLIX. All rights reserved.</p>
+          <p>
+            本製品は TMDB API を利用していますが、TMDB
+            による承認・認証を受けたものではありません。
+          </p>
         </div>
       </div>
     </footer>

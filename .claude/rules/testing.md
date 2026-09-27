@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 3 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 4 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -171,7 +171,12 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    matcher の検証に Auth.js 本体は不要で、読み込むと next-auth が Vitest 環境で
    解決できず落ちる。例: `tests/unit/middleware.test.ts`
 
-3. **`src/lib/turnstile.ts` 自身のテストでグローバル `fetch` をスタブする**
+3. **コンポーネントのテストで `next/navigation` をモックする**
+   `usePathname()` 等は App Router のコンテキストに依存し、Vitest 環境では
+   プロバイダが無いため実物を読み込むと落ちる。ルーター本体は検証対象ではない。
+   例: `tests/unit/components/Footer.test.tsx`
+
+4. **`src/lib/turnstile.ts` 自身のテストでグローバル `fetch` をスタブする**
    siteverify へ送る body（`secret` / `response` / `remoteip`）と、到達できなかった
    時に素通りさせない fail-closed の分岐は `fetch` に渡る `RequestInit` にしか
    現れない。`@/lib/turnstile` をモックすると検証対象ごと消える。
