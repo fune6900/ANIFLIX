@@ -13,6 +13,7 @@ import type { TurnstileVerdict } from "@/lib/turnstile";
  */
 
 const signIn = vi.fn();
+const signOut = vi.fn();
 const verifyTurnstileToken =
   vi.fn<
     (token: string | null, remoteIp?: string) => Promise<TurnstileVerdict>
@@ -23,7 +24,7 @@ let forwardedFor: string | null = null;
 
 vi.mock("@/auth", () => ({
   signIn: (...args: unknown[]) => signIn(...args),
-  signOut: vi.fn(),
+  signOut: (...args: unknown[]) => signOut(...args),
 }));
 
 vi.mock("@/lib/turnstile", () => ({
@@ -38,7 +39,8 @@ vi.mock("next/headers", () => ({
     ),
 }));
 
-const { signInWithTurnstileAction } = await import("@/app/actions/auth");
+const { signInWithTurnstileAction, signOutAction } =
+  await import("@/app/actions/auth");
 const { LOGIN_INITIAL_STATE } = await import("@/lib/login-action");
 
 /** トークン入りのフォーム送信を組み立てる */
@@ -198,7 +200,20 @@ describe("signInWithTurnstileAction", () => {
       );
 
       expect(signIn).toHaveBeenCalledWith("google", {
-        redirectTo: "/anime/1429",
+        redirectTo: "/anime/1429?flash=signed-in",
+      });
+    });
+
+    it("ログイン成功のフラッシュを遷移先に載せる", async () => {
+      // OAuth の往復を跨いで通知を届ける唯一の経路
+      await signInWithTurnstileAction(
+        "/search?q=naruto",
+        LOGIN_INITIAL_STATE,
+        formWithToken("token-abc"),
+      );
+
+      expect(signIn).toHaveBeenCalledWith("google", {
+        redirectTo: "/search?q=naruto&flash=signed-in",
       });
     });
 
@@ -252,7 +267,9 @@ describe("signInWithTurnstileAction", () => {
         formWithToken(),
       );
 
-      expect(signIn).toHaveBeenCalledWith("google", { redirectTo: "/" });
+      expect(signIn).toHaveBeenCalledWith("google", {
+        redirectTo: "/?flash=signed-in",
+      });
     });
 
     it("失敗の度に新しい state を返す（同じ理由が続いてもリセットを発火させる）", async () => {
@@ -286,7 +303,7 @@ describe("signInWithTurnstileAction", () => {
       );
 
       expect(signIn).toHaveBeenCalledWith("google", {
-        redirectTo: "/anime/1429",
+        redirectTo: "/anime/1429?flash=signed-in",
       });
     });
 
@@ -297,7 +314,9 @@ describe("signInWithTurnstileAction", () => {
         formWithToken("token-abc"),
       );
 
-      expect(signIn).toHaveBeenCalledWith("google", { redirectTo: "/x" });
+      expect(signIn).toHaveBeenCalledWith("google", {
+        redirectTo: "/x?flash=signed-in",
+      });
     });
 
     it("スキーム付きの危険な値はトップへ丸める", async () => {
@@ -307,7 +326,9 @@ describe("signInWithTurnstileAction", () => {
         formWithToken("token-abc"),
       );
 
-      expect(signIn).toHaveBeenCalledWith("google", { redirectTo: "/" });
+      expect(signIn).toHaveBeenCalledWith("google", {
+        redirectTo: "/?flash=signed-in",
+      });
     });
   });
 
@@ -324,5 +345,22 @@ describe("signInWithTurnstileAction", () => {
         formWithToken("token-abc"),
       ),
     ).rejects.toThrow(redirectError);
+  });
+});
+
+describe("signOutAction", () => {
+  it("ログアウトのフラッシュを付けてログイン画面へ戻す", async () => {
+    await signOutAction();
+
+    expect(signOut).toHaveBeenCalledWith({
+      redirectTo: "/login?flash=signed-out",
+    });
+  });
+
+  it("signOut が投げるリダイレクト例外を握り潰さない", async () => {
+    const redirectError = new Error("NEXT_REDIRECT");
+    signOut.mockRejectedValue(redirectError);
+
+    await expect(signOutAction()).rejects.toThrow(redirectError);
   });
 });
