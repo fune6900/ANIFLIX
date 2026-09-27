@@ -134,43 +134,41 @@ export default async function StudioPage({
         )}
       </div>
 
-      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-24">
-        <div className="max-w-[1920px] mx-auto">
-          {/* 他スタジオへのクイックリンク */}
-          <div
-            className="flex gap-2 overflow-x-auto py-3 mb-6"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {ANIME_STUDIOS.filter((s) => s.id !== studioId).map((s) => (
-              <Link
-                key={s.id}
-                href={`/browse/studio/${s.id}`}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
-              >
-                <span>{s.emoji}</span>
-                {s.name}
-              </Link>
+      <div className="site-container pb-24">
+        {/* 他スタジオへのクイックリンク */}
+        <div
+          className="flex gap-2 overflow-x-auto py-3 mb-6"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {ANIME_STUDIOS.filter((s) => s.id !== studioId).map((s) => (
+            <Link
+              key={s.id}
+              href={`/browse/studio/${s.id}`}
+              className="flex-shrink-0 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
+            >
+              <span>{s.emoji}</span>
+              {s.name}
+            </Link>
+          ))}
+        </div>
+
+        {anime.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+            {anime.map((a) => (
+              <SeasonAnimeCard key={a.id} entry={{ kind: "tv", anime: a }} />
             ))}
           </div>
+        ) : (
+          <div className="text-center py-20 text-gray-500">
+            このスタジオの作品が見つかりませんでした
+          </div>
+        )}
 
-          {anime.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-              {anime.map((a) => (
-                <SeasonAnimeCard key={a.id} entry={{ kind: "tv", anime: a }} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20 text-gray-500">
-              このスタジオの作品が見つかりませんでした
-            </div>
-          )}
-
-          <Pagination
-            studioId={studioId}
-            currentPage={currentPage}
-            totalPages={totalPages}
-          />
-        </div>
+        <Pagination
+          studioId={studioId}
+          currentPage={currentPage}
+          totalPages={totalPages}
+        />
       </div>
     </div>
   );

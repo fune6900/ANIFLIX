@@ -16,7 +16,7 @@ export default async function AiringPage() {
   return (
     <div className="min-h-screen bg-[#141414] text-white">
       {/* ヘッダー */}
-      <div className="relative bg-gradient-to-b from-red-950 to-[#141414] pt-28 pb-10 px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container relative bg-gradient-to-b from-red-950 to-[#141414] pt-28 pb-10">
         <div className="flex items-center gap-3 mb-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
@@ -37,24 +37,22 @@ export default async function AiringPage() {
         </p>
       </div>
 
-      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-24">
-        <div className="max-w-[1920px] mx-auto">
-          {entries.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-              {entries.map((entry) => (
-                <SeasonAnimeCard
-                  key={entryKey(entry)}
-                  entry={entry}
-                  airingBadge
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20 text-gray-500">
-              データを取得できませんでした
-            </div>
-          )}
-        </div>
+      <div className="site-container pb-24">
+        {entries.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+            {entries.map((entry) => (
+              <SeasonAnimeCard
+                key={entryKey(entry)}
+                entry={entry}
+                airingBadge
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-20 text-gray-500">
+            データを取得できませんでした
+          </div>
+        )}
       </div>
     </div>
   );

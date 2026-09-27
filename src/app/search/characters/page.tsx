@@ -39,7 +39,7 @@ export default async function CharacterSearchPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         <div className="mb-8">
           <h1 className="text-white text-2xl font-bold mb-1">
             キャラクターを検索
@@ -64,7 +64,7 @@ export default async function CharacterSearchPage({ searchParams }: PageProps) {
         )}
 
         {results.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 xl:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {results.map((char) => (
               <CharacterCard key={char.id} character={char} />
             ))}

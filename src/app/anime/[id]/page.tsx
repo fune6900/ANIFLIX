@@ -242,7 +242,7 @@ export default async function AnimeDetailPage({
 
       {/* コンテンツ */}
       <div className="relative -mt-32 md:-mt-48 pb-20">
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <div className="site-container">
           <div className="flex flex-col md:flex-row gap-6 md:gap-10">
             {/* ポスター */}
             <div className="flex-shrink-0 w-36 md:w-48 lg:w-56 mx-auto md:mx-0">
@@ -605,7 +605,7 @@ export default async function AnimeDetailPage({
               <h2 className="text-white font-bold text-lg mb-4">
                 キャスト・声優
               </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
                 {cast.map((member) => (
                   <Link
                     key={member.id}

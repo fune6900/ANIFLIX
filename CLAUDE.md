@@ -82,6 +82,7 @@ src/
 - **ContentRow**: ホバー 800ms で YouTube プレビュー（`/api/videos` 経由、モジュールキャッシュ）
 - **検索**: Navbar ドロップダウン（アニメ / 映画 / 声優、300ms デバウンス、最近の検索、矢印キー操作）+ 検索ページ（キーワード or 詳細フィルター）
 - **アニメ詳細**: メタ・あらすじ・トレーラー・OP/ED・キャスト・**ヒストリー年表**（SeasonTimeline）・**エピソード一覧**（SeasonEpisodes）・関連作品
+- **ウルトラワイド対応**: 横幅の上限なし。ガターは `.site-container`、1920px 超のグリッドは `auto-fill`（`3xl` / `4xl` / `5xl` = 1920 / 2560 / 3200px）
 - **デバイス別件数**: UA 判定で mobile=10 / tablet=16 / desktop=20（`lib/device.ts`）
 - **無限スクロール**: IntersectionObserver で追加読み込み（`InfiniteGrid` / `VoiceActorInfiniteGrid`）
 
@@ -170,6 +171,7 @@ Plan Mode → ISSUE作成 → ブランチ作成
 - **API キー死守**: TMDb のキーは `.env.local` のみ。コード直書き禁止。
 - **認可境界を緩めるな**: `src/middleware.ts` の matcher から除外を増やす時は必ず境界（`$` / `/`）を付ける。前方一致で終わらせると `/logindq` のような別パスが素通りする。
 - **Turnstile の検証を Route Handler に出すな**: `/api/**` は middleware のガード対象で、未認証には 401 JSON が返り本体が実行されない。ログイン前の利用者からは必ず失敗する。検証は Server Action 内に閉じること。matcher を緩めて回避するのは認可境界に穴を開ける行為。
+- **横幅に上限を付けるな**: ガターは `globals.css` の `.site-container` だけが持つ。`max-w-[1920px]` のような固定上限を戻すと 3440px の画面で左右が死ぬ。1920px 超はグリッドを `auto-fill` に切り替えて埋める（`@.claude/rules/conventions.md`）
 - **画像最適化禁止**: TMDb は既に最適化済み。`next/image` の `unoptimized: true` を維持し、Vercel の変換枠を消費しない。
 
 ## 👥 役割

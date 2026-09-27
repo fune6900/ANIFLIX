@@ -131,7 +131,7 @@ export default async function VoicedCharacters({
           このページに表示するキャラはない
         </p>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
           {hit.edges.map((edge) => {
             const name = pickCharacterName(edge);
             const img = pickCharacterImage(edge);

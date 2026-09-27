@@ -22,7 +22,7 @@ export default function Footer() {
 
   return (
     <footer className="py-10 text-gray-500 text-xs">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         <div className="max-w-4xl space-y-2">
           <p>© 2026 ANIFLIX. All rights reserved.</p>
           <p>

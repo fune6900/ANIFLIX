@@ -307,7 +307,7 @@ export default async function VoiceActorsPage({
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         {/* ヘッダー */}
         <div className="mb-8">
           <h1 className="text-white text-2xl font-bold">声優を検索</h1>
@@ -421,14 +421,14 @@ export default async function VoiceActorsPage({
         {/* 結果グリッド */}
         {isDefaultView
           ? defaultCastResults.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-9 gap-3 md:gap-4 xl:gap-5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 md:gap-4 xl:gap-5">
                 {defaultCastResults.map((cast) => (
                   <CastGridCard key={cast.id} cast={cast} />
                 ))}
               </div>
             )
           : results.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-9 gap-3 md:gap-4 xl:gap-5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 md:gap-4 xl:gap-5">
                 {results.map((person) => (
                   <PersonGridCard key={person.id} person={person} />
                 ))}

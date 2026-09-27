@@ -4,7 +4,7 @@ import { ANIME_GENRES } from "@/lib/genres";
 export default function GenresPage() {
   return (
     <div className="min-h-screen bg-[#141414] text-white pt-24 pb-24">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         <div className="mb-10">
           <h1 className="text-3xl md:text-4xl xl:text-5xl font-black mb-2">
             ジャンル
@@ -14,7 +14,7 @@ export default function GenresPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 gap-4 xl:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 xl:gap-5">
           {ANIME_GENRES.map((genre) => (
             <Link
               key={genre.id}

@@ -13,6 +13,16 @@ body {
   font-family: "Netflix Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+/* サイト共通の横幅。
+   横幅の上限は持たない。上限を付けるとウルトラワイドの左右に死んだ余白ができる。
+   代わりにガター（左右の余白）を画面幅に応じて広げる。
+   1920px（3xl）の段を置いていないのは意図的で、既存の見た目を変えないため。 */
+@layer components {
+  .site-container {
+    @apply w-full px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 4xl:px-24 5xl:px-32;
+  }
+}
+
 /* スクロールバー非表示 */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

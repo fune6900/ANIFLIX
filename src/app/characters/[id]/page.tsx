@@ -294,7 +294,7 @@ export default async function CharacterDetailPage({
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         <nav className="mb-6 text-xs text-gray-500">
           <Link
             href="/search/characters"
@@ -305,7 +305,7 @@ export default async function CharacterDetailPage({
         </nav>
 
         {/* ヒーロー */}
-        <section className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] gap-6 md:gap-10 mb-12">
+        <section className="grid grid-cols-1 md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] 3xl:grid-cols-[320px_minmax(0,1400px)] 4xl:grid-cols-[400px_minmax(0,1400px)] 5xl:grid-cols-[480px_minmax(0,1600px)] gap-6 md:gap-10 mb-12">
           {/* キャラ画像 */}
           <div className="relative aspect-[3/4] bg-gray-900 rounded-lg overflow-hidden shadow-2xl">
             {safeImage ? (
@@ -419,7 +419,7 @@ export default async function CharacterDetailPage({
           {edges.length === 0 ? (
             <p className="text-gray-500 text-sm">登録されている出演作はない</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4">
               {edges.map((edge) => (
                 <MediaEdgeCard key={edge.node.id} edge={edge} />
               ))}
@@ -451,7 +451,7 @@ export default async function CharacterDetailPage({
                 このページに表示するキャラはない
               </p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
                 {related.map((edge) => (
                   <RelatedCharacterCard key={edge.node.id} edge={edge} />
                 ))}

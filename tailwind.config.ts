@@ -9,7 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       screens: {
+        // ウルトラワイド（2560x1080 / 3440x1440 / 3840x1600）の段。
+        // 1920px 以下の見た目を変えないため、既存の段には手を入れない
         "3xl": "1920px",
+        "4xl": "2560px",
+        "5xl": "3200px",
       },
       colors: {
         background: "var(--background)",

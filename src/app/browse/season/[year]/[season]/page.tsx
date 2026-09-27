@@ -36,7 +36,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
     <div className="min-h-screen bg-[#141414] text-white">
       {/* ヘッダー（タイトルもグリッドと同じ最大幅・横パディングで中央寄せ） */}
       <div className={`relative bg-gradient-to-b ${gradientClass} pt-28 pb-10`}>
-        <div className="relative z-10 max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <div className="site-container relative z-10">
           <p className="text-gray-400 text-sm mb-1">シーズン</p>
           <h1 className="text-4xl md:text-5xl font-black mb-2 flex items-center gap-3">
             <span>{currentSeason.emoji}</span>
@@ -54,10 +54,10 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
         <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent opacity-40 pointer-events-none" />
       </div>
 
-      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-24">
+      <div className="site-container pb-24">
         {/* シーズンナビゲーション（中央寄せ） */}
         <div
-          className="max-w-[1920px] mx-auto flex gap-2 overflow-x-auto py-4 mb-6"
+          className="flex gap-2 overflow-x-auto py-4 mb-6"
           style={{ scrollbarWidth: "none" }}
         >
           {recentSeasons.map((s) => {
@@ -80,7 +80,7 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
         </div>
 
         {entries.length > 0 ? (
-          <div className="max-w-[1920px] mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {entries.map((entry) => (
               <SeasonAnimeCard key={entryKey(entry)} entry={entry} />
             ))}

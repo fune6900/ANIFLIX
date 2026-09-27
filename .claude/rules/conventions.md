@@ -92,6 +92,72 @@ export default function ContentRow(props: any) { ... }
 
 ---
 
+## レイアウト幅（ウルトラワイド対応）
+
+横方向の余白（ガター）は **`globals.css` の `.site-container` だけ**が持つ。
+各ページ・各コンポーネントで `px-4 md:px-8 lg:px-12 …` の梯子を直書きしない。
+
+```tsx
+// OK
+<div className="site-container pb-24">
+
+// NG: 梯子の直書き（32 箇所に散っていたものを 1 箇所へ集約済み）
+<div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+```
+
+- **横幅の上限（`max-w-[1920px]` 等）を付けない**。上限を付けると 2560px /
+  3440px の画面で左右に数百 px の死んだ余白ができる
+- ブレークポイントは `3xl: 1920px` / `4xl: 2560px` / `5xl: 3200px`
+  （`tailwind.config.ts`）。1920px 以下の見た目を変えないため、既存の段は触らない
+- グリッドは 1920px を超えたら列数の固定をやめ、`auto-fill` に切り替える。
+  `minmax()` の下限は **1920px 時点の列数を再現する値**を選ぶ（= ウルトラワイドでも
+  カード 1 枚の大きさが変わらない）
+
+```tsx
+// ポスター一覧の例。3xl 以降は画面幅なりに列が増える
+<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+```
+
+| 種類                     | `minmax` 下限 |
+| ------------------------ | ------------- |
+| ポスター一覧             | 300px         |
+| 無限スクロールのポスター | 260px         |
+| 検索結果の横長カード     | 500px         |
+| キャラクター一覧         | 250px         |
+| キャスト（丸アイコン）   | 190px         |
+| 声優一覧（丸アイコン）   | 170px         |
+
+固定幅の横スクローラ（`ContentRow` のカード等）は上限撤去だけで幅が埋まるが、
+`4xl` / `5xl` の幅も併せて用意する。
+
+### `1fr` トラックには上限を置く
+
+`grid-cols-[320px_1fr]` のような任意値トラックは上限が無く、横幅の上限を撤去した後は
+画面幅なりに伸び続ける。本文が入る列は 1920px 超（= `3xl`）で上限を付けること。例:
+`src/app/characters/[id]/page.tsx` の `3xl:grid-cols-[320px_minmax(0,1400px)]`。
+`minmax(0,1400px)` は 1920px ちょうどでは `1fr` と同値に解決するため既存の見た目は変わらず、
+1921px 以降だけが縛られる。上限を `4xl` から置くと 1921〜2559px が無防備になり、
+2560px で本文列が逆に縮む（幅の変化が単調でなくなる）。
+死んだ余白を「1 行 300 文字の本文」に置き換えるだけでは直したことにならない。
+
+### 読み幅を縛る `max-w` はガター集約の対象外
+
+本文の行長を抑える `max-w-2xl`（詳細ページのあらすじ）や、フォーム 1 列を中央に置く
+`max-w-3xl`（`src/app/diagnosis/page.tsx`）は **意図的な読み幅**であり、
+`.site-container` に置き換えない。`.site-container` に寄せると 1920px 超で
+逆に本文が狭くなる。
+
+### フォームのフィールドは `auto-fill` を使う（`auto-fit` は使わない）
+
+フィルターパネル（`src/app/search/page.tsx` / `src/app/browse/movies/page.tsx`）は
+フィールド数が 2〜3 で固定。`auto-fill` は空トラックを残すので **フィールドの幅が
+1920px 時点と同じまま**になる。`auto-fit` は空トラックを畳んで残りを引き伸ばすため、
+3440px で `<select>` が 1000px を超える。パネルの背景が余るのは正しい挙動。
+
+この契約は `tests/unit/ultrawide-layout.test.ts` で実行可能な形で固定してある。
+
+---
+
 ## TMDb 連携
 
 - TMDb 呼び出しは **必ず `src/lib/tmdb.ts` 経由**。コンポーネントから直接 `fetch("https://api.themoviedb.org/...")` しない
@@ -122,5 +188,6 @@ export default function ContentRow(props: any) { ... }
 - ホームの段組やジャンル定義を `lib/genres.ts` / `lib/eras.ts` 経由でなく直書きする
 - TMDb の `api_key` / `access_token` をコードに直書きする
 - `next/image` の `unoptimized: false` への変更（TMDb は最適化済み）
+- 横幅に固定上限（`max-w-[1920px]` 等）を付ける・ガターの梯子を直書きする（`.site-container` を使う）
 - テストなしの機能実装（テスト基盤導入後は `/review-pr` で弾く）
 - デフォルトエクスポート（`export default`）を components 以外で使う

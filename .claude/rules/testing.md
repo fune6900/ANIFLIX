@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 5 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 6 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -186,6 +186,12 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    どのエンドポイントを選ぶか、403 のときにもう一方へ再試行するか、認証失敗を
    何度ログに出すかは `fetch` の呼ばれ方にしか現れない。`@/lib/translate` を
    モックすると検証対象ごと消える。例: `tests/unit/lib/translate.test.ts`
+
+6. **コンポーネントのテストで `@/app/actions/auth` をモックする**
+   Server Action を辿ると `@/auth` = next-auth 本体に届き、例外 2 と同じ理由で
+   Vitest 環境では解決できない。ログアウトの配線自体は
+   `tests/unit/app/actions/auth.test.ts` が受け持っているため、
+   コンポーネント側では検証対象ではない。例: `tests/unit/components/Navbar.test.tsx`
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して

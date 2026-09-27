@@ -74,7 +74,7 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
       </div>
 
       {/* テキスト情報 */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 3xl:max-w-[1800px]">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="text-white text-sm font-semibold leading-snug line-clamp-2">
             {ep.name}

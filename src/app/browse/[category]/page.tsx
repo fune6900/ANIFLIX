@@ -75,7 +75,7 @@ export default async function BrowsePage({
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-20">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         {/* ヘッダー */}
         <div className="mb-8">
           <Link
@@ -116,7 +116,7 @@ export default async function BrowsePage({
 
         {/* グリッド */}
         {results.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {results.map((anime) => (
               <SeasonAnimeCard key={anime.id} entry={{ kind: "tv", anime }} />
             ))}

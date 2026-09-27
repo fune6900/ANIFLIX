@@ -230,7 +230,7 @@ export default async function Home() {
         )}
 
         {/* シーズン別セクション */}
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-6 mb-4 flex items-center gap-3">
+        <div className="site-container mt-6 mb-4 flex items-center gap-3">
           <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
             シーズンで探す
           </h2>
@@ -243,14 +243,14 @@ export default async function Home() {
           </Link>
         </div>
         <div
-          className="max-w-[1920px] mx-auto flex gap-3 xl:gap-4 px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mb-8 overflow-x-auto pb-1"
+          className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
         >
           {getRecentSeasons(8).map((s) => (
             <Link
               key={s.href}
               href={s.href}
-              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 h-24 md:h-28 xl:h-32 2xl:h-36 bg-gradient-to-br ${SEASON_COLORS[s.season]} group`}
+              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br ${SEASON_COLORS[s.season]} group`}
             >
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
               <div className="absolute bottom-2 right-3 text-white/10 font-black text-4xl leading-none select-none">
@@ -273,21 +273,21 @@ export default async function Home() {
         </div>
 
         {/* 年代別セクション */}
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-6 mb-4 flex items-center gap-3">
+        <div className="site-container mt-6 mb-4 flex items-center gap-3">
           <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
             年代で探す
           </h2>
           <div className="flex-1 h-px bg-gray-800" />
         </div>
         <div
-          className="max-w-[1920px] mx-auto flex gap-3 xl:gap-4 px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mb-8 overflow-x-auto pb-1"
+          className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
         >
           {ANIME_ERAS.map((era) => (
             <Link
               key={era.decade}
               href={`/browse/era/${era.decade}`}
-              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 h-24 md:h-28 xl:h-32 2xl:h-36 bg-gradient-to-br ${era.color} group`}
+              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br ${era.color} group`}
             >
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
               <div className="absolute bottom-2 right-3 text-white/10 font-black text-5xl leading-none select-none">
@@ -309,7 +309,7 @@ export default async function Home() {
         </div>
 
         {/* ジャンル別セクション */}
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 mt-6 mb-4 flex items-center gap-3">
+        <div className="site-container mt-6 mb-4 flex items-center gap-3">
           <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
             ジャンルで探す
           </h2>
