@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import BottomNav from "@/components/BottomNav";
 import Footer from "@/components/Footer";
+import FlashMessage from "@/components/FlashMessage";
 
 export const metadata: Metadata = {
   title: "ANIFLIX - アニメ・声優検索",
@@ -37,6 +39,11 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="antialiased bg-[#141414] text-white overflow-x-hidden">
+        {/* useSearchParams を使うため Suspense で包む。
+            包まないと静的レンダリングのページがビルド時に落ちる */}
+        <Suspense fallback={null}>
+          <FlashMessage />
+        </Suspense>
         <Navbar />
         <main>{children}</main>
         <BottomNav />
