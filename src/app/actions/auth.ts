@@ -3,6 +3,7 @@
 
 import { headers } from "next/headers";
 import { signIn, signOut } from "@/auth";
+import { withFlash } from "@/lib/flash";
 import type { LoginActionState } from "@/lib/login-action";
 import { safeCallbackUrl } from "@/lib/safe-callback-url";
 import { verifyTurnstileToken } from "@/lib/turnstile";
@@ -12,7 +13,7 @@ import { verifyTurnstileToken } from "@/lib/turnstile";
  * ログアウト完了後、自動的にログイン画面（/login）へリダイレクトする
  */
 export async function signOutAction() {
-  await signOut({ redirectTo: "/login" });
+  await signOut({ redirectTo: withFlash("/login", "signed-out") });
 }
 
 /**
@@ -63,7 +64,8 @@ export async function signInWithTurnstileAction(
   }
 
   // signIn は NEXT_REDIRECT を throw して遷移を実現する。
-  // try/catch で囲むと遷移が起きず「押しても何も起きない」障害になる
-  await signIn("google", { redirectTo });
+  // try/catch で囲むと遷移が起きず「押しても何も起きない」障害になる。
+  // フラッシュは redirectTo に載せる。OAuth の往復を跨いで遷移先まで届く
+  await signIn("google", { redirectTo: withFlash(redirectTo, "signed-in") });
   return { error: null };
 }
