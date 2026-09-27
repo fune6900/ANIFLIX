@@ -4,6 +4,10 @@
 // AniList から正確な季別タイトル一覧を取得し、各タイトルを TMDb 名前検索で解決して
 // TMDb 側の作品データ（poster/backdrop/score/詳細リンク）を返す。
 //
+// TMDb に該当が無い作品は捨てずに AniList のデータのまま返す。実測で
+// 1 シーズンあたり 20〜40 件がここに落ちており、その大半はショート・特別編・
+// 劇場版といった TMDb が TV 作品として持たないもの。
+//
 // 使用箇所:
 //   - /browse/season/[year]/[season]
 //   - /browse/airing
@@ -16,10 +20,11 @@ import {
   type AniListMedia,
   type AniListMediaPage,
 } from "@/lib/anilist";
-import { getAnimeBySeason, searchAnime } from "@/lib/tmdb";
+import { getAnimeBySeason, searchAnime, searchMovie } from "@/lib/tmdb";
 import { getSeasonDateRange, type SeasonSlug } from "@/lib/seasons";
 import { stripSeasonSuffix } from "@/lib/title-strip";
-import type { TMDbAnime } from "@/types/tmdb";
+import { matchTitles } from "@/lib/title-match";
+import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 
 // ──────────────────────────────────────────
 // 定数
@@ -30,10 +35,18 @@ const ANILIST_PAGE_SIZE = 50;
 
 /**
  * AniList を辿る最大ページ数。
- * 1 シーズンは 120 件前後（2026 SUMMER は 119 件）なので 3 ページで足りる。
+ * 1 シーズンは 140 件前後（2026 SUMMER は 138 件）なので 4 ページ取る。
  * 上限を設けるのは、AniList 側の想定外の応答で無限にページを辿らないため。
  */
-const MAX_ANILIST_PAGES = 3;
+const MAX_ANILIST_PAGES = 4;
+
+/**
+ * 既定の取得上限。
+ *
+ * かつて 100 にしていたため、2026 SUMMER では 138 件中 38 件が
+ * 照合すら試されずに捨てられていた。1 シーズン分を取り切れる値にする。
+ */
+const DEFAULT_LIMIT = 200;
 
 /**
  * 「話数未定」の作品を長寿作品とみなす基準（対象年から遡る年数）。
@@ -44,27 +57,46 @@ const MAX_ANILIST_PAGES = 3;
  */
 const LONG_RUNNER_START_YEARS_AGO = 1;
 
+/** TMDb 検索結果のキャッシュ秒数。AniList 由来の固定語彙なので長く持てる */
+const TITLE_SEARCH_CACHE_SECONDS = 86400;
+
 // ──────────────────────────────────────────
 // 公開 API
 // ──────────────────────────────────────────
 
+/**
+ * 一覧に並べる 1 件。
+ *
+ * TMDb に無い作品（`unlisted`）は詳細ページを持たないため、
+ * 呼び出し側はリンクを張らずに描画すること。
+ */
+export type SeasonalEntry =
+  | { kind: "tv"; anime: TMDbAnime }
+  | { kind: "movie"; movie: TMDbMovie }
+  | { kind: "unlisted"; media: AniListMedia };
+
 export interface SeasonalAnimeOptions {
-  /** 最終的に返す作品数の上限 (default: 100) */
+  /** 最終的に返す作品数の上限 (default: 200) */
   limit?: number;
-  /** TMDb 名前検索の並列度 (default: 4) */
+  /** TMDb 名前検索の並列度 (default: 6) */
   concurrency?: number;
   /** AniList 失敗時に TMDb の discover フォールバックを使うか (default: true) */
   fallbackToTmdbDiscover?: boolean;
 }
 
 export interface SeasonalAnimeResult {
-  /** TMDb の作品データ（マッチした分のみ）。AniList の人気順を維持 */
+  /** 人気順。画面の描画にはこれを使う */
+  entries: SeasonalEntry[];
+  /**
+   * TMDb の TV 作品のみ。TMDb id が要る用途（ホームの列・声優集約）向けに
+   * 従来どおりの形で残してある
+   */
   items: TMDbAnime[];
   /** 取得経路 */
   source: "anilist+tmdb" | "tmdb-fallback" | "empty";
   /** AniList から取れたタイトル総数（参考） */
   anilistTotal: number;
-  /** TMDb マッチに失敗したタイトル（観測用） */
+  /** TMDb に該当が無かったタイトル（= entries の unlisted。観測用） */
   unmatchedTitles: string[];
 }
 
@@ -75,12 +107,12 @@ export interface SeasonalAnimeResult {
  *   1. AniList を **2 系統** で引き、和集合を取る
  *      - シーズンクエリ: その季に開始した作品
  *      - 期間クエリ: 放送期間がその季と重なる作品（前クールからの継続を拾う）
- *   2. 同季の TMDb プールも並列で取得（Step A 一次マッチ用）
+ *   2. 同季の TMDb プールも並列で取得（一次マッチ用）
  *   3. 常時放送の長寿作品を落とし、人気順に並べる
- *   4. 各 AniList 作品を TMDb と突き合わせ:
- *      A. TMDb プール内で title 完全一致を探す
- *      B. ヒット無ければ /search/tv で名前検索 → 結果を検証して採用
- *      C. それでも不一致は表示しない
+ *   4. 各作品を TMDb と突き合わせる。**形式で行き先を分ける**
+ *      - MOVIE → `/search/movie`
+ *      - それ以外 → TMDb プール → `/search/tv`
+ *      - どちらにも無ければ AniList のデータのまま返す
  *
  * **2 系統で引く理由**: シーズンクエリだけだと 2 クール作品が前の季に属したまま
  * 当季のリストから消える（転生したらスライムだった件 第4期 は 2026 SPRING 所属）。
@@ -94,8 +126,8 @@ export async function fetchSeasonalAnime(
   season: SeasonSlug,
   options: SeasonalAnimeOptions = {},
 ): Promise<SeasonalAnimeResult> {
-  const limit = options.limit ?? 100;
-  const concurrency = options.concurrency ?? 4;
+  const limit = options.limit ?? DEFAULT_LIMIT;
+  const concurrency = options.concurrency ?? 6;
   const fallbackToTmdbDiscover = options.fallbackToTmdbDiscover ?? true;
 
   const { from, to } = getSeasonDateRange(year, season);
@@ -137,14 +169,17 @@ export async function fetchSeasonalAnime(
   // AniList が両系統とも失敗 → フォールバック判定
   if (anilistTotal === 0) {
     if (fallbackToTmdbDiscover && tmdbPool.length > 0) {
+      const items = tmdbPool.slice(0, limit);
       return {
-        items: tmdbPool.slice(0, limit),
+        entries: items.map((anime) => ({ kind: "tv", anime })),
+        items,
         source: "tmdb-fallback",
         anilistTotal: 0,
         unmatchedTitles: [],
       };
     }
     return {
+      entries: [],
       items: [],
       source: "empty",
       anilistTotal: 0,
@@ -158,32 +193,42 @@ export async function fetchSeasonalAnime(
     .sort((a, b) => b.popularity - a.popularity)
     .slice(0, limit);
 
-  // 4. 各 AniList 作品を TMDb と突き合わせ
-  const resolved = await pMapLimit(
-    candidates,
-    concurrency,
-    async (media): Promise<{ anime: TMDbAnime | null; title: string }> => {
-      const title = pickDisplayTitle(media);
-      const anime = await matchAniListToTmdb(media, tmdbPool);
-      return { anime, title };
-    },
+  // 4. 各作品を TMDb と突き合わせる
+  const resolved = await pMapLimit(candidates, concurrency, (media) =>
+    resolveMedia(media, tmdbPool),
   );
 
-  // 重複排除（同じ TMDb id に複数 AniList 作品がマッチした場合は人気の高い方を優先）
-  const dedupedMap = new Map<number, TMDbAnime>();
+  // 重複排除（同じ TMDb 作品に複数の AniList 作品がマッチしたら人気の高い方を優先）
+  const seenTv = new Set<number>();
+  const seenMovie = new Set<number>();
+  const entries: SeasonalEntry[] = [];
   const unmatchedTitles: string[] = [];
-  for (const { anime, title } of resolved) {
-    if (anime) {
-      if (!dedupedMap.has(anime.id)) {
-        dedupedMap.set(anime.id, anime);
-      }
-    } else {
-      unmatchedTitles.push(title);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const media = candidates[i];
+    const hit = resolved[i];
+
+    if (hit === null) {
+      unmatchedTitles.push(pickDisplayTitle(media));
+      entries.push({ kind: "unlisted", media });
+      continue;
     }
+    if (hit.kind === "tv") {
+      if (seenTv.has(hit.anime.id)) continue;
+      seenTv.add(hit.anime.id);
+      entries.push(hit);
+      continue;
+    }
+    if (seenMovie.has(hit.movie.id)) continue;
+    seenMovie.add(hit.movie.id);
+    entries.push(hit);
   }
 
   return {
-    items: Array.from(dedupedMap.values()),
+    entries,
+    items: entries
+      .filter((e): e is { kind: "tv"; anime: TMDbAnime } => e.kind === "tv")
+      .map((e) => e.anime),
     source: "anilist+tmdb",
     anilistTotal,
     unmatchedTitles,
@@ -234,6 +279,115 @@ export function isPerpetualLongRunner(
   const startYear = media.startDate.year;
   if (startYear === null) return false;
   return startYear < targetYear - LONG_RUNNER_START_YEARS_AGO;
+}
+
+// ──────────────────────────────────────────
+// 内部: TMDb との突き合わせ
+// ──────────────────────────────────────────
+
+type ResolvedEntry =
+  { kind: "tv"; anime: TMDbAnime } | { kind: "movie"; movie: TMDbMovie };
+
+/** AniList 側の照合候補となるタイトル群 */
+function candidateTitles(media: AniListMedia): string[] {
+  return [
+    media.title.native,
+    media.title.romaji,
+    media.title.english,
+    ...(media.synonyms ?? []),
+  ].filter((s): s is string => !!s);
+}
+
+/** 検索に投げるクエリ。原題と、サフィックスを剥がした版 */
+function searchQueries(media: AniListMedia): string[] {
+  const primary =
+    media.title.native ?? media.title.romaji ?? media.title.english;
+  if (!primary) return [];
+  const stripped = stripSeasonSuffix(primary);
+  return stripped && stripped !== primary ? [primary, stripped] : [primary];
+}
+
+/**
+ * 候補の中から最も確からしいものを選ぶ。
+ * 完全一致があればそれを、無ければ最初の前方一致を返す。
+ */
+function pickBest<T>(
+  items: T[],
+  namesOf: (item: T) => string[],
+  titles: string[],
+): T | null {
+  let prefixHit: T | null = null;
+
+  for (const item of items) {
+    for (const name of namesOf(item)) {
+      const kind = matchTitles(titles, name);
+      if (kind === "exact") return item;
+      if (kind === "prefix" && prefixHit === null) prefixHit = item;
+    }
+  }
+  return prefixHit;
+}
+
+const tvNames = (a: TMDbAnime): string[] =>
+  [a.name, a.original_name].filter((s): s is string => !!s);
+
+const movieNames = (m: TMDbMovie): string[] =>
+  [m.title, m.original_title].filter((s): s is string => !!s);
+
+/**
+ * 1 作品を TMDb へ解決する。**形式で行き先を分ける**。
+ *
+ * 劇場版を TV 検索に投げても当たらないし、TV 作品を映画検索に投げても当たらない。
+ * 振り分けることで TMDb への問い合わせ回数も半分になる。
+ */
+async function resolveMedia(
+  media: AniListMedia,
+  tmdbPool: TMDbAnime[],
+): Promise<ResolvedEntry | null> {
+  return media.format === "MOVIE"
+    ? resolveAsMovie(media)
+    : resolveAsTv(media, tmdbPool);
+}
+
+async function resolveAsTv(
+  media: AniListMedia,
+  tmdbPool: TMDbAnime[],
+): Promise<ResolvedEntry | null> {
+  const titles = candidateTitles(media);
+  if (titles.length === 0) return null;
+
+  // 同季の discover プールに居れば問い合わせ不要
+  const fromPool = pickBest(tmdbPool, tvNames, titles);
+  if (fromPool) return { kind: "tv", anime: fromPool };
+
+  for (const query of searchQueries(media)) {
+    try {
+      const sr = await searchAnime(query, TITLE_SEARCH_CACHE_SECONDS);
+      const hit = pickBest(sr.results, tvNames, titles);
+      if (hit) return { kind: "tv", anime: hit };
+    } catch {
+      // 個別の失敗は次のクエリへ
+    }
+  }
+  return null;
+}
+
+async function resolveAsMovie(
+  media: AniListMedia,
+): Promise<ResolvedEntry | null> {
+  const titles = candidateTitles(media);
+  if (titles.length === 0) return null;
+
+  for (const query of searchQueries(media)) {
+    try {
+      const sr = await searchMovie(query, TITLE_SEARCH_CACHE_SECONDS);
+      const hit = pickBest(sr.results, movieNames, titles);
+      if (hit) return { kind: "movie", movie: hit };
+    } catch {
+      // 個別の失敗は次のクエリへ
+    }
+  }
+  return null;
 }
 
 // ──────────────────────────────────────────
@@ -289,101 +443,19 @@ async function pMapLimit<T, R>(
   return results;
 }
 
-/** タイトル比較用の正規化: 大文字/全角/記号/空白の差異を吸収する */
-function normalizeTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[\s　:：!！?？・,、。.「」『』()（）\-－–—~〜～]/g, "")
-    .normalize("NFKC");
+/** 一覧の key。TMDb の TV と映画は id 空間が別なので接頭辞で分ける */
+export function entryKey(entry: SeasonalEntry): string {
+  if (entry.kind === "tv") return `tv-${entry.anime.id}`;
+  if (entry.kind === "movie") return `movie-${entry.movie.id}`;
+  return `anilist-${entry.media.id}`;
 }
 
-/** 比較用キー: フル正規化 + サフィックス剥がし正規化のセットを返す（AniList 候補側で使用） */
-function buildCompareKeys(title: string): { full: string; stripped: string } {
-  const full = normalizeTitle(title);
-  const stripped = normalizeTitle(stripSeasonSuffix(title));
-  return { full, stripped };
-}
-
-function pickDisplayTitle(media: AniListMedia): string {
+/** 表示・観測用のタイトル（日本語優先） */
+export function pickDisplayTitle(media: AniListMedia): string {
   return (
     media.title.native ??
     media.title.romaji ??
     media.title.english ??
     `(anilist:${media.id})`
   );
-}
-
-/**
- * AniList の作品を TMDb の作品に紐付けて返す。
- *
- * TMDb は新クール作品を独立したエントリではなく本体作品の Season N として登録する
- * ため（例: 「転スラ第4期」のエピソードが「転生したらスライムだった件」(id 82684) の
- * Season 4 に入る）、AniList のシーズン番号サフィックスを剥がしてから比較する。
- *
- * 比較は非対称: AniList 側のみ「フル + サフィックス剥がし」両方をキー化し、
- * TMDb 側は **フル正規化のみ** で照合する。これは AniList「進撃の巨人」(親) ×
- * TMDb プール「進撃の巨人 Final Season」が同居した場合に、TMDb 側も strip して
- * しまうと AniList 親が TMDb 続編エントリに誤マッチするため。
- *
- * Step A: TMDb プール内で完全一致（TMDb はフルのみ・AniList はフル / 剥がし両方）
- * Step B: TMDb /search/tv をフル / サフィックス剥がしクエリ両方で検索し、結果を再検証
- * 不一致なら null
- */
-async function matchAniListToTmdb(
-  media: AniListMedia,
-  tmdbPool: TMDbAnime[],
-): Promise<TMDbAnime | null> {
-  const candidates = [
-    media.title.native,
-    media.title.romaji,
-    media.title.english,
-    ...(media.synonyms ?? []),
-  ].filter((s): s is string => !!s);
-
-  // 候補タイトル全てに対してフル正規化キー + サフィックス剥がしキーを集約
-  // （Set なのでフル == 剥がしの場合は自動で重複排除される）
-  const candidateKeys = new Set<string>();
-  for (const c of candidates) {
-    const { full, stripped } = buildCompareKeys(c);
-    candidateKeys.add(full);
-    if (stripped) candidateKeys.add(stripped);
-  }
-
-  // TMDb 側はフル正規化のみで照合（非対称比較で逆方向誤マッチを防ぐ）
-  const matchesCandidate = (tmdbName: string): boolean => {
-    return candidateKeys.has(normalizeTitle(tmdbName));
-  };
-
-  // Step A: ローカルプールと突き合わせ
-  const direct = tmdbPool.find((a) => {
-    const tmdbNames = [a.name, a.original_name].filter((s): s is string => !!s);
-    return tmdbNames.some(matchesCandidate);
-  });
-  if (direct) return direct;
-
-  // Step B: TMDb 名前検索
-  // primary そのまま検索 → ヒット無ければサフィックス剥がし版で再検索。
-  // 例: 「転スラ第4期」では原文ゼロヒットなので「転スラ」にして本体作品(82684)を取りに行く
-  const primary =
-    media.title.native ?? media.title.romaji ?? media.title.english;
-  if (!primary) return null;
-
-  const stripped = stripSeasonSuffix(primary);
-  const queries =
-    stripped && stripped !== primary ? [primary, stripped] : [primary];
-
-  for (const query of queries) {
-    try {
-      // ヘルパ経由は 24h キャッシュ
-      const sr = await searchAnime(query, 86400);
-      const verified = sr.results.find((r) => {
-        const names = [r.name, r.original_name].filter((s): s is string => !!s);
-        return names.some(matchesCandidate);
-      });
-      if (verified) return verified;
-    } catch {
-      // 個別失敗は次のクエリへ
-    }
-  }
-  return null;
 }

@@ -7,7 +7,7 @@ import {
   SEASON_COLORS,
   type SeasonSlug,
 } from "@/lib/seasons";
-import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
+import { entryKey, fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
 
 interface SeasonPageProps {
@@ -25,11 +25,10 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
   const currentSeason = findSeason(year, seasonSlug);
 
   // AniList を季別タイトルリスト源、TMDb を表示データ源として一括取得
-  const { items } = await fetchSeasonalAnime(year, seasonSlug, {
-    limit: 100,
-  });
+  // 上限は既定（1 シーズン分を取り切る）に任せる
+  const { entries } = await fetchSeasonalAnime(year, seasonSlug);
 
-  const totalResults = items.length;
+  const totalResults = entries.length;
   const recentSeasons = getRecentSeasons(8);
   const gradientClass = SEASON_COLORS[seasonSlug];
 
@@ -80,10 +79,10 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
           })}
         </div>
 
-        {items.length > 0 ? (
+        {entries.length > 0 ? (
           <div className="max-w-[1920px] mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-            {items.map((anime) => (
-              <SeasonAnimeCard key={anime.id} anime={anime} />
+            {entries.map((entry) => (
+              <SeasonAnimeCard key={entryKey(entry)} entry={entry} />
             ))}
           </div>
         ) : (
