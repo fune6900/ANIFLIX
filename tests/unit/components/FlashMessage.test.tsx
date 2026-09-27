@@ -210,6 +210,46 @@ describe("FlashMessage", () => {
     });
   });
 
+  describe("スマートフォン向けの配慮", () => {
+    it("閉じるボタンに指で押せる大きさの当たり判定を持たせる", () => {
+      // 44px 四方が下限。× の字面は小さいままでよいが、当たり判定は
+      // 親の padding へはみ出させて確保する
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      const className = screen.getByRole("button", {
+        name: "閉じる",
+      }).className;
+      expect(className).toContain("h-11");
+      expect(className).toContain("w-11");
+    });
+
+    it("Navbar より手前に重ねる", () => {
+      // Navbar と BottomNav はどちらも z-50。トーストはレイアウト上
+      // Navbar より前に描画されるため、同じ z だと隠れる
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      expect(screen.getByRole("status").className).toContain("z-[60]");
+    });
+
+    it("動きを減らす設定を尊重する", () => {
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      expect(screen.getByRole("status").className).toContain(
+        "motion-reduce:transition-none",
+      );
+    });
+
+    it("画面幅いっぱいまで広がらないよう上限を持つ", () => {
+      setLocation("/", "flash=signed-in");
+      render(<FlashMessage />);
+
+      expect(screen.getByRole("status").className).toContain("max-w-");
+    });
+  });
+
   describe("見た目と動き", () => {
     /** トーストの外枠（位置とスライドを担う要素） */
     function toast() {

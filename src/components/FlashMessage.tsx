@@ -104,7 +104,9 @@ export default function FlashMessage() {
     <div
       // 失敗は読み上げを割り込ませる。成功は手が空いた時でよい
       role={flash.tone === "error" ? "alert" : "status"}
-      className={`fixed right-4 top-20 z-50 w-[calc(100%-2rem)] max-w-sm transition-all duration-300 ease-out sm:right-6 ${
+      // Navbar と BottomNav はどちらも z-50。トーストはレイアウト上
+      // Navbar より前に描画されるため、同じ z だと隠れる
+      className={`fixed right-4 top-20 z-[60] w-[calc(100%-2rem)] max-w-sm transition-all duration-300 ease-out motion-reduce:transition-none sm:right-6 ${
         onScreen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
       }`}
     >
@@ -117,7 +119,9 @@ export default function FlashMessage() {
             type="button"
             onClick={dismiss}
             aria-label="閉じる"
-            className="-mr-1 shrink-0 rounded px-1 text-gray-400 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            // 指で押せる 44px 四方を確保する。負のマージンで親の padding へ
+            // はみ出させるので、トーストの高さは増えない
+            className="-my-3 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded text-lg leading-none text-gray-400 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             ×
           </button>
