@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AniListMedia, AniListMediaPage } from "@/lib/anilist";
-import type { TMDbAnime } from "@/types/tmdb";
+import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 
 /**
  * シーズン一覧の取得パイプライン。
@@ -29,6 +29,7 @@ const getAniListAnimeAiringInRange =
   >();
 const getAnimeBySeason = vi.fn();
 const searchAnime = vi.fn();
+const searchMovie = vi.fn();
 
 vi.mock("@/lib/anilist", () => ({
   getAniListSeasonAnime: (...a: [number, string, number, number]) =>
@@ -41,6 +42,7 @@ vi.mock("@/lib/anilist", () => ({
 vi.mock("@/lib/tmdb", () => ({
   getAnimeBySeason: (...a: unknown[]) => getAnimeBySeason(...a),
   searchAnime: (...a: unknown[]) => searchAnime(...a),
+  searchMovie: (...a: unknown[]) => searchMovie(...a),
 }));
 
 const {
@@ -108,10 +110,27 @@ function page(results: AniListMedia[], hasNextPage = false): AniListMediaPage {
   };
 }
 
+/** TMDb の映画 */
+function movie(id: number, title: string): TMDbMovie {
+  return {
+    id,
+    title,
+    original_title: title,
+    overview: "",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "2026-07-01",
+    vote_average: 0,
+    vote_count: 0,
+    genre_ids: [],
+  };
+}
+
 /** TMDb プールを空にし、検索も空を返す既定状態 */
 function emptyTmdb() {
   getAnimeBySeason.mockResolvedValue({ results: [] });
   searchAnime.mockResolvedValue({ results: [] });
+  searchMovie.mockResolvedValue({ results: [] });
 }
 
 /** AniList のタイトルがそのまま TMDb にある状態にする */
@@ -119,6 +138,7 @@ function tmdbPoolFrom(names: string[]) {
   const pool = names.map((n, i) => tmdb(1000 + i, n));
   getAnimeBySeason.mockResolvedValue({ results: pool });
   searchAnime.mockResolvedValue({ results: [] });
+  searchMovie.mockResolvedValue({ results: [] });
   return pool;
 }
 
@@ -359,7 +379,7 @@ describe("fetchSeasonalAnime", () => {
     expect(result.items.map((i) => i.name)).toEqual(["生き残り"]);
   });
 
-  it("TMDb に無い作品は表示せず unmatchedTitles に残す", async () => {
+  it("TMDb に無い作品も unmatchedTitles に残す", async () => {
     getAniListSeasonAnime.mockResolvedValue(
       page([media({ title: "TMDb に無い作品" })]),
     );
@@ -369,5 +389,131 @@ describe("fetchSeasonalAnime", () => {
 
     expect(result.items).toEqual([]);
     expect(result.unmatchedTitles).toEqual(["TMDb に無い作品"]);
+  });
+
+  describe("TMDb に無い作品の扱い", () => {
+    it("捨てずに AniList のデータで返す", async () => {
+      // かつては丸ごと捨てていた。1 シーズンあたり 20〜40 件が消えていた
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "ショート作品" })]),
+      );
+      emptyTmdb();
+
+      const { entries } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].kind).toBe("unlisted");
+      if (entries[0].kind === "unlisted") {
+        expect(entries[0].media.title.native).toBe("ショート作品");
+      }
+    });
+
+    it("items には混ぜない（TMDb id を要する用途を壊さない）", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "ショート作品" }), media({ title: "本編" })]),
+      );
+      tmdbPoolFrom(["本編"]);
+
+      const { items, entries } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(items.map((i) => i.name)).toEqual(["本編"]);
+      expect(entries).toHaveLength(2);
+    });
+  });
+
+  describe("劇場版", () => {
+    it("MOVIE 形式は映画検索で解決する", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "劇場版 作品", format: "MOVIE" })]),
+      );
+      emptyTmdb();
+      searchMovie.mockResolvedValue({ results: [movie(7, "劇場版 作品")] });
+
+      const { entries } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].kind).toBe("movie");
+      if (entries[0].kind === "movie") {
+        expect(entries[0].movie.title).toBe("劇場版 作品");
+      }
+    });
+
+    it("MOVIE 形式で TV 検索を叩かない", async () => {
+      // 劇場版を TV 検索へ投げても当たらない。問い合わせの無駄
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "劇場版 作品", format: "MOVIE" })]),
+      );
+      emptyTmdb();
+
+      await fetchSeasonalAnime(2026, "summer");
+
+      expect(searchAnime).not.toHaveBeenCalled();
+      expect(searchMovie).toHaveBeenCalled();
+    });
+
+    it("TV 形式で映画検索を叩かない", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "TV 作品" })]),
+      );
+      emptyTmdb();
+
+      await fetchSeasonalAnime(2026, "summer");
+
+      expect(searchMovie).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("副題の差を許容する", () => {
+    it("TMDb 側に副題が付いていても紐付ける", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "凶乱令嬢ニア・リストン" })]),
+      );
+      tmdbPoolFrom(["凶乱令嬢ニア・リストン 病弱令嬢に転生した神殺しの武人"]);
+
+      const { items } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(items).toHaveLength(1);
+    });
+
+    it("完全一致を前方一致より優先する", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "鬼滅の刃" })]),
+      );
+      getAnimeBySeason.mockResolvedValue({
+        results: [tmdb(1, "鬼滅の刃 遊郭編"), tmdb(2, "鬼滅の刃")],
+      });
+      searchAnime.mockResolvedValue({ results: [] });
+      searchMovie.mockResolvedValue({ results: [] });
+
+      const { items } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(items.map((i) => i.id)).toEqual([2]);
+    });
+
+    it("単語の途中で切れる前方一致は紐付けない", async () => {
+      getAniListSeasonAnime.mockResolvedValue(
+        page([media({ title: "ワンピース" })]),
+      );
+      tmdbPoolFrom(["ワンピースフィルム レッド"]);
+
+      const { entries } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(entries[0].kind).toBe("unlisted");
+    });
+  });
+
+  describe("取得上限", () => {
+    it("既定の上限が 1 シーズン分を取り切れる", async () => {
+      // 2026 夏は 138 件。100 で打ち切っていた頃は 38 件が捨てられていた
+      const many = Array.from({ length: 138 }, (_, i) =>
+        media({ title: `作品${i}`, popularity: 1000 - i }),
+      );
+      getAniListSeasonAnime.mockResolvedValue(page(many));
+      emptyTmdb();
+
+      const { entries } = await fetchSeasonalAnime(2026, "summer");
+
+      expect(entries).toHaveLength(138);
+    });
   });
 });

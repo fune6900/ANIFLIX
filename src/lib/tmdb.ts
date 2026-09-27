@@ -719,14 +719,22 @@ export async function getMovieDetail(id: number): Promise<TMDbMovieDetail> {
 // 映画検索
 // ──────────────────────────────────────────
 
-/** 映画タイトル検索 */
+/**
+ * 映画タイトル検索。
+ *
+ * `cacheTime` の既定は 0。**利用者が入力したキーワードでは必ず 0 のまま使う**
+ * （キーワードがそのままキャッシュキーになるため）。呼び出し側が固定の語彙しか
+ * 渡さない場合に限り上書きを許す（例: `src/lib/seasonal-anime.ts` は AniList
+ * 由来の作品名で 86400 を渡す）。`searchAnime` と同じ方針。
+ */
 export async function searchMovie(
   query: string,
+  cacheTime = 0,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
   return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
     "/search/movie",
     { query, include_adult: "false" },
-    0,
+    cacheTime,
   );
 }
 

@@ -156,7 +156,7 @@ export default async function StudioPage({
           {anime.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
               {anime.map((a) => (
-                <SeasonAnimeCard key={a.id} anime={a} />
+                <SeasonAnimeCard key={a.id} entry={{ kind: "tv", anime: a }} />
               ))}
             </div>
           ) : (
