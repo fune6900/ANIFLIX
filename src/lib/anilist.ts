@@ -63,6 +63,13 @@ export interface AniListMedia {
   averageScore: number | null;
   popularity: number;
   startDate: { year: number | null; month: number | null; day: number | null };
+  /**
+   * 放送終了日。放送中・未定の作品は null。
+   * シーズンをまたぐ 2 クール作品を拾うのに使う（src/lib/seasonal-anime.ts）
+   */
+  endDate: { year: number | null; month: number | null; day: number | null };
+  /** FINISHED / RELEASING / NOT_YET_RELEASED / CANCELLED / HIATUS */
+  status: string | null;
   format: string | null;
   episodes: number | null;
   countryOfOrigin: string | null;
@@ -86,6 +93,35 @@ interface AniListPageResponse {
   errors?: Array<{ message: string }>;
 }
 
+/** Page ベースのクエリが返す 1 ページ分 */
+export interface AniListMediaPage {
+  results: AniListMedia[];
+  totalPages: number;
+  totalResults: number;
+  /** 次ページがあるか。全ページ取り切る判定に使う */
+  hasNextPage: boolean;
+}
+
+/** AniListMedia を満たすフィールド集合。シーズン / 期間の両クエリで共有する */
+const MEDIA_FIELDS = `
+  id
+  idMal
+  title { romaji english native }
+  coverImage { large extraLarge color }
+  bannerImage
+  averageScore
+  popularity
+  startDate { year month day }
+  endDate { year month day }
+  status
+  format
+  episodes
+  countryOfOrigin
+  isAdult
+  synonyms
+  siteUrl
+`;
+
 const SEASON_QUERY = `
   query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) {
     Page(page: $page, perPage: $perPage) {
@@ -98,20 +134,37 @@ const SEASON_QUERY = `
         countryOfOrigin: "JP"
         isAdult: false
       ) {
-        id
-        idMal
-        title { romaji english native }
-        coverImage { large extraLarge color }
-        bannerImage
-        averageScore
-        popularity
-        startDate { year month day }
-        format
-        episodes
-        countryOfOrigin
-        isAdult
-        synonyms
-        siteUrl
+        ${MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+/**
+ * 放送期間が指定範囲と重なる作品を引くクエリ。
+ *
+ * `season` で引くと「その季に開始した作品」しか取れず、前クールから継続している
+ * 2 クール作品（例: 2026 SPRING 開始の「転生したらスライムだった件 第4期」）が
+ * 夏のリストから丸ごと落ちる。開始日 <= 期間終了 かつ 終了日 >= 期間開始 で引く。
+ *
+ * 副作用として、終了日が未定（null）の作品は AniList 側の絞り込みから外れる。
+ * これは ONE PIECE / 名探偵コナン のような常時放送の長寿作品を自動的に除外する
+ * 効果があるが、同時に「これから始まる季の新作」も落ちる。そのため呼び出し側では
+ * シーズンクエリとの**和集合**を取ること（src/lib/seasonal-anime.ts）。
+ */
+const AIRING_RANGE_QUERY = `
+  query ($start: FuzzyDateInt, $end: FuzzyDateInt, $page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+      pageInfo { hasNextPage total currentPage lastPage }
+      media(
+        type: ANIME
+        startDate_lesser: $end
+        endDate_greater: $start
+        sort: POPULARITY_DESC
+        countryOfOrigin: "JP"
+        isAdult: false
+      ) {
+        ${MEDIA_FIELDS}
       }
     }
   }
@@ -123,20 +176,41 @@ export async function getAniListSeasonAnime(
   season: AniListSeason,
   page = 1,
   perPage = 30,
-): Promise<{
-  results: AniListMedia[];
-  totalPages: number;
-  totalResults: number;
-}> {
+): Promise<AniListMediaPage> {
+  return fetchAniListMediaPage(SEASON_QUERY, { year, season, page, perPage });
+}
+
+/**
+ * 放送期間が指定範囲と重なるアニメ一覧を AniList から取得する。
+ *
+ * 日付は AniList の FuzzyDateInt（`YYYYMMDD` の整数）で渡すこと。
+ * 終了日が未定の作品は含まれない（`AIRING_RANGE_QUERY` の注記を参照）。
+ */
+export async function getAniListAnimeAiringInRange(
+  start: number,
+  end: number,
+  page = 1,
+  perPage = 50,
+): Promise<AniListMediaPage> {
+  return fetchAniListMediaPage(AIRING_RANGE_QUERY, {
+    start,
+    end,
+    page,
+    perPage,
+  });
+}
+
+/** Page ベースのクエリ共通の取得処理 */
+async function fetchAniListMediaPage(
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<AniListMediaPage> {
   let response: Response;
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
       headers: ANILIST_HEADERS,
-      body: JSON.stringify({
-        query: SEASON_QUERY,
-        variables: { year, season, page, perPage },
-      }),
+      body: JSON.stringify({ query, variables }),
       // 上流が遅延した場合に SSR が無限待機しないよう 8秒で打ち切る
       signal: AbortSignal.timeout(8000),
       // シーズン一覧は頻繁に変わらないので6時間キャッシュ
@@ -171,6 +245,7 @@ export async function getAniListSeasonAnime(
     results: pageData.media,
     totalPages: pageData.pageInfo.lastPage,
     totalResults: pageData.pageInfo.total,
+    hasNextPage: pageData.pageInfo.hasNextPage,
   };
 }
 
