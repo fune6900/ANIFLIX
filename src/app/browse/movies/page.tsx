@@ -216,7 +216,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className="site-container">
         <div className="mb-8">
           <h1 className="text-white text-2xl font-bold mb-1">
             アニメ映画を検索
@@ -259,7 +259,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
             <input type="hidden" name="mode" value="filter" />
             {query && <input type="hidden" name="q" value={query} />}
             <div className="bg-[#1a1a1a] border border-gray-700 rounded-lg p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 3xl:grid-cols-[repeat(auto-fill,minmax(700px,1fr))] gap-4 xl:gap-5">
                 {/* ジャンル */}
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">
@@ -351,7 +351,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
         )}
 
         {results.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {results.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}

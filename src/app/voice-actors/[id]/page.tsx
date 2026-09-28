@@ -58,16 +58,18 @@ function AnimeWorkCard({ credit }: { credit: TMDbPersonCreditCast }) {
         )}
 
         {/* タイトル・役名 */}
-        <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-[11px] font-semibold truncate">
+        <div className="absolute bottom-0 left-0 right-0 p-2 xl:p-2.5">
+          <p className="text-white text-[11px] xl:text-sm font-semibold truncate">
             {title}
           </p>
           {credit.character && (
-            <p className="text-gray-400 text-[10px] truncate">
+            <p className="text-gray-400 text-[10px] xl:text-xs truncate">
               {credit.character}
             </p>
           )}
-          {year && <p className="text-gray-500 text-[10px]">{year}</p>}
+          {year && (
+            <p className="text-gray-500 text-[10px] xl:text-xs">{year}</p>
+          )}
         </div>
       </div>
     </Link>
@@ -223,17 +225,17 @@ export default async function VoiceActorDetailPage({
 
       {/* コンテンツ */}
       <div className="relative -mt-28 md:-mt-40 pb-20">
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10">
+        <div className="site-container">
+          <div className="detail-block flex flex-col md:flex-row gap-6 md:gap-10 xl:gap-12">
             {/* プロフィール写真 */}
-            <div className="flex-shrink-0 w-32 md:w-44 lg:w-52 mx-auto md:mx-0">
+            <div className="flex-shrink-0 w-36 md:w-48 lg:w-60 xl:w-72 3xl:w-80 mx-auto md:mx-0">
               <div className="relative aspect-[2/3] rounded-md overflow-hidden shadow-2xl border border-gray-700/50">
                 {person.profile_path ? (
                   <Image
-                    src={getImageUrl(person.profile_path, "w342")}
+                    src={getImageUrl(person.profile_path, "w500")}
                     alt={person.name}
                     fill
-                    sizes="(max-width: 768px) 128px, 208px"
+                    sizes="(max-width: 767px) 144px, (max-width: 1023px) 192px, (max-width: 1279px) 240px, (max-width: 1919px) 288px, 320px"
                     className="object-cover object-top"
                   />
                 ) : (
@@ -253,31 +255,31 @@ export default async function VoiceActorDetailPage({
             {/* 情報パネル */}
             <div className="flex-1 min-w-0">
               {/* 名前 */}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black mb-1 leading-tight">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black mb-1 leading-tight">
                 {person.name}
               </h1>
               {person.original_name && person.original_name !== person.name && (
-                <p className="text-gray-400 text-base mb-3">
+                <p className="text-gray-400 text-base xl:text-lg mb-3">
                   {person.original_name}
                 </p>
               )}
 
               {/* バッジ */}
-              <div className="flex flex-wrap items-center gap-2 mb-5">
-                <span className="border border-[#54b9c5] text-[#54b9c5] text-xs px-2 py-0.5 rounded">
+              <div className="flex flex-wrap items-center gap-2 xl:gap-3 mb-5">
+                <span className="border border-[#54b9c5] text-[#54b9c5] text-xs xl:text-sm px-2 xl:px-3 py-0.5 xl:py-1 rounded">
                   🎤 声優 / 俳優
                 </span>
-                <span className="text-gray-400 text-sm flex items-center gap-1">
+                <span className="text-gray-400 text-sm xl:text-base flex items-center gap-1">
                   ★ 人気 {person.popularity.toFixed(1)}
                 </span>
                 {person.birthday && (
-                  <span className="text-gray-400 text-sm">
+                  <span className="text-gray-400 text-sm xl:text-base">
                     生年月日: {person.birthday}
                     {age !== null && `（${age}歳）`}
                   </span>
                 )}
                 {person.place_of_birth && (
-                  <span className="text-gray-400 text-sm">
+                  <span className="text-gray-400 text-sm xl:text-base">
                     出身: {person.place_of_birth}
                   </span>
                 )}
@@ -286,7 +288,7 @@ export default async function VoiceActorDetailPage({
               {/* 別名 */}
               {person.also_known_as && person.also_known_as.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-gray-500 text-xs">
+                  <p className="text-gray-500 text-xs xl:text-sm">
                     別名:{" "}
                     <span className="text-gray-300">
                       {person.also_known_as.slice(0, 4).join(" / ")}
@@ -298,10 +300,10 @@ export default async function VoiceActorDetailPage({
               {/* プロフィール */}
               {person.biography && (
                 <div className="mb-6">
-                  <h2 className="text-white font-semibold mb-2">
+                  <h2 className="text-white font-semibold text-base xl:text-lg mb-2">
                     プロフィール
                   </h2>
-                  <p className="text-gray-300 text-sm leading-relaxed max-w-2xl line-clamp-6">
+                  <p className="text-gray-300 text-sm lg:text-base 3xl:text-lg leading-relaxed max-w-3xl xl:max-w-4xl 3xl:max-w-5xl line-clamp-6">
                     {person.biography}
                   </p>
                 </div>
@@ -313,15 +315,19 @@ export default async function VoiceActorDetailPage({
           {totalWorks > 0 && (
             <section className="mt-10">
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-white font-bold text-lg">出演作品</h2>
-                <span className="text-gray-500 text-sm">{totalWorks}件</span>
+                <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">
+                  出演作品
+                </h2>
+                <span className="text-gray-500 text-sm xl:text-base">
+                  {totalWorks}件
+                </span>
                 {totalPages > 1 && (
                   <span className="text-gray-500 text-sm">
                     · {currentPage} / {totalPages} ページ
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 md:gap-3">
                 {pagedWorks.map((credit) => (
                   <AnimeWorkCard
                     key={`${credit.id}-${credit.character}`}

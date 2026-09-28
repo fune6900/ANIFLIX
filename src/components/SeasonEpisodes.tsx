@@ -43,7 +43,7 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
     <div className="flex gap-3 md:gap-4 py-4 border-b border-gray-800 last:border-0 group">
       {/* エピソード番号 */}
       <div className="flex-shrink-0 w-8 text-center pt-1">
-        <span className="text-gray-500 text-lg font-bold">
+        <span className="text-gray-500 text-lg xl:text-xl font-bold">
           {ep.episode_number}
         </span>
       </div>
@@ -74,7 +74,7 @@ function EpisodeCard({ ep }: { ep: TMDbEpisode }) {
       </div>
 
       {/* テキスト情報 */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 3xl:max-w-[1800px]">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="text-white text-sm font-semibold leading-snug line-clamp-2">
             {ep.name}
@@ -183,7 +183,7 @@ export default function SeasonEpisodes({
 
   return (
     <section className="mt-10">
-      <h2 className="text-white font-bold text-lg mb-4">エピソード</h2>
+      <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl mb-4">エピソード</h2>
 
       {/* シーズンタブ */}
       <div className="flex gap-2 flex-wrap mb-6">

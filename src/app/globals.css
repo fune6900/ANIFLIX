@@ -13,6 +13,24 @@ body {
   font-family: "Netflix Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+/* サイト共通の横幅。
+   横幅の上限は持たない。上限を付けるとウルトラワイドの左右に死んだ余白ができる。
+   代わりにガター（左右の余白）を画面幅に応じて広げる。
+   1920px（3xl）の段を置いていないのは意図的で、既存の見た目を変えないため。 */
+@layer components {
+  .site-container {
+    @apply w-full px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 4xl:px-24 5xl:px-32;
+  }
+
+  /* 詳細ページの本文ブロック（ヒーロー・動画・あらすじ）。
+     本文が左に寄って見えるので中央へ寄せる。上限は画面幅に対して単調に増やす。
+     一覧グリッド（キャスト・出演作）には被せない。あちらは幅いっぱいのまま。
+     1535px 以下では上限が効かないため、既存の見た目は変わらない */
+  .detail-block {
+    @apply mx-auto w-full 2xl:max-w-[1400px] 3xl:max-w-[1440px] 4xl:max-w-[1520px] 5xl:max-w-[1600px];
+  }
+}
+
 /* スクロールバー非表示 */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

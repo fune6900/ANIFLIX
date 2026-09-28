@@ -73,7 +73,7 @@ export default async function GenrePage({
           }}
         />
         {/* タイトルもコンテンツと同じ最大幅 + 横パディングで中央寄せ */}
-        <div className="relative max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <div className="site-container relative">
           <Link
             href="/"
             className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6"
@@ -112,138 +112,136 @@ export default async function GenrePage({
         </div>
       </div>
 
-      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-20">
-        <div className="max-w-[1920px] mx-auto">
-          {/* 他ジャンルへのクイックリンク（ヘッダーと被らないようにマージン正方向） */}
-          <div className="flex gap-2 flex-wrap mb-8 mt-6">
-            {ANIME_GENRES.filter((g) => g.id !== genreId).map((g) => (
-              <Link
-                key={g.id}
-                href={`/browse/genre/${g.id}`}
-                className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
-              >
-                <span>{g.emoji}</span>
-                {g.name}
-              </Link>
+      <div className="site-container pb-20">
+        {/* 他ジャンルへのクイックリンク（ヘッダーと被らないようにマージン正方向） */}
+        <div className="flex gap-2 flex-wrap mb-8 mt-6">
+          {ANIME_GENRES.filter((g) => g.id !== genreId).map((g) => (
+            <Link
+              key={g.id}
+              href={`/browse/genre/${g.id}`}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition"
+            >
+              <span>{g.emoji}</span>
+              {g.name}
+            </Link>
+          ))}
+        </div>
+
+        {/* エラー */}
+        {error && (
+          <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
+            {error}
+          </div>
+        )}
+
+        {/* 結果なし */}
+        {!error && results.length === 0 && (
+          <div className="text-center py-24">
+            <p className="text-gray-500 text-lg">
+              このジャンルの作品が見つかりませんでした
+            </p>
+            <Link
+              href="/"
+              className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
+            >
+              ホームに戻る
+            </Link>
+          </div>
+        )}
+
+        {/* グリッド */}
+        {results.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+            {results.map((anime) => (
+              <SeasonAnimeCard key={anime.id} entry={{ kind: "tv", anime }} />
             ))}
           </div>
+        )}
 
-          {/* エラー */}
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
-              {error}
-            </div>
-          )}
-
-          {/* 結果なし */}
-          {!error && results.length === 0 && (
-            <div className="text-center py-24">
-              <p className="text-gray-500 text-lg">
-                このジャンルの作品が見つかりませんでした
-              </p>
+        {/* ページネーション */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 mt-12">
+            {prevPage ? (
               <Link
-                href="/"
-                className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
+                href={`/browse/genre/${genreId}?page=${prevPage}`}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
-                ホームに戻る
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                前のページ
               </Link>
-            </div>
-          )}
-
-          {/* グリッド */}
-          {results.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-              {results.map((anime) => (
-                <SeasonAnimeCard key={anime.id} entry={{ kind: "tv", anime }} />
-              ))}
-            </div>
-          )}
-
-          {/* ページネーション */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-12">
-              {prevPage ? (
-                <Link
-                  href={`/browse/genre/${genreId}?page=${prevPage}`}
-                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+            ) : (
+              <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                  前のページ
-                </Link>
-              ) : (
-                <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                  前のページ
-                </span>
-              )}
-              <span className="text-gray-400 text-sm">
-                {currentPage} / {totalPages}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                前のページ
               </span>
-              {nextPage ? (
-                <Link
-                  href={`/browse/genre/${genreId}?page=${nextPage}`}
-                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+            )}
+            <span className="text-gray-400 text-sm">
+              {currentPage} / {totalPages}
+            </span>
+            {nextPage ? (
+              <Link
+                href={`/browse/genre/${genreId}?page=${nextPage}`}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+              >
+                次のページ
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  次のページ
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </Link>
-              ) : (
-                <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
-                  次のページ
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            ) : (
+              <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
+                次のページ
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

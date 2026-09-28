@@ -273,8 +273,8 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
   // 声優カードは PC でも縦長を維持。それ以外のアニメ/映画カードは PC で横長
   const useLandscapeOnDesktop = !item.isPortrait;
   const widthClass = useLandscapeOnDesktop
-    ? "w-[120px] sm:w-[140px] md:w-[260px] lg:w-[300px] xl:w-[340px] 2xl:w-[380px] 3xl:w-[420px]"
-    : "w-[120px] sm:w-[140px] md:w-[155px] lg:w-[175px] xl:w-[200px] 2xl:w-[225px] 3xl:w-[250px]";
+    ? "w-[120px] sm:w-[140px] md:w-[260px] lg:w-[300px] xl:w-[340px] 2xl:w-[380px] 3xl:w-[420px] 4xl:w-[470px] 5xl:w-[520px]"
+    : "w-[120px] sm:w-[140px] md:w-[155px] lg:w-[175px] xl:w-[200px] 2xl:w-[225px] 3xl:w-[250px] 4xl:w-[280px] 5xl:w-[310px]";
   const aspectClass = useLandscapeOnDesktop
     ? "aspect-[2/3] md:aspect-video"
     : "aspect-[2/3]";
@@ -459,8 +459,8 @@ export default function ContentRow({ title, items, allHref }: ContentRowProps) {
   };
 
   return (
-    <div className="relative group/row mb-6 md:mb-8 max-w-[1920px] mx-auto">
-      <h2 className="text-white font-bold text-base md:text-lg xl:text-xl mb-2 md:mb-3 px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 flex items-center gap-2">
+    <div className="relative group/row mb-6 md:mb-8">
+      <h2 className="site-container text-white font-bold text-base md:text-lg xl:text-xl mb-2 md:mb-3 flex items-center gap-2">
         {title}
         {allHref && (
           <Link
@@ -510,7 +510,7 @@ export default function ContentRow({ title, items, allHref }: ContentRowProps) {
         <div
           ref={rowRef}
           onScroll={handleScroll}
-          className="flex gap-1 md:gap-2 xl:gap-3 overflow-x-auto scrollbar-hide px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-2"
+          className="site-container flex gap-1 md:gap-2 xl:gap-3 overflow-x-auto scrollbar-hide pb-2"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {items.map((item) => (

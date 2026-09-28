@@ -242,17 +242,17 @@ export default async function AnimeDetailPage({
 
       {/* コンテンツ */}
       <div className="relative -mt-32 md:-mt-48 pb-20">
-        <div className="max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10">
+        <div className="site-container">
+          <div className="detail-block flex flex-col md:flex-row gap-6 md:gap-10 xl:gap-12">
             {/* ポスター */}
-            <div className="flex-shrink-0 w-36 md:w-48 lg:w-56 mx-auto md:mx-0">
+            <div className="flex-shrink-0 w-40 md:w-52 lg:w-64 xl:w-72 3xl:w-80 mx-auto md:mx-0">
               <div className="relative aspect-[2/3] rounded-md overflow-hidden shadow-2xl border border-gray-700/50">
                 {anime.poster_path ? (
                   <Image
-                    src={getImageUrl(anime.poster_path, "w342")}
+                    src={getImageUrl(anime.poster_path, "w500")}
                     alt={anime.name}
                     fill
-                    sizes="(max-width: 768px) 144px, 224px"
+                    sizes="(max-width: 767px) 160px, (max-width: 1023px) 208px, (max-width: 1279px) 256px, (max-width: 1919px) 288px, 320px"
                     className="object-cover"
                   />
                 ) : (
@@ -267,39 +267,43 @@ export default async function AnimeDetailPage({
 
             {/* 情報パネル */}
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black mb-1 leading-tight">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black mb-1 leading-tight">
                 {anime.name}
               </h1>
               {anime.original_name && anime.original_name !== anime.name && (
-                <p className="text-gray-400 text-base mb-3">
+                <p className="text-gray-400 text-base xl:text-lg mb-3">
                   {anime.original_name}
                 </p>
               )}
               {anime.tagline && (
-                <p className="text-gray-300 italic text-sm mb-4">
+                <p className="text-gray-300 italic text-sm xl:text-base mb-4">
                   &ldquo;{anime.tagline}&rdquo;
                 </p>
               )}
 
               {/* メタバッジ */}
-              <div className="flex flex-wrap items-center gap-2 mb-5">
+              <div className="flex flex-wrap items-center gap-2 xl:gap-3 mb-5">
                 {score && parseFloat(score) > 0 && (
-                  <span className="flex items-center gap-1 text-green-400 font-bold text-base">
+                  <span className="flex items-center gap-1 text-green-400 font-bold text-base xl:text-lg">
                     ★ {score}
-                    <span className="text-gray-500 text-xs font-normal">
+                    <span className="text-gray-500 text-xs xl:text-sm font-normal">
                       ({anime.vote_count?.toLocaleString()}件)
                     </span>
                   </span>
                 )}
-                {year && <span className="text-gray-400 text-sm">{year}</span>}
+                {year && (
+                  <span className="text-gray-400 text-sm xl:text-base">
+                    {year}
+                  </span>
+                )}
                 {anime.status && <StatusBadge anime={anime} />}
                 {anime.number_of_seasons > 0 && (
-                  <span className="text-gray-400 text-sm">
+                  <span className="text-gray-400 text-sm xl:text-base">
                     {anime.number_of_seasons}シーズン
                   </span>
                 )}
                 {anime.number_of_episodes > 0 && (
-                  <span className="text-gray-400 text-sm">
+                  <span className="text-gray-400 text-sm xl:text-base">
                     全{anime.number_of_episodes}話
                   </span>
                 )}
@@ -311,7 +315,7 @@ export default async function AnimeDetailPage({
                   {anime.genres.map((g) => (
                     <span
                       key={g.id}
-                      className="border border-gray-600 text-gray-300 text-xs px-2 py-0.5 rounded"
+                      className="border border-gray-600 text-gray-300 text-xs xl:text-sm px-2 xl:px-3 py-0.5 xl:py-1 rounded"
                     >
                       {g.name}
                     </span>
@@ -326,10 +330,10 @@ export default async function AnimeDetailPage({
                     href={`https://www.youtube.com/watch?v=${mainVideo.key}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-white text-black font-bold px-6 py-2.5 rounded hover:bg-gray-200 transition text-sm"
+                    className="flex items-center gap-2 bg-white text-black font-bold px-6 xl:px-8 py-2.5 xl:py-3 rounded hover:bg-gray-200 transition text-sm xl:text-base"
                   >
                     <svg
-                      className="w-5 h-5"
+                      className="w-5 h-5 xl:w-6 xl:h-6"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -344,10 +348,10 @@ export default async function AnimeDetailPage({
                     href={anime.homepage}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-gray-700/60 text-gray-200 font-semibold px-5 py-2.5 rounded hover:bg-gray-600/60 transition text-sm border border-gray-600"
+                    className="flex items-center gap-2 bg-gray-700/60 text-gray-200 font-semibold px-5 xl:px-7 py-2.5 xl:py-3 rounded hover:bg-gray-600/60 transition text-sm xl:text-base border border-gray-600"
                   >
                     <svg
-                      className="w-4 h-4"
+                      className="w-4 h-4 xl:w-5 xl:h-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -367,14 +371,16 @@ export default async function AnimeDetailPage({
               {/* 公式SNSリンク */}
               {snsLinks.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6">
-                  <span className="text-gray-500 text-xs">公式SNS:</span>
+                  <span className="text-gray-500 text-xs xl:text-sm">
+                    公式SNS:
+                  </span>
                   {snsLinks.map((link) => (
                     <a
                       key={link.label}
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white border border-gray-700 px-3 py-1.5 rounded-full text-xs transition"
+                      className="flex items-center gap-1.5 bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 hover:text-white border border-gray-700 px-3 xl:px-4 py-1.5 xl:py-2 rounded-full text-xs xl:text-sm transition"
                     >
                       {link.icon}
                       {link.label}
@@ -386,8 +392,10 @@ export default async function AnimeDetailPage({
               {/* あらすじ */}
               {anime.overview && (
                 <div className="mb-6">
-                  <h2 className="text-white font-semibold mb-2">あらすじ</h2>
-                  <p className="text-gray-300 text-sm leading-relaxed max-w-2xl">
+                  <h2 className="text-white font-semibold text-base xl:text-lg mb-2">
+                    あらすじ
+                  </h2>
+                  <p className="text-gray-300 text-sm lg:text-base 3xl:text-lg leading-relaxed max-w-3xl xl:max-w-4xl 3xl:max-w-5xl">
                     {anime.overview}
                   </p>
                 </div>
@@ -405,15 +413,15 @@ export default async function AnimeDetailPage({
 
           {/* ③ 動画セクション */}
           {trailerVideos.length > 0 && (
-            <section className="mt-12">
-              <h2 className="text-white font-bold text-lg mb-5">
+            <section className="detail-block mt-12">
+              <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl mb-5">
                 動画・トレーラー
               </h2>
 
               {/* メイン動画（大） */}
               {mainVideo && (
                 <div className="mb-5">
-                  <div className="relative w-full max-w-3xl aspect-video rounded-lg overflow-hidden bg-black shadow-2xl">
+                  <div className="relative w-full max-w-4xl xl:max-w-5xl 3xl:max-w-6xl aspect-video rounded-lg overflow-hidden bg-black shadow-2xl">
                     <iframe
                       src={`https://www.youtube-nocookie.com/embed/${mainVideo.key}?rel=0&modestbranding=1`}
                       title={mainVideo.name}
@@ -422,8 +430,8 @@ export default async function AnimeDetailPage({
                       className="absolute inset-0 w-full h-full"
                     />
                   </div>
-                  <div className="mt-2 max-w-3xl flex items-center justify-between">
-                    <p className="text-gray-300 text-sm font-medium truncate">
+                  <div className="mt-2 max-w-4xl xl:max-w-5xl 3xl:max-w-6xl flex items-center justify-between">
+                    <p className="text-gray-300 text-sm xl:text-base font-medium truncate">
                       {mainVideo.name}
                     </p>
                     <VideoTypeLabel
@@ -448,13 +456,13 @@ export default async function AnimeDetailPage({
                       rel="noopener noreferrer"
                       className="flex-shrink-0 group"
                     >
-                      <div className="relative w-48 aspect-video rounded overflow-hidden bg-gray-900">
+                      <div className="relative w-48 xl:w-60 3xl:w-72 aspect-video rounded overflow-hidden bg-gray-900">
                         {/* YouTube サムネイル */}
                         <Image
                           src={`https://img.youtube.com/vi/${v.key}/mqdefault.jpg`}
                           alt={v.name}
                           fill
-                          sizes="192px"
+                          sizes="(max-width: 1279px) 192px, (max-width: 1919px) 240px, 288px"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                         {/* 再生アイコンオーバーレイ */}
@@ -470,7 +478,7 @@ export default async function AnimeDetailPage({
                           </div>
                         </div>
                       </div>
-                      <p className="text-gray-400 text-[11px] mt-1.5 w-48 truncate">
+                      <p className="text-gray-400 text-[11px] xl:text-xs mt-1.5 w-48 xl:w-60 3xl:w-72 truncate">
                         {v.name}
                       </p>
                       <VideoTypeLabel type={v.type} official={v.official} />
@@ -483,8 +491,10 @@ export default async function AnimeDetailPage({
 
           {/* OP・ED セクション */}
           {(opVideos.length > 0 || edVideos.length > 0) && (
-            <section className="mt-12">
-              <h2 className="text-white font-bold text-lg mb-5">OP・ED</h2>
+            <section className="detail-block mt-12">
+              <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl mb-5">
+                OP・ED
+              </h2>
               <div className="space-y-6">
                 {opVideos.length > 0 && (
                   <div>
@@ -506,12 +516,12 @@ export default async function AnimeDetailPage({
                           rel="noopener noreferrer"
                           className="flex-shrink-0 group"
                         >
-                          <div className="relative w-48 aspect-video rounded overflow-hidden bg-gray-900">
+                          <div className="relative w-48 xl:w-60 3xl:w-72 aspect-video rounded overflow-hidden bg-gray-900">
                             <Image
                               src={`https://img.youtube.com/vi/${v.key}/mqdefault.jpg`}
                               alt={v.name}
                               fill
-                              sizes="192px"
+                              sizes="(max-width: 1279px) 192px, (max-width: 1919px) 240px, 288px"
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
@@ -526,7 +536,7 @@ export default async function AnimeDetailPage({
                               </div>
                             </div>
                           </div>
-                          <p className="text-gray-300 text-[11px] mt-1.5 w-48 truncate font-medium">
+                          <p className="text-gray-300 text-[11px] xl:text-xs mt-1.5 w-48 xl:w-60 3xl:w-72 truncate font-medium">
                             {v.name}
                           </p>
                           {v.official && (
@@ -559,12 +569,12 @@ export default async function AnimeDetailPage({
                           rel="noopener noreferrer"
                           className="flex-shrink-0 group"
                         >
-                          <div className="relative w-48 aspect-video rounded overflow-hidden bg-gray-900">
+                          <div className="relative w-48 xl:w-60 3xl:w-72 aspect-video rounded overflow-hidden bg-gray-900">
                             <Image
                               src={`https://img.youtube.com/vi/${v.key}/mqdefault.jpg`}
                               alt={v.name}
                               fill
-                              sizes="192px"
+                              sizes="(max-width: 1279px) 192px, (max-width: 1919px) 240px, 288px"
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
@@ -579,7 +589,7 @@ export default async function AnimeDetailPage({
                               </div>
                             </div>
                           </div>
-                          <p className="text-gray-300 text-[11px] mt-1.5 w-48 truncate font-medium">
+                          <p className="text-gray-300 text-[11px] xl:text-xs mt-1.5 w-48 xl:w-60 3xl:w-72 truncate font-medium">
                             {v.name}
                           </p>
                           {v.official && (
@@ -602,23 +612,23 @@ export default async function AnimeDetailPage({
           {/* ① キャスト・声優（クリックで声優詳細へ） */}
           {cast.length > 0 && (
             <section className="mt-10">
-              <h2 className="text-white font-bold text-lg mb-4">
+              <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl mb-4">
                 キャスト・声優
               </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
                 {cast.map((member) => (
                   <Link
                     key={member.id}
                     href={`/voice-actors/${member.id}`}
                     className="text-center group"
                   >
-                    <div className="relative w-full aspect-square rounded-full overflow-hidden bg-gray-800 mb-2 mx-auto max-w-[72px] ring-2 ring-transparent group-hover:ring-[#54b9c5] transition-all duration-200">
+                    <div className="relative w-full aspect-square rounded-full overflow-hidden bg-gray-800 mb-2 mx-auto max-w-[88px] xl:max-w-[112px] 3xl:max-w-[136px] ring-2 ring-transparent group-hover:ring-[#54b9c5] transition-all duration-200">
                       {member.profile_path ? (
                         <Image
-                          src={getImageUrl(member.profile_path, "w185")}
+                          src={getImageUrl(member.profile_path, "w342")}
                           alt={member.name}
                           fill
-                          sizes="72px"
+                          sizes="(max-width: 1279px) 88px, (max-width: 1919px) 112px, 136px"
                           className="object-cover group-hover:scale-105 transition-transform duration-200"
                         />
                       ) : (
@@ -633,11 +643,11 @@ export default async function AnimeDetailPage({
                         </div>
                       )}
                     </div>
-                    <p className="text-white text-[11px] font-semibold truncate group-hover:text-[#54b9c5] transition-colors">
+                    <p className="text-white text-[11px] xl:text-sm font-semibold truncate group-hover:text-[#54b9c5] transition-colors">
                       {member.name}
                     </p>
                     {member.character && (
-                      <p className="text-gray-500 text-[10px] truncate">
+                      <p className="text-gray-500 text-[10px] xl:text-xs truncate">
                         {member.character}
                       </p>
                     )}

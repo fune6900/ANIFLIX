@@ -167,7 +167,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           {era.shortLabel}
         </div>
 
-        <div className="relative max-w-[1920px] mx-auto px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <div className="site-container relative">
           <Link
             href="/"
             className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-200 transition text-sm mb-6"
@@ -228,229 +228,227 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
         </div>
       </div>
 
-      <div className="px-4 md:px-8 lg:px-12 xl:px-16 2xl:px-20 pb-20">
-        <div className="max-w-[1920px] mx-auto">
-          {/* ────── 検索フォーム ────── */}
-          <form
-            method="GET"
-            action={`/browse/era/${decade}`}
-            className="mt-6 mb-2 flex items-center gap-2"
-          >
-            {/* ソート値を hidden で引き継ぐ */}
-            <input type="hidden" name="sort" value={sortLabel} />
+      <div className="site-container pb-20">
+        {/* ────── 検索フォーム ────── */}
+        <form
+          method="GET"
+          action={`/browse/era/${decade}`}
+          className="mt-6 mb-2 flex items-center gap-2"
+        >
+          {/* ソート値を hidden で引き継ぐ */}
+          <input type="hidden" name="sort" value={sortLabel} />
 
-            <div className="relative flex-1 max-w-md">
-              {/* 虫眼鏡アイコン */}
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                name="q"
-                defaultValue={query}
-                placeholder={`${era.label}のアニメをタイトルで絞り込む…`}
-                className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/15 border border-white/10 focus:border-white/30 rounded-full pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 outline-none transition"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="bg-white text-black px-5 py-2 rounded-full text-xs font-bold hover:bg-gray-200 transition flex-shrink-0"
+          <div className="relative flex-1 max-w-md">
+            {/* 虫眼鏡アイコン */}
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              検索
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              name="q"
+              defaultValue={query}
+              placeholder={`${era.label}のアニメをタイトルで絞り込む…`}
+              className="w-full bg-white/10 hover:bg-white/15 focus:bg-white/15 border border-white/10 focus:border-white/30 rounded-full pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 outline-none transition"
+            />
+          </div>
 
-            {/* 検索中のとき: クリアリンク */}
-            {isSearchMode && (
-              <Link
-                href={`/browse/era/${decade}?sort=${sortLabel}`}
-                className="text-gray-400 hover:text-white text-xs underline flex-shrink-0 transition"
-              >
-                クリア
-              </Link>
-            )}
-          </form>
+          <button
+            type="submit"
+            className="bg-white text-black px-5 py-2 rounded-full text-xs font-bold hover:bg-gray-200 transition flex-shrink-0"
+          >
+            検索
+          </button>
 
-          {/* 検索結果件数 / 絞り込み中バッジ */}
+          {/* 検索中のとき: クリアリンク */}
           {isSearchMode && (
-            <p className="text-sm text-gray-400 mb-4">
-              <span className="text-white font-semibold">「{query}」</span>{" "}
-              の検索結果：{era.label}のアニメ
-              <span className="ml-2 font-bold text-white">
-                {results.length}件
-              </span>
-            </p>
+            <Link
+              href={`/browse/era/${decade}?sort=${sortLabel}`}
+              className="text-gray-400 hover:text-white text-xs underline flex-shrink-0 transition"
+            >
+              クリア
+            </Link>
           )}
+        </form>
 
-          {/* ソートボタン（通常モードのみ表示） */}
-          {!isSearchMode && (
-            <div className="flex items-center gap-3 mb-6 mt-2">
-              <span className="text-gray-500 text-sm">並び替え:</span>
-              <Link
-                href={`/browse/era/${decade}?sort=popular&page=1`}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
-                  sortLabel === "popular"
-                    ? "bg-white text-black"
-                    : "bg-white/10 text-gray-300 hover:bg-white/20"
-                }`}
-              >
-                人気順
-              </Link>
-              <Link
-                href={`/browse/era/${decade}?sort=date&page=1`}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
-                  sortLabel === "date"
-                    ? "bg-white text-black"
-                    : "bg-white/10 text-gray-300 hover:bg-white/20"
-                }`}
-              >
-                放送日順
-              </Link>
-            </div>
-          )}
+        {/* 検索結果件数 / 絞り込み中バッジ */}
+        {isSearchMode && (
+          <p className="text-sm text-gray-400 mb-4">
+            <span className="text-white font-semibold">「{query}」</span>{" "}
+            の検索結果：{era.label}のアニメ
+            <span className="ml-2 font-bold text-white">
+              {results.length}件
+            </span>
+          </p>
+        )}
 
-          {/* エラー */}
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
-              {error}
-            </div>
-          )}
+        {/* ソートボタン（通常モードのみ表示） */}
+        {!isSearchMode && (
+          <div className="flex items-center gap-3 mb-6 mt-2">
+            <span className="text-gray-500 text-sm">並び替え:</span>
+            <Link
+              href={`/browse/era/${decade}?sort=popular&page=1`}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+                sortLabel === "popular"
+                  ? "bg-white text-black"
+                  : "bg-white/10 text-gray-300 hover:bg-white/20"
+              }`}
+            >
+              人気順
+            </Link>
+            <Link
+              href={`/browse/era/${decade}?sort=date&page=1`}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+                sortLabel === "date"
+                  ? "bg-white text-black"
+                  : "bg-white/10 text-gray-300 hover:bg-white/20"
+              }`}
+            >
+              放送日順
+            </Link>
+          </div>
+        )}
 
-          {/* 結果なし */}
-          {!error && results.length === 0 && (
-            <div className="text-center py-24">
-              {isSearchMode ? (
-                <>
-                  <p className="text-gray-500 text-lg">
-                    「{query}」に一致する{era.label}の作品が見つかりませんでした
-                  </p>
-                  <Link
-                    href={`/browse/era/${decade}?sort=${sortLabel}`}
-                    className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
-                  >
-                    検索をクリアして全作品を表示
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <p className="text-gray-500 text-lg">
-                    この年代の作品が見つかりませんでした
-                  </p>
-                  <Link
-                    href="/"
-                    className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
-                  >
-                    ホームに戻る
-                  </Link>
-                </>
-              )}
-            </div>
-          )}
+        {/* エラー */}
+        {error && (
+          <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
+            {error}
+          </div>
+        )}
 
-          {/* グリッド */}
-          {results.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 xl:gap-5">
-              {results.map((anime) => (
-                <AnimeGridCard key={anime.id} anime={anime} />
-              ))}
-            </div>
-          )}
-
-          {/* ページネーション（通常モードのみ） */}
-          {!isSearchMode && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-12">
-              {prevPage ? (
+        {/* 結果なし */}
+        {!error && results.length === 0 && (
+          <div className="text-center py-24">
+            {isSearchMode ? (
+              <>
+                <p className="text-gray-500 text-lg">
+                  「{query}」に一致する{era.label}の作品が見つかりませんでした
+                </p>
                 <Link
-                  href={`${pageBase}&page=${prevPage}`}
-                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+                  href={`/browse/era/${decade}?sort=${sortLabel}`}
+                  className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                  前のページ
+                  検索をクリアして全作品を表示
                 </Link>
-              ) : (
-                <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                  前のページ
-                </span>
-              )}
-              <span className="text-gray-400 text-sm">
-                {currentPage} / {totalPages}
-              </span>
-              {nextPage ? (
+              </>
+            ) : (
+              <>
+                <p className="text-gray-500 text-lg">
+                  この年代の作品が見つかりませんでした
+                </p>
                 <Link
-                  href={`${pageBase}&page=${nextPage}`}
-                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+                  href="/"
+                  className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
                 >
-                  次のページ
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  ホームに戻る
                 </Link>
-              ) : (
-                <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
-                  次のページ
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* グリッド */}
+        {results.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+            {results.map((anime) => (
+              <AnimeGridCard key={anime.id} anime={anime} />
+            ))}
+          </div>
+        )}
+
+        {/* ページネーション（通常モードのみ） */}
+        {!isSearchMode && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 mt-12">
+            {prevPage ? (
+              <Link
+                href={`${pageBase}&page=${prevPage}`}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                前のページ
+              </Link>
+            ) : (
+              <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                前のページ
+              </span>
+            )}
+            <span className="text-gray-400 text-sm">
+              {currentPage} / {totalPages}
+            </span>
+            {nextPage ? (
+              <Link
+                href={`${pageBase}&page=${nextPage}`}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
+              >
+                次のページ
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            ) : (
+              <span className="flex items-center gap-2 bg-gray-800 text-gray-600 px-5 py-2.5 rounded text-sm font-semibold cursor-not-allowed">
+                次のページ
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

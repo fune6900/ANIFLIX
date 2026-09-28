@@ -373,7 +373,7 @@ export default function SeasonTimeline({ seasons }: SeasonTimelineProps) {
     <section className="mt-10">
       {/* section header */}
       <div className="flex items-baseline gap-3 mb-8">
-        <h2 className="text-white font-bold text-lg">ヒストリー</h2>
+        <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">ヒストリー</h2>
         <span className="text-gray-600 text-sm">— シリーズ年表</span>
         <span className="ml-auto text-gray-700 text-xs tabular-nums">
           {sorted.length} シーズン
