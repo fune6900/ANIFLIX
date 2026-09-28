@@ -112,7 +112,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
         {/* コンテンツ（スライドごとに再レンダリングしてアニメーション） */}
         <div
           key={current}
-          className="absolute bottom-[20%] md:bottom-[28%] left-4 md:left-12 lg:left-16 xl:left-20 2xl:left-28 4xl:left-32 5xl:left-40 max-w-xs sm:max-w-md md:max-w-xl lg:max-w-2xl xl:max-w-3xl 4xl:max-w-4xl 5xl:max-w-5xl animate-fade-in"
+          className="absolute bottom-[24%] md:bottom-[28%] left-4 md:left-12 lg:left-16 xl:left-20 2xl:left-28 4xl:left-32 5xl:left-40 max-w-xs sm:max-w-md md:max-w-xl lg:max-w-2xl xl:max-w-3xl 4xl:max-w-4xl 5xl:max-w-5xl animate-fade-in"
         >
           {/* 年 */}
           {item.year && (
@@ -200,9 +200,10 @@ export default function HeroSection({ items }: HeroSectionProps) {
           </div>
         </div>
 
-        {/* スライドドット */}
+        {/* スライドドット。ホームでは直後の段が -mt-16 md:-mt-24 で重なるため、
+            その高さより上に置かないとカードの下に潜って押せなくなる */}
         {items.length > 1 && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-[4.5rem] md:bottom-[6.5rem] left-1/2 -translate-x-1/2 flex gap-2">
             {items.map((_, i) => (
               <button
                 key={i}
@@ -228,7 +229,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 setCurrent((c) => (c - 1 + items.length) % items.length)
               }
               aria-label="前のスライド"
-              className="absolute bottom-[20%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-[4.5rem] md:right-20 lg:right-auto lg:left-2 xl:left-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
+              className="absolute bottom-[24%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-[4.5rem] md:right-20 lg:right-auto lg:left-2 xl:left-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
                 className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
@@ -248,7 +249,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
             <button
               onClick={next}
               aria-label="次のスライド"
-              className="absolute bottom-[20%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-4 lg:right-2 xl:right-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
+              className="absolute bottom-[24%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-4 lg:right-2 xl:right-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
                 className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
