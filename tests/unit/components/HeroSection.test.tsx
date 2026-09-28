@@ -54,7 +54,9 @@ describe("HeroSection", () => {
   it("余る領域を同じ画像のブラーで埋める（黒帯を作らない）", () => {
     const { container } = render(<HeroSection items={ITEMS} />);
 
-    const fills = container.querySelectorAll('[aria-hidden="true"][class*="blur"]');
+    const fills = container.querySelectorAll(
+      '[aria-hidden="true"][class*="blur"]',
+    );
 
     expect(fills.length).toBeGreaterThan(0);
   });
@@ -79,13 +81,32 @@ describe("HeroSection", () => {
     expect(next.className).not.toContain("opacity-0");
   });
 
+  it("lg 未満では切り替えボタンを縦中央に置かない（タイトル・あらすじに被る）", () => {
+    // 375px / 768px では本文ブロックが縦中央まで伸びており、中央の矢印が
+    // タイトルの先頭・末尾の文字を隠していた。lg 未満は CTA 行の高さに下ろす
+    render(<HeroSection items={ITEMS} />);
+
+    for (const name of ["前のスライド", "次のスライド"]) {
+      const classes = screen
+        .getByRole("button", { name })
+        .className.split(/\s+/);
+
+      expect(classes).not.toContain("top-1/2");
+      expect(classes).toContain("lg:top-1/2");
+    }
+  });
+
   it("次のスライドへ切り替えられる", () => {
     render(<HeroSection items={ITEMS} />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("作品A");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "作品A",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "次のスライド" }));
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("作品B");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "作品B",
+    );
   });
 
   it("前のスライドへ戻ると末尾へ回る", () => {
@@ -93,7 +114,9 @@ describe("HeroSection", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "前のスライド" }));
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("作品B");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "作品B",
+    );
   });
 
   it("スライドを直接選ぶドットを名前付きで並べる", () => {

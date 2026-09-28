@@ -219,7 +219,8 @@ export default function HeroSection({ items }: HeroSectionProps) {
           </div>
         )}
 
-        {/* 左右の矢印 */}
+        {/* 左右の矢印。lg 未満は本文ブロックが縦中央まで伸びるため、
+            CTA 行と同じ高さの右端へ下ろしてタイトルとの重なりを避ける */}
         {items.length > 1 && (
           <>
             <button
@@ -227,7 +228,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 setCurrent((c) => (c - 1 + items.length) % items.length)
               }
               aria-label="前のスライド"
-              className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#54b9c5]"
+              className="absolute bottom-[20%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-[4.5rem] md:right-20 lg:right-auto lg:left-2 xl:left-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
                 className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
@@ -247,7 +248,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
             <button
               onClick={next}
               aria-label="次のスライド"
-              className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#54b9c5]"
+              className="absolute bottom-[20%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-4 lg:right-2 xl:right-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
                 className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
