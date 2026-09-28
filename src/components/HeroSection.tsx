@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { getImageUrl } from "@/lib/tmdb";
 
 export interface HeroItem {
   id: number;
@@ -50,7 +51,7 @@ export default function HeroSection({ items }: HeroSectionProps) {
 
   return (
     <>
-      <section className="relative w-full h-[56.25vw] max-h-[85vh] min-h-[400px] overflow-hidden">
+      <section className="group relative w-full aspect-video max-h-[85vh] min-h-[400px] overflow-hidden">
         {/* 背景: 全スライドを重ねて opacity でクロスフェード */}
         {items.map((it, i) =>
           it.backdropPath ? (
@@ -60,12 +61,24 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 i === current ? "opacity-100" : "opacity-0"
               }`}
             >
+              {/* 箱の縦横比が 16:9 とずれた時に余る領域。同じ画像を引き伸ばして
+                  ぼかし、黒帯を作らずに埋める（前景は切らない） */}
               <Image
-                src={`https://image.tmdb.org/t/p/original${it.backdropPath}`}
+                src={getImageUrl(it.backdropPath, "w780")}
+                alt=""
+                aria-hidden="true"
+                fill
+                sizes="100vw"
+                className="object-cover scale-110 blur-2xl opacity-60"
+                priority={i < 2}
+              />
+              {/* 前景: キービジュアル全体を切らずに収める */}
+              <Image
+                src={getImageUrl(it.backdropPath, "original")}
                 alt={it.title}
                 fill
                 sizes="100vw"
-                className="object-cover object-center"
+                className="object-contain object-center"
                 priority={i < 2}
               />
             </div>
@@ -99,17 +112,16 @@ export default function HeroSection({ items }: HeroSectionProps) {
         {/* コンテンツ（スライドごとに再レンダリングしてアニメーション） */}
         <div
           key={current}
-          className="absolute bottom-[20%] md:bottom-[28%] left-4 md:left-12 lg:left-16 xl:left-20 2xl:left-28 4xl:left-32 5xl:left-40 max-w-xs sm:max-w-md md:max-w-xl lg:max-w-2xl xl:max-w-3xl 4xl:max-w-4xl 5xl:max-w-5xl animate-fade-in"
+          className="absolute bottom-[24%] md:bottom-[28%] left-4 md:left-12 lg:left-16 xl:left-20 2xl:left-28 4xl:left-32 5xl:left-40 max-w-xs sm:max-w-md md:max-w-xl lg:max-w-2xl xl:max-w-3xl 4xl:max-w-4xl 5xl:max-w-5xl animate-fade-in"
         >
-          {/* バッジ */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="bg-[#E50914] text-white text-xs font-bold px-2 py-0.5 tracking-widest">
-              ANIFLIX
-            </span>
-            {item.year && (
-              <span className="text-gray-300 text-xs">{item.year}</span>
-            )}
-          </div>
+          {/* 年 */}
+          {item.year && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-gray-300 text-xs xl:text-sm">
+                {item.year}
+              </span>
+            </div>
+          )}
 
           {/* タイトル */}
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-black text-white leading-tight drop-shadow-xl mb-3">
@@ -188,34 +200,40 @@ export default function HeroSection({ items }: HeroSectionProps) {
           </div>
         </div>
 
-        {/* スライドドット */}
+        {/* スライドドット。ホームでは直後の段が -mt-16 md:-mt-24 で重なるため、
+            その高さより上に置かないとカードの下に潜って押せなくなる */}
         {items.length > 1 && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-[4.5rem] md:bottom-[6.5rem] left-1/2 -translate-x-1/2 flex gap-2">
             {items.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrent(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${
+                aria-label={`${i + 1} 枚目のスライドへ`}
+                aria-current={i === current}
+                className={`h-2 xl:h-2.5 rounded-full transition-all duration-300 ${
                   i === current
-                    ? "bg-white w-6"
-                    : "bg-white/40 hover:bg-white/70 w-2"
+                    ? "bg-white w-6 xl:w-8"
+                    : "bg-white/40 hover:bg-white/70 w-2 xl:w-2.5"
                 }`}
               />
             ))}
           </div>
         )}
 
-        {/* 左右の矢印 */}
+        {/* 左右の矢印。lg 未満は本文ブロックが縦中央まで伸びるため、
+            CTA 行と同じ高さの右端へ下ろしてタイトルとの重なりを避ける */}
         {items.length > 1 && (
           <>
             <button
               onClick={() =>
                 setCurrent((c) => (c - 1 + items.length) % items.length)
               }
-              className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition opacity-0 hover:opacity-100 focus:opacity-100"
+              aria-label="前のスライド"
+              className="absolute bottom-[24%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-[4.5rem] md:right-20 lg:right-auto lg:left-2 xl:left-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
+                aria-hidden="true"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -230,10 +248,12 @@ export default function HeroSection({ items }: HeroSectionProps) {
             </button>
             <button
               onClick={next}
-              className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition opacity-0 hover:opacity-100 focus:opacity-100"
+              aria-label="次のスライド"
+              className="absolute bottom-[24%] md:bottom-[28%] lg:bottom-auto lg:top-1/2 lg:-translate-y-1/2 right-4 lg:right-2 xl:right-4 w-11 h-11 md:w-12 md:h-12 xl:w-14 xl:h-14 rounded-full bg-black/50 group-hover:bg-black/70 hover:!bg-black/85 text-white flex items-center justify-center transition-colors backdrop-blur-sm border border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#54b9c5]"
             >
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 md:w-6 md:h-6 xl:w-7 xl:h-7"
+                aria-hidden="true"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
