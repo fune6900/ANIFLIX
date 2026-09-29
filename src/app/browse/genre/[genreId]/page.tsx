@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import {
   getAnimeByGenre,
   getAnimeByKeywords,
   parsePageParam,
 } from "@/lib/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
-import { detectDevice, itemsPerPage } from "@/lib/device";
+import { requestItemsPerPage } from "@/lib/request-device";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
 import BrowseFilterForm from "@/components/BrowseFilterForm";
@@ -44,9 +43,7 @@ export default async function GenrePage({
   const currentPage = parsePageParam(sp.page);
   const filter = parseBrowseFilter(sp);
 
-  const ua = (await headers()).get("user-agent") ?? "";
-  const device = detectDevice(ua);
-  const limit = itemsPerPage(device);
+  const limit = await requestItemsPerPage();
 
   let results: TMDbAnime[] = [];
   let fetchedCount = 0;
@@ -147,8 +144,9 @@ export default async function GenrePage({
         <BrowseFilterForm
           action={`/browse/genre/${genreId}`}
           filter={filter}
-          fetchedCount={fetchedCount}
-          shownCount={results.length}
+          // 取得に失敗したときは「0 件中 0 件」を出さない
+          fetchedCount={error ? undefined : fetchedCount}
+          shownCount={error ? undefined : results.length}
         />
 
         {/* エラー */}

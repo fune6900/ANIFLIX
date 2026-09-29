@@ -20,10 +20,27 @@ import { ANIME_GENRES } from "@/lib/genres";
 
 const getAnimeWatchProviders = vi.fn();
 const getMovieWatchProviders = vi.fn();
+const getAnimeKeywordIds = vi.fn();
+const getMovieKeywordIds = vi.fn();
+/** キーワード名 → ID。isekai=1001, sports 系=3001〜, mecha=2001 */
+const KEYWORD_IDS: Record<string, number> = {
+  isekai: 1001,
+  sports: 3001,
+  sport: 3002,
+  baseball: 3003,
+  basketball: 3004,
+  volleyball: 3005,
+  soccer: 3006,
+  mecha: 2001,
+};
+const resolveKeywordId = vi.fn(async (q: string) => KEYWORD_IDS[q] ?? null);
 
 vi.mock("@/lib/tmdb", () => ({
   getAnimeWatchProviders: (id: number) => getAnimeWatchProviders(id),
   getMovieWatchProviders: (id: number) => getMovieWatchProviders(id),
+  getAnimeKeywordIds: (id: number) => getAnimeKeywordIds(id),
+  getMovieKeywordIds: (id: number) => getMovieKeywordIds(id),
+  resolveKeywordId: (q: string) => resolveKeywordId(q),
 }));
 
 const {
@@ -86,17 +103,16 @@ function providersWith(...names: string[]): TMDbWatchProvidersResponse {
 afterEach(() => {
   getAnimeWatchProviders.mockReset();
   getMovieWatchProviders.mockReset();
+  getAnimeKeywordIds.mockReset();
+  getMovieKeywordIds.mockReset();
+  resolveKeywordId.mockClear();
 });
 
 describe("FILTER_GENRES", () => {
-  it("一覧データの genre_ids で判定できる TMDb ジャンルだけを選択肢にする", () => {
-    // キーワード由来のジャンル（9001〜）は一覧レスポンスに現れず、追加リクエスト無しに判定できない
-    expect(FILTER_GENRES.length).toBeGreaterThan(0);
-    expect(FILTER_GENRES.every((g) => g.filterType === "genre")).toBe(true);
-    const keywordIds = ANIME_GENRES.filter((g) => g.filterType === "keyword").map(
-      (g) => g.id,
+  it("選択肢は ANIME_GENRES の全ジャンル（キーワード由来も含む）", () => {
+    expect(FILTER_GENRES.map((g) => g.id)).toEqual(
+      ANIME_GENRES.map((g) => g.id),
     );
-    expect(FILTER_GENRES.some((g) => keywordIds.includes(g.id))).toBe(false);
   });
 });
 
@@ -118,7 +134,6 @@ describe("parseBrowseFilter", () => {
 
   it.each([
     ["存在しないジャンル", "99999"],
-    ["キーワード由来のジャンル", "9001"],
     ["数値でない", "abc"],
     ["小数・前後に余計な文字", "10759abc"],
     ["負数", "-16"],
@@ -134,6 +149,10 @@ describe("parseBrowseFilter", () => {
     ["タグ入り", "netflix<script>"],
   ])("サービス: %s は捨てる", (_label, raw) => {
     expect(parseBrowseFilter({ service: raw }).service).toBeNull();
+  });
+
+  it("キーワード由来のジャンルも受け付ける", () => {
+    expect(parseBrowseFilter({ genre: "9001" }).genreId).toBe(9001);
   });
 
   it("配列（?genre=a&genre=b）は先頭だけを見る", () => {
@@ -299,5 +318,107 @@ describe("filterEntries（シーズン一覧の TV / 映画 / TMDb 未登録）"
     });
 
     expect(out).toEqual([unlisted]);
+  });
+});
+
+describe("キーワード由来のジャンル", () => {
+  // ANIME_GENRES の 9001 = 異世界転生（isekai）、9004 = スポーツ（sports + 追加 5 語）
+  const ISEKAI = 9001;
+  const SPORTS = 9004;
+
+  it("作品ごとのキーワードに、ジャンルのキーワードがあれば残す", async () => {
+    getAnimeKeywordIds.mockImplementation(async (id: number) =>
+      id === 1 ? [1001] : id === 2 ? [5, 1001] : [2001],
+    );
+
+    const out = await filterAnime([anime(1), anime(2), anime(3)], {
+      genreId: ISEKAI,
+      service: null,
+    });
+
+    expect(out.map((a) => a.id)).toEqual([1, 2]);
+  });
+
+  it("追加キーワードのどれか 1 つでも一致すれば残す（OR）", async () => {
+    getAnimeKeywordIds.mockImplementation(async (id: number) =>
+      id === 1 ? [3005] : [1001],
+    );
+
+    const out = await filterAnime([anime(1), anime(2)], {
+      genreId: SPORTS,
+      service: null,
+    });
+
+    expect(out.map((a) => a.id)).toEqual([1]);
+    // キーワード名の解決はジャンルの語数ぶんだけ（作品数ぶん繰り返さない）
+    expect(resolveKeywordId).toHaveBeenCalledTimes(6);
+  });
+
+  it("キーワードが取れなかった作品は出さない（ページは落とさない）", async () => {
+    getAnimeKeywordIds.mockImplementation(async (id: number) => {
+      if (id === 1) throw new Error("TMDb down");
+      return [1001];
+    });
+
+    const out = await filterAnime([anime(1), anime(2)], {
+      genreId: ISEKAI,
+      service: null,
+    });
+
+    expect(out.map((a) => a.id)).toEqual([2]);
+  });
+
+  it("映画は映画のキーワードを引く", async () => {
+    getMovieKeywordIds.mockResolvedValue([1001]);
+
+    const out = await filterEntries([{ kind: "movie", movie: movie(7) }], {
+      genreId: ISEKAI,
+      service: null,
+    });
+
+    expect(out).toHaveLength(1);
+    expect(getMovieKeywordIds).toHaveBeenCalledWith(7);
+  });
+
+  it("ジャンルで落ちた作品の配信情報は引かない", async () => {
+    getAnimeKeywordIds.mockImplementation(async (id: number) =>
+      id === 1 ? [1001] : [],
+    );
+    getAnimeWatchProviders.mockResolvedValue(providersWith("Netflix"));
+
+    const out = await filterAnime([anime(1), anime(2)], {
+      genreId: ISEKAI,
+      service: "netflix",
+    });
+
+    expect(out.map((a) => a.id)).toEqual([1]);
+    expect(getAnimeWatchProviders.mock.calls.map((c) => c[0])).toEqual([1]);
+  });
+});
+
+describe("映画のジャンル（TV 専用 ID の読み替え）", () => {
+  it.each([
+    ["アクション・冒険", 10759, [28]],
+    ["アクション・冒険", 10759, [12]],
+    ["SF・ファンタジー", 10765, [878]],
+    ["SF・ファンタジー", 10765, [14]],
+    ["戦争・政治", 10768, [10752]],
+    ["コメディ", 35, [35]],
+  ])("%s（%i）は映画の %j を拾う", async (_name, genreId, movieGenres) => {
+    const out = await filterEntries(
+      [{ kind: "movie", movie: movie(1, [16, ...movieGenres]) }],
+      { genreId, service: null },
+    );
+
+    expect(out).toHaveLength(1);
+  });
+
+  it("対応しないジャンルの映画は落とす", async () => {
+    const out = await filterEntries(
+      [{ kind: "movie", movie: movie(1, [16, 35]) }],
+      { genreId: 10759, service: null },
+    );
+
+    expect(out).toEqual([]);
   });
 });

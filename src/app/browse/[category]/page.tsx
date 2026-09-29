@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { parsePageParam } from "@/lib/tmdb";
-import { detectDevice, itemsPerPage } from "@/lib/device";
+import { requestItemsPerPage } from "@/lib/request-device";
 import {
   browseCategoryTitle,
   isBrowseCategory,
@@ -41,9 +40,7 @@ export default async function BrowsePage({
   let currentPage = parsePageParam(sp.page);
   const filter = parseBrowseFilter(sp);
 
-  const ua = (await headers()).get("user-agent") ?? "";
-  const device = detectDevice(ua);
-  const limit = itemsPerPage(device);
+  const limit = await requestItemsPerPage();
 
   let results: TMDbAnime[] = [];
   let fetchedCount = 0;
@@ -111,8 +108,9 @@ export default async function BrowsePage({
         <BrowseFilterForm
           action={`/browse/${category}`}
           filter={filter}
-          fetchedCount={fetchedCount}
-          shownCount={results.length}
+          // 取得に失敗したときは「0 件中 0 件」を出さない
+          fetchedCount={error ? undefined : fetchedCount}
+          shownCount={error ? undefined : results.length}
         />
 
         {!error && results.length === 0 && isFilterActive(filter) && fetchedCount > 0 && (

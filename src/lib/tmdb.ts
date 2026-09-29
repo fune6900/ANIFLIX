@@ -13,6 +13,8 @@ import type {
   TMDbTVDetail,
   TMDbVideo,
   TMDbWatchProvidersResponse,
+  TMDbTVKeywordsResponse,
+  TMDbMovieKeywordsResponse,
 } from "@/types/tmdb";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
@@ -767,6 +769,26 @@ export async function getAnimeWatchProviders(
     {},
     86400,
   );
+}
+
+/** 作品のキーワード ID（一覧フィルターのキーワード由来ジャンル用。ほぼ不変なので 24 時間キャッシュ） */
+export async function getAnimeKeywordIds(animeId: number): Promise<number[]> {
+  const data = await fetchTMDb<TMDbTVKeywordsResponse>(
+    `/tv/${animeId}/keywords`,
+    {},
+    86400,
+  );
+  return (data.results ?? []).map((k) => k.id);
+}
+
+/** 映画のキーワード ID。映画はレスポンスのキーが `keywords`（TV は `results`） */
+export async function getMovieKeywordIds(movieId: number): Promise<number[]> {
+  const data = await fetchTMDb<TMDbMovieKeywordsResponse>(
+    `/movie/${movieId}/keywords`,
+    {},
+    86400,
+  );
+  return (data.keywords ?? []).map((k) => k.id);
 }
 
 /** 映画の配信プラットフォーム情報を取得（24時間キャッシュ） */

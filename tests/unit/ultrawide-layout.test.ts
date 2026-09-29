@@ -201,3 +201,21 @@ describe("グリッドの列数", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("フォームのフィールド", () => {
+  it("グリッドに auto-fit を使わない（auto-fill を使う）", () => {
+    // auto-fit は空トラックを畳んで残りを引き伸ばすため、3440px で <select> が 1000px を超える。
+    // auto-fill なら 1920px 時点のフィールド幅のまま残りは背景になる（conventions.md）
+    const offenders: string[] = [];
+
+    for (const file of TSX_FILES) {
+      for (const classes of classStrings(file.source)) {
+        if (classes.includes("repeat(auto-fit,")) {
+          offenders.push(`${file.path}: ${classes.slice(0, 80)}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

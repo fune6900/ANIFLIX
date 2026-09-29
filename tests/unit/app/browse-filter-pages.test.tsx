@@ -5,8 +5,10 @@ import type { TMDbAnime, TMDbWatchProvidersResponse } from "@/types/tmdb";
 /**
  * 一覧ページへのフィルターの組み込み（#77）。
  *
- * 代表としてスタジオ（ページ送りあり）と放送中（全件 1 ページ）を描画して確かめる。
- * `@/lib/tmdb` / `@/lib/seasonal-anime` は自前の lib なのでモックしてよい。
+ * 6 ファイル（popular / trending / new は [category] の 1 ファイル）を描画し、
+ * 絞り込みとリンクへの引き継ぎを確かめる。
+ * `@/lib/tmdb` / `@/lib/seasonal-anime` / `@/lib/request-device` は自前の lib なのでモックしてよい
+ * （request-device は next/headers を読むだけの薄い層）。
  */
 
 function anime(id: number, genreIds: number[]): TMDbAnime {
@@ -59,10 +61,31 @@ const getAnimeWatchProviders = vi.fn(async (id: number) =>
   providers(id % 2 === 0 ? "Netflix" : "Hulu"),
 );
 
+/** 一覧系の取得関数はどれも同じ 6 件・全 5 ページを返す */
+function listPage() {
+  return Promise.resolve({
+    page: 2,
+    total_pages: 5,
+    total_results: 100,
+    results: WORKS,
+  });
+}
+let listFails = false;
+const failableList = () =>
+  listFails ? Promise.reject(new Error("TMDb down")) : listPage();
+
 vi.mock("@/lib/tmdb", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tmdb")>()),
   getAnimeByStudio: () => getAnimeByStudio(),
   getAnimeWatchProviders: (id: number) => getAnimeWatchProviders(id),
+  getAnimeByEra: () => failableList(),
+  getAnimeByGenre: () => failableList(),
+  getPopularAnime: () => failableList(),
+  searchTVByPage: () => listPage(),
+}));
+
+vi.mock("@/lib/request-device", () => ({
+  requestItemsPerPage: async () => 20,
 }));
 
 vi.mock("@/lib/seasonal-anime", () => ({
@@ -74,6 +97,16 @@ vi.mock("@/lib/seasonal-anime", () => ({
 
 const { default: StudioPage } = await import("@/app/browse/studio/[id]/page");
 const { default: AiringPage } = await import("@/app/browse/airing/page");
+const { default: EraPage } = await import("@/app/browse/era/[decade]/page");
+const { default: SeasonPage } = await import(
+  "@/app/browse/season/[year]/[season]/page"
+);
+const { default: GenrePage } = await import(
+  "@/app/browse/genre/[genreId]/page"
+);
+const { default: CategoryPage } = await import(
+  "@/app/browse/[category]/page"
+);
 const { ANIME_STUDIOS } = await import("@/lib/studios");
 
 const STUDIO_ID = ANIME_STUDIOS[0].id;
@@ -81,7 +114,22 @@ const STUDIO_ID = ANIME_STUDIOS[0].id;
 afterEach(() => {
   cleanup();
   getAnimeWatchProviders.mockClear();
+  listFails = false;
 });
+
+const FILTER = { genre: "35", service: "netflix" };
+
+/** href が prefix で始まるリンク（フィルターを外すのが役目の「絞り込みを解除」は除く） */
+function linksStartingWith(prefix: string): string[] {
+  return [...document.querySelectorAll<HTMLAnchorElement>("a[href]")]
+    .filter((a) => a.textContent !== "絞り込みを解除")
+    .map((a) => a.getAttribute("href") ?? "")
+    .filter((h) => h.startsWith(prefix));
+}
+
+function keepsFilter(href: string): boolean {
+  return href.includes("genre=35") && href.includes("service=netflix");
+}
 
 function shownAnimeIds(): number[] {
   return [...document.querySelectorAll<HTMLAnchorElement>('a[href^="/anime/"]')]
@@ -163,3 +211,119 @@ describe("放送中ページ", () => {
     expect(shownAnimeIds()).toEqual([2, 4, 6]);
   });
 });
+
+describe("年代ページ", () => {
+  async function renderEra(sp: Record<string, string>) {
+    render(
+      await EraPage({
+        params: Promise.resolve({ decade: "2020" }),
+        searchParams: Promise.resolve(sp),
+      }),
+    );
+  }
+
+  it("絞り込み、ページ送り・並び替えのリンクにフィルターを引き継ぐ", async () => {
+    await renderEra({ ...FILTER, sort: "date", page: "2" });
+
+    expect(shownAnimeIds()).toEqual([2]);
+    const pageLinks = linksStartingWith("/browse/era/2020?sort=date&page=");
+    expect(pageLinks.length).toBeGreaterThan(0);
+    expect(pageLinks.every(keepsFilter)).toBe(true);
+    const sortLinks = linksStartingWith("/browse/era/2020?sort=popular");
+    expect(sortLinks.length).toBeGreaterThan(0);
+    expect(sortLinks.every(keepsFilter)).toBe(true);
+  });
+
+  it("フィルターのフォームは並び順を hidden で引き継ぐ", async () => {
+    await renderEra({ ...FILTER, sort: "date" });
+
+    const form = screen.getByRole("search");
+    const sort = form.querySelector<HTMLInputElement>('input[name="sort"]');
+    expect(sort?.value).toBe("date");
+  });
+
+  it("タイトル検索の「クリア」でジャンル・配信の絞り込みを外さない", async () => {
+    await renderEra({ ...FILTER, q: "作品" });
+
+    const clear = screen.getByRole("link", { name: "クリア" });
+    expect(keepsFilter(clear.getAttribute("href") ?? "")).toBe(true);
+  });
+
+  it("タイトル検索フォームもジャンル・配信を hidden で送る", async () => {
+    await renderEra({ ...FILTER, q: "作品" });
+
+    const q = document.querySelector<HTMLInputElement>('input[name="q"]');
+    const form = q?.closest("form");
+    expect(form?.querySelector<HTMLInputElement>('input[name="genre"]')?.value).toBe(
+      "35",
+    );
+    expect(
+      form?.querySelector<HTMLInputElement>('input[name="service"]')?.value,
+    ).toBe("netflix");
+  });
+});
+
+describe("シーズンページ", () => {
+  it("絞り込み、シーズン移動のリンクにフィルターを引き継ぐ", async () => {
+    render(
+      await SeasonPage({
+        params: Promise.resolve({ year: "2026", season: "summer" }),
+        searchParams: Promise.resolve(FILTER),
+      }),
+    );
+
+    expect(shownAnimeIds()).toEqual([2]);
+    expect(screen.getByRole("search").getAttribute("action")).toBe(
+      "/browse/season/2026/summer",
+    );
+    const nav = linksStartingWith("/browse/season/");
+    expect(nav.length).toBeGreaterThan(0);
+    expect(nav.every(keepsFilter)).toBe(true);
+  });
+});
+
+describe("ジャンルページ", () => {
+  it("絞り込み、ページ送りのリンクにフィルターを引き継ぐ", async () => {
+    render(
+      await GenrePage({
+        params: Promise.resolve({ genreId: "10759" }),
+        searchParams: Promise.resolve({ ...FILTER, page: "2" }),
+      }),
+    );
+
+    expect(shownAnimeIds()).toEqual([2]);
+    const pageLinks = linksStartingWith("/browse/genre/10759?page=");
+    expect(pageLinks.length).toBeGreaterThan(0);
+    expect(pageLinks.every(keepsFilter)).toBe(true);
+  });
+});
+
+describe("カテゴリページ（人気）", () => {
+  async function renderPopular(sp: Record<string, string>) {
+    render(
+      await CategoryPage({
+        params: Promise.resolve({ category: "popular" }),
+        searchParams: Promise.resolve(sp),
+      }),
+    );
+  }
+
+  it("絞り込み、ページ送りのリンクにフィルターを引き継ぐ", async () => {
+    await renderPopular({ ...FILTER, page: "2" });
+
+    expect(shownAnimeIds()).toEqual([2]);
+    const pageLinks = linksStartingWith("/browse/popular?page=");
+    expect(pageLinks.length).toBeGreaterThan(0);
+    expect(pageLinks.every(keepsFilter)).toBe(true);
+  });
+
+  it("取得に失敗したときは件数（0 件中 0 件）を出さない", async () => {
+    listFails = true;
+
+    await renderPopular(FILTER);
+
+    expect(screen.getByText("データの取得に失敗しました")).toBeInTheDocument();
+    expect(screen.queryByText(/件中/)).not.toBeInTheDocument();
+  });
+});
+

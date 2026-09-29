@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import {
   getAnimeByEra,
   getImageUrl,
@@ -10,7 +9,7 @@ import {
   searchTVByPage,
 } from "@/lib/tmdb";
 import { ANIME_ERAS, findEra } from "@/lib/eras";
-import { detectDevice, itemsPerPage } from "@/lib/device";
+import { requestItemsPerPage } from "@/lib/request-device";
 import type { TMDbAnime } from "@/types/tmdb";
 import BrowseFilterForm from "@/components/BrowseFilterForm";
 import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
@@ -127,9 +126,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   const query = (sp.q ?? "").trim();
   const filter = parseBrowseFilter(sp);
 
-  const ua = (await headers()).get("user-agent") ?? "";
-  const device = detectDevice(ua);
-  const limit = itemsPerPage(device);
+  const limit = await requestItemsPerPage();
 
   let results: TMDbAnime[] = [];
   let fetchedCount = 0;
@@ -300,7 +297,8 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           {/* 検索中のとき: クリアリンク */}
           {isSearchMode && (
             <Link
-              href={`/browse/era/${decade}?sort=${sortLabel}`}
+              // タイトル検索だけを外し、ジャンル・配信の絞り込みは残す
+              href={withFilter(`/browse/era/${decade}?sort=${sortLabel}`, filter)}
               className="text-gray-400 hover:text-white text-xs underline flex-shrink-0 transition"
             >
               クリア
@@ -350,8 +348,9 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           action={`/browse/era/${decade}`}
           filter={filter}
           preserve={{ sort: sortLabel, ...(query ? { q: query } : {}) }}
-          fetchedCount={fetchedCount}
-          shownCount={results.length}
+          // 取得に失敗したときは「0 件中 0 件」を出さない
+          fetchedCount={error ? undefined : fetchedCount}
+          shownCount={error ? undefined : results.length}
         />
 
         {/* エラー */}
@@ -375,7 +374,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
                   「{query}」に一致する{era.label}の作品が見つかりませんでした
                 </p>
                 <Link
-                  href={`/browse/era/${decade}?sort=${sortLabel}`}
+                  href={withFilter(`/browse/era/${decade}?sort=${sortLabel}`, filter)}
                   className="text-[#54b9c5] text-sm mt-3 inline-block hover:underline"
                 >
                   検索をクリアして全作品を表示

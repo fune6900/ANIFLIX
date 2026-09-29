@@ -1,6 +1,12 @@
 // 一覧ページ（「すべて見る」の飛び先）の共通フィルター
 
-import { getAnimeWatchProviders, getMovieWatchProviders } from "@/lib/tmdb";
+import {
+  getAnimeKeywordIds,
+  getAnimeWatchProviders,
+  getMovieKeywordIds,
+  getMovieWatchProviders,
+  resolveKeywordId,
+} from "@/lib/tmdb";
 import { ANIME_GENRES } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { findStreamingService, streamingServicesIn } from "@/lib/providers";
@@ -12,16 +18,25 @@ import type {
 } from "@/types/tmdb";
 
 /**
- * 選べるジャンル。一覧レスポンスの genre_ids で判定できる TMDb ジャンルだけ。
- * キーワード由来のジャンル（9001〜）は一覧レスポンスに現れず、
- * 作品ごとに追加リクエストしないと判定できないため選択肢に出さない
+ * 選べるジャンル（ANIME_GENRES の全ジャンル）。
+ * - TMDb ジャンル: 一覧レスポンスの genre_ids で判定する（追加リクエスト無し）
+ * - キーワード由来: 一覧レスポンスに現れないため、作品ごとのキーワード（24h キャッシュ）で判定する
  */
-export const FILTER_GENRES: readonly AnimeGenre[] = ANIME_GENRES.filter(
-  (g) => g.filterType === "genre",
-);
+export const FILTER_GENRES: readonly AnimeGenre[] = ANIME_GENRES;
 
-/** 配信情報を同時に引く上限（シーズン一覧は 1 ページで 100 件を超える） */
-const PROVIDER_CONCURRENCY = 10;
+/**
+ * TV 専用のジャンル ID を映画のジャンル ID に読み替える。
+ * シーズン一覧に混ざる劇場版は TV 用の ID（10759 等）を持たない
+ */
+const TV_TO_MOVIE_GENRES: Readonly<Record<number, readonly number[]>> = {
+  10759: [28, 12], // アクション・冒険 → アクション / アドベンチャー
+  10765: [878, 14], // SF・ファンタジー → SF / ファンタジー
+  10768: [10752], // 戦争・政治 → 戦争
+  10762: [10751], // キッズ → ファミリー（映画にキッズは無い）
+};
+
+/** 作品ごとの追加取得（配信情報・キーワード）を同時に引く上限（シーズン一覧は 100 件を超える） */
+const LOOKUP_CONCURRENCY = 10;
 
 export interface BrowseFilter {
   genreId: number | null;
@@ -109,9 +124,56 @@ async function isStreamingOn(
   }
 }
 
+/** TMDb ジャンル（genre_ids）で判定する。映画は TV 専用 ID を読み替える */
+function hasTmdbGenre(target: FilterTarget, genreId: number): boolean {
+  if (target.genreIds.includes(genreId)) return true;
+  if (target.kind !== "movie") return false;
+  const movieIds = TV_TO_MOVIE_GENRES[genreId] ?? [];
+  return movieIds.some((id) => target.genreIds.includes(id));
+}
+
+/** キーワード由来ジャンルのキーワード ID（名前の解決はジャンルごとに 1 回だけ） */
+async function genreKeywordIds(genre: AnimeGenre): Promise<Set<number>> {
+  const names = [genre.keyword, ...(genre.extraKeywords ?? [])].filter(
+    (n): n is string => Boolean(n),
+  );
+  const settled = await Promise.allSettled(names.map(resolveKeywordId));
+  const ids = new Set<number>();
+  for (const r of settled) {
+    if (r.status === "fulfilled" && r.value !== null) ids.add(r.value);
+  }
+  return ids;
+}
+
+async function hasKeyword(
+  target: FilterTarget,
+  wanted: Set<number>,
+): Promise<boolean> {
+  try {
+    const ids =
+      target.kind === "movie"
+        ? await getMovieKeywordIds(target.id)
+        : await getAnimeKeywordIds(target.id);
+    return ids.some((id) => wanted.has(id));
+  } catch {
+    // 取れなかった作品は「不明」として出さない（配信情報と同じ扱い）
+    return false;
+  }
+}
+
+/** 非同期の述語で絞る（並び順を保つ、同時 LOOKUP_CONCURRENCY 件まで） */
+async function keepAsync<T>(
+  items: T[],
+  predicate: (item: T) => Promise<boolean>,
+): Promise<T[]> {
+  const keep = await mapLimit(items, LOOKUP_CONCURRENCY, predicate);
+  return items.filter((_, i) => keep[i]);
+}
+
 /**
  * 渡された作品の中だけを絞る。新しく作品を取りに行くことはしない
- * （取得していない作品が条件に合っていても表示しない）
+ * （取得していない作品が条件に合っていても表示しない）。
+ * 安い判定から順に通し、落ちた作品には後段の取得をしない
  */
 async function applyFilter<T>(
   items: T[],
@@ -120,21 +182,28 @@ async function applyFilter<T>(
 ): Promise<T[]> {
   if (!isFilterActive(filter)) return items;
 
-  // ジャンルは一覧データだけで判定できる。先に落として配信情報の取得を減らす
-  const byGenre = items.filter((item) => {
+  // TMDb に無い作品（AniList のみ）はジャンルも配信も判定できない
+  let pool = items.flatMap((item) => {
     const target = toTarget(item);
-    if (!target) return false;
-    return filter.genreId === null || target.genreIds.includes(filter.genreId);
+    return target ? [{ item, target }] : [];
   });
+
+  const genre = ANIME_GENRES.find((g) => g.id === filter.genreId);
+  if (genre?.filterType === "genre") {
+    pool = pool.filter((p) => hasTmdbGenre(p.target, genre.id));
+  } else if (genre?.filterType === "keyword") {
+    const wanted = await genreKeywordIds(genre);
+    pool =
+      wanted.size === 0
+        ? []
+        : await keepAsync(pool, (p) => hasKeyword(p.target, wanted));
+  }
 
   const service = filter.service;
-  if (service === null) return byGenre;
-
-  const keep = await mapLimit(byGenre, PROVIDER_CONCURRENCY, (item) => {
-    const target = toTarget(item);
-    return target ? isStreamingOn(target, service) : Promise.resolve(false);
-  });
-  return byGenre.filter((_, i) => keep[i]);
+  if (service !== null) {
+    pool = await keepAsync(pool, (p) => isStreamingOn(p.target, service));
+  }
+  return pool.map((p) => p.item);
 }
 
 export function filterAnime(

@@ -167,6 +167,23 @@ export interface TMDbWatchProviderCountry {
   free?: TMDbWatchProvider[];
 }
 
+export interface TMDbKeywordRef {
+  id: number;
+  name: string;
+}
+
+/** `/tv/{id}/keywords`（TV は results） */
+export interface TMDbTVKeywordsResponse {
+  id: number;
+  results?: TMDbKeywordRef[];
+}
+
+/** `/movie/{id}/keywords`（映画は keywords） */
+export interface TMDbMovieKeywordsResponse {
+  id: number;
+  keywords?: TMDbKeywordRef[];
+}
+
 export interface TMDbWatchProvidersResponse {
   id: number;
   results: Record<string, TMDbWatchProviderCountry>;
