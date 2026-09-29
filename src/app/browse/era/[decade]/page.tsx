@@ -12,10 +12,24 @@ import {
 import { ANIME_ERAS, findEra } from "@/lib/eras";
 import { detectDevice, itemsPerPage } from "@/lib/device";
 import type { TMDbAnime } from "@/types/tmdb";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterAnime,
+  isFilterActive,
+  parseBrowseFilter,
+  withFilter,
+} from "@/lib/browse-filter";
 
 interface EraPageProps {
   params: Promise<{ decade: string }>;
-  searchParams: Promise<{ page?: string; sort?: string; q?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    sort?: string;
+    q?: string;
+    genre?: string | string[];
+    service?: string | string[];
+  }>;
 }
 
 function AnimeGridCard({ anime }: { anime: TMDbAnime }) {
@@ -111,12 +125,14 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   const sort = sp.sort === "date" ? "first_air_date.asc" : "popularity.desc";
   const sortLabel = sort === "first_air_date.asc" ? "date" : "popular";
   const query = (sp.q ?? "").trim();
+  const filter = parseBrowseFilter(sp);
 
   const ua = (await headers()).get("user-agent") ?? "";
   const device = detectDevice(ua);
   const limit = itemsPerPage(device);
 
   let results: TMDbAnime[] = [];
+  let fetchedCount = 0;
   let totalPages = 1;
   let totalResults = 0;
   let error: string | null = null;
@@ -151,6 +167,10 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   } catch {
     error = "データの取得に失敗しました";
   }
+
+  // 取得済みの作品の中だけを絞る
+  fetchedCount = results.length;
+  results = await filterAnime(results, filter);
 
   const prevPage = currentPage > 1 ? currentPage - 1 : null;
   const nextPage = currentPage < totalPages ? currentPage + 1 : null;
@@ -269,6 +289,14 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
             検索
           </button>
 
+          {/* タイトル検索でもジャンル・配信の絞り込みを外さない */}
+          {filter.genreId !== null && (
+            <input type="hidden" name="genre" value={String(filter.genreId)} />
+          )}
+          {filter.service !== null && (
+            <input type="hidden" name="service" value={filter.service} />
+          )}
+
           {/* 検索中のとき: クリアリンク */}
           {isSearchMode && (
             <Link
@@ -296,7 +324,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           <div className="flex items-center gap-3 mb-6 mt-2">
             <span className="text-gray-500 text-sm">並び替え:</span>
             <Link
-              href={`/browse/era/${decade}?sort=popular&page=1`}
+              href={withFilter(`/browse/era/${decade}?sort=popular&page=1`, filter)}
               className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
                 sortLabel === "popular"
                   ? "bg-white text-black"
@@ -306,7 +334,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
               人気順
             </Link>
             <Link
-              href={`/browse/era/${decade}?sort=date&page=1`}
+              href={withFilter(`/browse/era/${decade}?sort=date&page=1`, filter)}
               className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
                 sortLabel === "date"
                   ? "bg-white text-black"
@@ -318,6 +346,14 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           </div>
         )}
 
+        <BrowseFilterForm
+          action={`/browse/era/${decade}`}
+          filter={filter}
+          preserve={{ sort: sortLabel, ...(query ? { q: query } : {}) }}
+          fetchedCount={fetchedCount}
+          shownCount={results.length}
+        />
+
         {/* エラー */}
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
@@ -325,8 +361,13 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           </div>
         )}
 
+        {/* 絞り込んだ結果が無い */}
+        {!error && results.length === 0 && isFilterActive(filter) && fetchedCount > 0 && (
+          <BrowseFilterEmpty />
+        )}
+
         {/* 結果なし */}
-        {!error && results.length === 0 && (
+        {!error && results.length === 0 && fetchedCount === 0 && (
           <div className="text-center py-24">
             {isSearchMode ? (
               <>
@@ -370,7 +411,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
           <div className="flex items-center justify-center gap-4 mt-12">
             {prevPage ? (
               <Link
-                href={`${pageBase}&page=${prevPage}`}
+                href={withFilter(`${pageBase}&page=${prevPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 <svg
@@ -411,7 +452,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
             </span>
             {nextPage ? (
               <Link
-                href={`${pageBase}&page=${nextPage}`}
+                href={withFilter(`${pageBase}&page=${nextPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 次のページ

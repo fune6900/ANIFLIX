@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { getImageUrl } from "@/lib/tmdb";
+import { matchesStreamingService } from "@/lib/providers";
 import type { TMDbWatchProvider, TMDbWatchProviderCountry } from "@/types/tmdb";
 
 interface WatchProvidersProps {
@@ -39,6 +40,7 @@ function sanitizeTmdbLink(raw: string | undefined | null): string | null {
 
 /**
  * provider_name → 各サービスの「作品名検索 URL ビルダ」マッピング。
+ * 一覧のフィルターでも選べるサービスの表記ゆれは lib/providers.ts と共有する（判定を食い違わせない）。
  * 完全一致 / 前方一致のいずれかで判定。マッピング外は TMDb 集約ページにフォールバック。
  *
  * 注: TMDb の watch providers API は各サービスの作品詳細直リンクを返さないため、
@@ -49,11 +51,11 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
   build: (title: string) => string;
 }> = [
   {
-    match: (n) => n.startsWith("Netflix"),
+    match: (n) => matchesStreamingService("netflix", n),
     build: (t) => `https://www.netflix.com/search?q=${encodeURIComponent(t)}`,
   },
   {
-    match: (n) => n.startsWith("Amazon Prime Video") || n === "Prime Video",
+    match: (n) => matchesStreamingService("prime-video", n),
     build: (t) =>
       `https://www.amazon.co.jp/s?k=${encodeURIComponent(t)}&i=instant-video`,
   },
@@ -65,17 +67,17 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
       `https://www.amazon.co.jp/s?k=${encodeURIComponent(t)}&i=instant-video`,
   },
   {
-    match: (n) => n.startsWith("Disney"),
+    match: (n) => matchesStreamingService("disney-plus", n),
     build: (t) =>
       `https://www.disneyplus.com/ja-jp/search?q=${encodeURIComponent(t)}`,
   },
   {
-    match: (n) => n === "U-Next" || n === "U-NEXT",
+    match: (n) => matchesStreamingService("u-next", n),
     build: (t) =>
       `https://video.unext.jp/freeword?query=${encodeURIComponent(t)}`,
   },
   {
-    match: (n) => n.startsWith("dAnime") || n.startsWith("d Anime"),
+    match: (n) => matchesStreamingService("d-anime", n),
     build: (t) =>
       `https://anime.dmkt-sp.jp/animestore/sch_pc?searchKey=${encodeURIComponent(t)}&vodTypeList=svod_tvod`,
   },
@@ -85,7 +87,7 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
       `https://fod.fujitv.co.jp/title/?searchWord=${encodeURIComponent(t)}`,
   },
   {
-    match: (n) => n === "Hulu",
+    match: (n) => matchesStreamingService("hulu", n),
     build: (t) => `https://www.hulu.jp/search?q=${encodeURIComponent(t)}`,
   },
   {
@@ -105,7 +107,7 @@ const PROVIDER_SEARCH_BUILDERS: Array<{
       `https://play.google.com/store/search?q=${encodeURIComponent(t)}&c=movies`,
   },
   {
-    match: (n) => n === "ABEMA" || n === "Abema TV",
+    match: (n) => matchesStreamingService("abema", n),
     build: (t) => `https://abema.tv/search?q=${encodeURIComponent(t)}`,
   },
   {

@@ -10,10 +10,22 @@ import {
 } from "@/lib/browse-category";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterAnime,
+  isFilterActive,
+  parseBrowseFilter,
+  withFilter,
+} from "@/lib/browse-filter";
 
 interface BrowsePageProps {
   params: Promise<{ category: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    genre?: string | string[];
+    service?: string | string[];
+  }>;
 }
 
 export default async function BrowsePage({
@@ -27,12 +39,14 @@ export default async function BrowsePage({
 
   const title = browseCategoryTitle(category);
   let currentPage = parsePageParam(sp.page);
+  const filter = parseBrowseFilter(sp);
 
   const ua = (await headers()).get("user-agent") ?? "";
   const device = detectDevice(ua);
   const limit = itemsPerPage(device);
 
   let results: TMDbAnime[] = [];
+  let fetchedCount = 0;
   let totalPages = 1;
   let totalResults = 0;
   let error: string | null = null;
@@ -41,7 +55,9 @@ export default async function BrowsePage({
     // トレンド・新着は 70 件、人気はデバイス別件数（lib/browse-category.ts）
     const data = await loadBrowseCategory(category, currentPage, limit);
     currentPage = data.page;
-    results = data.results;
+    fetchedCount = data.results.length;
+    // 取得済みの作品の中だけを絞る
+    results = await filterAnime(data.results, filter);
     totalPages = data.totalPages;
     totalResults = data.totalResults;
   } catch {
@@ -92,6 +108,17 @@ export default async function BrowsePage({
           </div>
         )}
 
+        <BrowseFilterForm
+          action={`/browse/${category}`}
+          filter={filter}
+          fetchedCount={fetchedCount}
+          shownCount={results.length}
+        />
+
+        {!error && results.length === 0 && isFilterActive(filter) && fetchedCount > 0 && (
+          <BrowseFilterEmpty />
+        )}
+
         {/* グリッド */}
         {results.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
@@ -106,7 +133,7 @@ export default async function BrowsePage({
           <div className="flex items-center justify-center gap-4 mt-12">
             {prevPage ? (
               <Link
-                href={`/browse/${category}?page=${prevPage}`}
+                href={withFilter(`/browse/${category}?page=${prevPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 <svg
@@ -149,7 +176,7 @@ export default async function BrowsePage({
 
             {nextPage ? (
               <Link
-                href={`/browse/${category}?page=${nextPage}`}
+                href={withFilter(`/browse/${category}?page=${nextPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 次のページ

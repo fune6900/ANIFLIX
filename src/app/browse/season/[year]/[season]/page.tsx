@@ -9,13 +9,27 @@ import {
 } from "@/lib/seasons";
 import { entryKey, fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterEntries,
+  isFilterActive,
+  parseBrowseFilter,
+  withFilter,
+} from "@/lib/browse-filter";
+import type { BrowseFilterParams } from "@/lib/browse-filter";
 
 interface SeasonPageProps {
   params: Promise<{ year: string; season: string }>;
+  searchParams: Promise<BrowseFilterParams>;
 }
 
-export default async function SeasonPage({ params }: SeasonPageProps) {
+export default async function SeasonPage({
+  params,
+  searchParams,
+}: SeasonPageProps) {
   const { year: yearStr, season: seasonStr } = await params;
+  const filter = parseBrowseFilter(await searchParams);
 
   const year = parseInt(yearStr, 10);
   if (isNaN(year) || year < 1960 || year > 2030) notFound();
@@ -26,7 +40,9 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
 
   // AniList を季別タイトルリスト源、TMDb を表示データ源として一括取得
   // 上限は既定（1 シーズン分を取り切る）に任せる
-  const { entries } = await fetchSeasonalAnime(year, seasonSlug);
+  const { entries: fetched } = await fetchSeasonalAnime(year, seasonSlug);
+  // 取得済みの作品の中だけを絞る
+  const entries = await filterEntries(fetched, filter);
 
   const totalResults = entries.length;
   const recentSeasons = getRecentSeasons(8);
@@ -65,7 +81,8 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
             return (
               <Link
                 key={s.href}
-                href={s.href}
+                // シーズンを移っても絞り込みを外さない
+                href={withFilter(s.href, filter)}
                 className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition ${
                   isCurrentSeason
                     ? "bg-white text-black"
@@ -79,12 +96,21 @@ export default async function SeasonPage({ params }: SeasonPageProps) {
           })}
         </div>
 
+        <BrowseFilterForm
+          action={currentSeason.href}
+          filter={filter}
+          fetchedCount={fetched.length}
+          shownCount={entries.length}
+        />
+
         {entries.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {entries.map((entry) => (
               <SeasonAnimeCard key={entryKey(entry)} entry={entry} />
             ))}
           </div>
+        ) : isFilterActive(filter) && fetched.length > 0 ? (
+          <BrowseFilterEmpty />
         ) : (
           <div className="text-center py-20 text-gray-500">
             このシーズンのアニメが見つかりませんでした

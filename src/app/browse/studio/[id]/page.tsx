@@ -4,24 +4,43 @@ import { getAnimeByStudio, parsePageParam } from "@/lib/tmdb";
 import { ANIME_STUDIOS, findStudio } from "@/lib/studios";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterAnime,
+  isFilterActive,
+  parseBrowseFilter,
+  withFilter,
+} from "@/lib/browse-filter";
+import type { BrowseFilter } from "@/lib/browse-filter";
 
 interface StudioPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    genre?: string | string[];
+    service?: string | string[];
+  }>;
+}
+
+interface PaginationProps {
+  studioId: number;
+  currentPage: number;
+  totalPages: number;
+  filter: BrowseFilter;
 }
 
 function Pagination({
   studioId,
   currentPage,
   totalPages,
-}: {
-  studioId: number;
-  currentPage: number;
-  totalPages: number;
-}) {
+  filter,
+}: PaginationProps) {
   if (totalPages <= 1) return null;
 
-  const pageUrl = (p: number) => `/browse/studio/${studioId}?page=${p}`;
+  // ページを送ってもフィルターを外さない
+  const pageUrl = (p: number) =>
+    withFilter(`/browse/studio/${studioId}?page=${p}`, filter);
 
   const range = 2;
   const pages: number[] = [];
@@ -97,7 +116,9 @@ export default async function StudioPage({
   searchParams,
 }: StudioPageProps) {
   const { id: idStr } = await params;
-  const { page: pageStr } = await searchParams;
+  const sp = await searchParams;
+  const pageStr = sp.page;
+  const filter = parseBrowseFilter(sp);
 
   const studioId = parseInt(idStr, 10);
   if (isNaN(studioId)) notFound();
@@ -108,7 +129,9 @@ export default async function StudioPage({
   const currentPage = parsePageParam(pageStr);
 
   const data = await getAnimeByStudio(studioId, currentPage).catch(() => null);
-  const anime: TMDbAnime[] = data?.results ?? [];
+  const fetched: TMDbAnime[] = data?.results ?? [];
+  // 取得済みの作品の中だけを絞る
+  const anime = await filterAnime(fetched, filter);
   const totalPages = Math.min(data?.total_pages ?? 1, 500);
   const totalResults = data?.total_results ?? 0;
 
@@ -152,12 +175,21 @@ export default async function StudioPage({
           ))}
         </div>
 
+        <BrowseFilterForm
+          action={`/browse/studio/${studioId}`}
+          filter={filter}
+          fetchedCount={fetched.length}
+          shownCount={anime.length}
+        />
+
         {anime.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {anime.map((a) => (
               <SeasonAnimeCard key={a.id} entry={{ kind: "tv", anime: a }} />
             ))}
           </div>
+        ) : isFilterActive(filter) && fetched.length > 0 ? (
+          <BrowseFilterEmpty />
         ) : (
           <div className="text-center py-20 text-gray-500">
             このスタジオの作品が見つかりませんでした
@@ -168,6 +200,7 @@ export default async function StudioPage({
           studioId={studioId}
           currentPage={currentPage}
           totalPages={totalPages}
+          filter={filter}
         />
       </div>
     </div>
