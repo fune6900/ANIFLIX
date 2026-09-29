@@ -1,36 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import {
-  getPopularAnime,
-  getNewAnime,
-  getTrendingAnime,
-  parsePageParam,
-} from "@/lib/tmdb";
+import { parsePageParam } from "@/lib/tmdb";
 import { detectDevice, itemsPerPage } from "@/lib/device";
+import {
+  browseCategoryTitle,
+  isBrowseCategory,
+  loadBrowseCategory,
+} from "@/lib/browse-category";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
-
-const CATEGORY_CONFIG = {
-  popular: {
-    title: "🔥 今期人気アニメ",
-    fetcher: (page: number) => getPopularAnime(page),
-    filter: null,
-  },
-  trending: {
-    title: "📈 今週のトレンド",
-    fetcher: (page: number) => getTrendingAnime(page),
-    filter: (a: TMDbAnime) =>
-      a.genre_ids.includes(16) || a.origin_country.includes("JP"),
-  },
-  new: {
-    title: "🆕 新着アニメ",
-    fetcher: (page: number) => getNewAnime(page),
-    filter: null,
-  },
-} as const;
-
-type Category = keyof typeof CATEGORY_CONFIG;
 
 interface BrowsePageProps {
   params: Promise<{ category: string }>;
@@ -44,10 +23,10 @@ export default async function BrowsePage({
   const { category } = await params;
   const sp = await searchParams;
 
-  if (!(category in CATEGORY_CONFIG)) notFound();
+  if (!isBrowseCategory(category)) notFound();
 
-  const config = CATEGORY_CONFIG[category as Category];
-  const currentPage = parsePageParam(sp.page);
+  const title = browseCategoryTitle(category);
+  let currentPage = parsePageParam(sp.page);
 
   const ua = (await headers()).get("user-agent") ?? "";
   const device = detectDevice(ua);
@@ -59,13 +38,12 @@ export default async function BrowsePage({
   let error: string | null = null;
 
   try {
-    const data = await config.fetcher(currentPage);
-    const filtered = config.filter
-      ? data.results.filter(config.filter)
-      : data.results;
-    results = filtered.slice(0, limit);
-    totalPages = data.total_pages;
-    totalResults = data.total_results;
+    // トレンド・新着は 70 件、人気はデバイス別件数（lib/browse-category.ts）
+    const data = await loadBrowseCategory(category, currentPage, limit);
+    currentPage = data.page;
+    results = data.results;
+    totalPages = data.totalPages;
+    totalResults = data.totalResults;
   } catch {
     error = "データの取得に失敗しました";
   }
@@ -98,7 +76,7 @@ export default async function BrowsePage({
             ホームに戻る
           </Link>
           <h1 className="text-white text-2xl md:text-3xl font-black">
-            {config.title}
+            {title}
           </h1>
           {totalResults > 0 && (
             <p className="text-gray-500 text-sm mt-1">

@@ -359,26 +359,53 @@ export async function getPopularAnime(
   );
 }
 
-// 新着アニメ（直近3ヶ月）
+/** 新着 = 直近この日数（今日を含む）にエピソードが放送された作品 */
+const NEW_ANIME_WINDOW_DAYS = 7;
+
+/**
+ * 新着のキャッシュ秒数。期間の日付が URL に入るため日付が変われば別エントリになり、
+ * 1 日の中では同じ結果でよい（日替わり）
+ */
+const NEW_ANIME_CACHE_TIME = 86400;
+
+/** 日本時間（UTC+9）で見た日付を YYYY-MM-DD で返す */
+function jstDateString(date: Date): string {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
+}
+
+/**
+ * 今日（日本時間）を含む直近 days 日の期間。
+ * アニメは日本時間で放送されるため、UTC で数えると 0〜9 時に 1 日ずれる
+ */
+function recentAirWindowJst(days: number): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+  return { from: jstDateString(from), to: jstDateString(now) };
+}
+
+// 新着アニメ（直近 7 日にエピソードが放送された作品）
 export async function getNewAnime(
   page = 1,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const now = new Date();
-  const threeMonthsAgo = new Date(now);
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const { from, to } = recentAirWindowJst(NEW_ANIME_WINDOW_DAYS);
 
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/discover/tv",
     {
       with_genres: String(ANIMATION_GENRE_ID),
       with_origin_country: "JP",
-      sort_by: "first_air_date.desc",
-      "first_air_date.lte": now.toISOString().split("T")[0],
-      "first_air_date.gte": threeMonthsAgo.toISOString().split("T")[0],
-      "vote_count.gte": "5",
+      sort_by: "popularity.desc",
+      // air_date はエピソードの放送日。放送開始日（first_air_date）で絞ると
+      // 継続中の作品が新しい話を出しても新着に入らない
+      "air_date.gte": from,
+      "air_date.lte": to,
+      // air_date をどのタイムゾーンで解釈するか。窓の日付は日本時間で作っているので揃える
+      timezone: "Asia/Tokyo",
       page: String(page),
     },
-    DISCOVER_CACHE_TIME,
+    NEW_ANIME_CACHE_TIME,
   );
 }
 
@@ -389,33 +416,6 @@ export async function getTrendingAnime(
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/trending/tv/week",
     { page: String(page) },
-    DISCOVER_CACHE_TIME,
-  );
-}
-
-/**
- * 日本国内の旬なトレンドアニメを取得する。
- * TMDb の /trending はワールドワイドで日本作品が少ないため、
- * 直近 6ヶ月以内に放送開始した日本アニメを人気度順で取得することで
- * 「日本国内のトレンド」として代用する。
- */
-export async function getJapaneseTrendingAnime(
-  page = 1,
-): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const now = new Date();
-  const sixMonthsAgo = new Date(now);
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
-    "/discover/tv",
-    {
-      with_genres: String(ANIMATION_GENRE_ID),
-      with_origin_country: "JP",
-      sort_by: "popularity.desc",
-      "first_air_date.gte": sixMonthsAgo.toISOString().split("T")[0],
-      "first_air_date.lte": now.toISOString().split("T")[0],
-      "vote_count.gte": "10",
-      page: String(page),
-    },
     DISCOVER_CACHE_TIME,
   );
 }

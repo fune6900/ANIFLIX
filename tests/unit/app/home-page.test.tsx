@@ -49,7 +49,8 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
   return {
     ...actual,
     getNewAnime: () => Promise.resolve(page(1000)),
-    getJapaneseTrendingAnime: () => Promise.resolve(page(2000)),
+    // 週間トレンド（世界の TV）。「今週のトレンド」行は /browse/trending と同じくここから取る
+    getTrendingAnime: (p: number) => Promise.resolve(page(3000 + p * 100)),
     getAnimeVideos: () => Promise.resolve([]),
     getAnimeByGenre: (_id: number, p: number) => Promise.resolve(page(p * 100)),
     getAnimeByKeywords: (_k: string[], p: number) =>
@@ -221,6 +222,29 @@ describe("ホーム: 探すセクション", () => {
     expect(countLinks(heading?.parentElement ?? null, "/voice-actors/")).toBe(
       20,
     );
+  });
+});
+
+describe("ホーム: 今週のトレンド", () => {
+  beforeAll(async () => {
+    const { container } = render(await Home());
+    homeDom = container.cloneNode(true) as HTMLElement; // cloneNode の戻り値は Node 型
+    cleanup();
+  }, RENDER_TIMEOUT_MS);
+
+  it("「すべて見る」の一覧（/browse/trending）と同じ週間トレンドから並べる", () => {
+    // 行と一覧で取得元が違うと、行で見た作品が一覧に無い
+    const heading = [...homeDom.querySelectorAll("h2")].find((h) =>
+      /今週のトレンド/.test(h.textContent ?? ""),
+    );
+    const ids = links(heading?.parentElement ?? homeDom)
+      .map((a) => a.getAttribute("href") ?? "")
+      .filter((h) => h.startsWith("/anime/"))
+      .map((h) => Number(h.split("/")[2]));
+
+    expect(ids.length).toBeGreaterThan(0);
+    // 週間トレンドのモックは 3100 番台以降の id を返す
+    expect(ids.every((id) => id >= 3100)).toBe(true);
   });
 });
 

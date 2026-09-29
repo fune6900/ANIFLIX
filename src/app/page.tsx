@@ -5,7 +5,6 @@ import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
 import {
   getNewAnime,
-  getJapaneseTrendingAnime,
   getAnimeVideos,
 } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
@@ -14,6 +13,7 @@ import {
   type AggregatedCast,
 } from "@/lib/seasonal-cast";
 import { ANIME_GENRES } from "@/lib/genres";
+import { WIDE_PAGE_SIZE, loadBrowseCategory } from "@/lib/browse-category";
 import { ANIME_ERAS } from "@/lib/eras";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
 import {
@@ -23,7 +23,6 @@ import {
   fetchGenreRow,
   fetchSeasonRows,
   pickHomeEras,
-  randomPage,
   shuffle,
 } from "@/lib/home-rows";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -110,7 +109,7 @@ export default async function Home() {
   const rowEras = pickHomeEras();
 
   // 既存4列 + 全ジャンル を並列フェッチ
-  // トレンドはフィルタ後に20件確保するため2ページ同時取得
+  // トレンドは /browse/trending と同じ週間トレンド（先頭 20 ページを見て日本のアニメに絞る）
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
   // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
   // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
@@ -125,15 +124,17 @@ export default async function Home() {
   const [
     currentSeasonResult,
     newData,
-    trendingData1,
-    trendingData2,
+    trendingData,
     eraRows,
     genreRows,
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
-    getNewAnime(randomPage(3)),
-    getJapaneseTrendingAnime(1),
-    getJapaneseTrendingAnime(2),
+    // 新着（直近 7 日の放送）は時期によって数十件しか無く、2 ページ目以降が空になりうる。
+    // 1 ページ目を取り、下で shuffle して並びに変化を出す
+    getNewAnime(1),
+    // 「すべて見る」の一覧（/browse/trending）と同じ週間トレンド由来。
+    // 行と一覧で取得元が違うと、行で見た作品が一覧に無い。20 ページ分の TMDb キャッシュは一覧と共有
+    loadBrowseCategory("trending", 1, WIDE_PAGE_SIZE),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
@@ -187,22 +188,11 @@ export default async function Home() {
       ? shuffle(newData.value.results).slice(0, 20).map(toCardItem)
       : [];
 
-  // 2ページ分を合算してフィルタ → シャッフル → 20件
-  // 「日本国内のトレンド」要件: 日本 origin の作品のみを採用する
-  // （TMDb の /trending はワールドワイドのトレンドだが、ここでは日本作品のみ通す）
-  const trendingPool = [
-    ...(trendingData1.status === "fulfilled"
-      ? trendingData1.value.results
-      : []),
-    ...(trendingData2.status === "fulfilled"
-      ? trendingData2.value.results
-      : []),
-  ];
-  const trendingAnime = shuffle(
-    trendingPool.filter((a) => a.origin_country?.includes("JP")),
-  )
-    .slice(0, 20)
-    .map(toCardItem);
+  // 週間トレンドの日本のアニメ（先頭 70 件）から 20 件
+  const trendingAnime =
+    trendingData.status === "fulfilled"
+      ? shuffle(trendingData.value.results).slice(0, 20).map(toCardItem)
+      : [];
 
   const voiceActors: ContentRowItem[] = aggregatedCast
     .slice(0, 20)
