@@ -15,6 +15,13 @@ const SITEVERIFY_URL =
 
 const SECRET = "test-secret-key";
 
+/** 本番のウィジェット（action: "login"）を本番のドメインで解いた応答 */
+const VALID = {
+  success: true,
+  action: "login",
+  hostname: "aniflix.example",
+};
+
 type FetchFn = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -48,7 +55,7 @@ beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  stubFetch({ success: true });
+  stubFetch(VALID);
 });
 
 afterEach(() => {
@@ -173,7 +180,7 @@ describe("verifyTurnstileToken", () => {
 
   describe("siteverify の結果", () => {
     it("success: true なら通す", async () => {
-      stubFetch({ success: true });
+      stubFetch(VALID);
       const { verifyTurnstileToken } = await loadTurnstile();
 
       expect(await verifyTurnstileToken("token-abc")).toEqual({
@@ -253,6 +260,168 @@ describe("verifyTurnstileToken", () => {
       const logged = errorSpy.mock.calls.flat().map(String).join(" ");
       expect(logged).not.toContain(SECRET);
       expect(logged).not.toContain("super-secret-token");
+    });
+  });
+
+  describe("action の照合", () => {
+    it("action が login でなければ action-mismatch で弾く（開発環境でも）", async () => {
+      stubFetch({ ...VALID, action: "signup" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "action-mismatch",
+      });
+    });
+
+    it("action が無ければ action-mismatch で弾く（fail-closed）", async () => {
+      stubFetch({ success: true, hostname: "aniflix.example" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "action-mismatch",
+      });
+    });
+
+    it("success: false は action より先に invalid-token で弾く", async () => {
+      stubFetch({ success: false, action: "login" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "invalid-token",
+      });
+    });
+  });
+
+  describe("hostname の照合（本番）", () => {
+    beforeEach(() => {
+      vi.stubEnv("NODE_ENV", "production");
+    });
+
+    it("許可リスト（環境変数）にあれば通す", async () => {
+      vi.stubEnv(
+        "TURNSTILE_ALLOWED_HOSTNAMES",
+        "www.aniflix.example, aniflix.example",
+      );
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: true,
+        skipped: false,
+      });
+    });
+
+    it("許可リストに無い hostname は hostname-mismatch で弾く", async () => {
+      // 開発用ウィジェットを本番と使い回した設定事故で、localhost で解いたトークンが来た
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "aniflix.example");
+      stubFetch({ ...VALID, hostname: "localhost" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+    });
+
+    it("大文字小文字の違いは無視する", async () => {
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "ANIFLIX.example");
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect((await verifyTurnstileToken("token-abc")).ok).toBe(true);
+    });
+
+    it("許可リストが無ければ AUTH_URL のホスト名と照合する", async () => {
+      vi.stubEnv("AUTH_URL", "https://aniflix.example/api/auth");
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect((await verifyTurnstileToken("token-abc")).ok).toBe(true);
+    });
+
+    it("どちらも無ければリクエストの Host と照合する（ポートは外す）", async () => {
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(
+        (await verifyTurnstileToken("token-abc", undefined, "aniflix.example:443"))
+          .ok,
+      ).toBe(true);
+      expect(
+        await verifyTurnstileToken("token-abc", undefined, "evil.example"),
+      ).toEqual({ ok: false, reason: "hostname-mismatch" });
+    });
+
+    it("x-forwarded-host が多段なら先頭（利用者が開いたホスト）を使う", async () => {
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(
+        (
+          await verifyTurnstileToken(
+            "token-abc",
+            undefined,
+            "aniflix.example, internal-lb.local",
+          )
+        ).ok,
+      ).toBe(true);
+    });
+
+    it("照合先が 1 つも決まらなければ弾く（fail-closed）", async () => {
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+    });
+
+    it("応答に hostname が無ければ弾く", async () => {
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "aniflix.example");
+      stubFetch({ success: true, action: "login" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+    });
+
+    it("弾いた時もトークンとシークレットをログに出さない", async () => {
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "aniflix.example");
+      stubFetch({ ...VALID, hostname: "localhost" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      await verifyTurnstileToken("token-abc");
+
+      const logged = vi
+        .mocked(console.error)
+        .mock.calls.flat()
+        .map(String)
+        .join(" ");
+      expect(logged).not.toContain("token-abc");
+      expect(logged).not.toContain(SECRET);
+    });
+  });
+
+  describe("hostname の照合（開発環境）", () => {
+    it("許可リストが無ければ照合しない（Cloudflare のテストキーは example.com を返す）", async () => {
+      stubFetch({ ...VALID, hostname: "example.com" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(
+        (await verifyTurnstileToken("token-abc", undefined, "localhost:3000"))
+          .ok,
+      ).toBe(true);
+    });
+
+    it("許可リストを明示したら開発環境でも照合する", async () => {
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "localhost");
+      stubFetch({ ...VALID, hostname: "example.com" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
     });
   });
 });

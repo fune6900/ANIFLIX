@@ -7,6 +7,7 @@ import type {
   TurnstileRenderOptions,
   TurnstileWidgetHandle,
 } from "@/types/turnstile";
+import { TURNSTILE_LOGIN_ACTION } from "@/lib/turnstile-action";
 
 /**
  * `next/script` は id をキーに注入済みスクリプトを管理する。
@@ -92,7 +93,7 @@ export default function TurnstileWidget({
       language: "ja",
       size: "flexible",
       // Cloudflare ダッシュボードで分析軸になるラベル
-      action: "login",
+      action: TURNSTILE_LOGIN_ACTION,
       callback: (token) => onTokenRef.current(token),
       // トークンは発行から約 300 秒で失効する。ログイン画面は背景が流れ続ける
       // 「眺めていられる」画面なので、5 分放置は現実に起きる

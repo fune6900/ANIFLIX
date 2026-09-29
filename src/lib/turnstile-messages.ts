@@ -27,6 +27,10 @@ const MESSAGES: Record<TurnstileFailureReason, string> = {
     "確認サービスに接続できませんでした。時間をおいて再度お試しください。",
   misconfigured:
     "現在ログインを受け付けられません。時間をおいて再度お試しください。",
+  "action-mismatch":
+    "確認に失敗しました。ページを再読み込みしてから、もう一度お試しください。",
+  "hostname-mismatch":
+    "確認を完了できませんでした。このサイトのログイン画面から、もう一度お試しください。",
 };
 
 /** `code` が既知の失敗理由か。`in` 演算子は toString 等まで拾うため使わない */
