@@ -13,7 +13,7 @@ import {
   type AggregatedCast,
 } from "@/lib/seasonal-cast";
 import { ANIME_GENRES } from "@/lib/genres";
-import { loadBrowseCategory } from "@/lib/browse-category";
+import { WIDE_PAGE_SIZE, loadBrowseCategory } from "@/lib/browse-category";
 import { ANIME_ERAS } from "@/lib/eras";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
 import {
@@ -109,7 +109,7 @@ export default async function Home() {
   const rowEras = pickHomeEras();
 
   // 既存4列 + 全ジャンル を並列フェッチ
-  // トレンドはフィルタ後に20件確保するため2ページ同時取得
+  // トレンドは /browse/trending と同じ週間トレンド（先頭 20 ページを見て日本のアニメに絞る）
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
   // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
   // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
@@ -134,7 +134,7 @@ export default async function Home() {
     getNewAnime(1),
     // 「すべて見る」の一覧（/browse/trending）と同じ週間トレンド由来。
     // 行と一覧で取得元が違うと、行で見た作品が一覧に無い。20 ページ分の TMDb キャッシュは一覧と共有
-    loadBrowseCategory("trending", 1, 0),
+    loadBrowseCategory("trending", 1, WIDE_PAGE_SIZE),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
