@@ -401,6 +401,8 @@ export async function getNewAnime(
       // 継続中の作品が新しい話を出しても新着に入らない
       "air_date.gte": from,
       "air_date.lte": to,
+      // air_date をどのタイムゾーンで解釈するか。窓の日付は日本時間で作っているので揃える
+      timezone: "Asia/Tokyo",
       page: String(page),
     },
     NEW_ANIME_CACHE_TIME,

@@ -12,13 +12,13 @@ import type { TMDbAnime } from "@/types/tmdb";
 
 const TMDB_PAGE = 20;
 
-const getJapaneseTrendingAnime = vi.fn();
+const getTrendingAnime = vi.fn();
 const getNewAnime = vi.fn();
 const getPopularAnime = vi.fn();
 
 vi.mock("@/lib/tmdb", () => ({
   TMDB_MAX_PAGE: 500,
-  getJapaneseTrendingAnime: (p: number) => getJapaneseTrendingAnime(p),
+  getTrendingAnime: (p: number) => getTrendingAnime(p),
   getNewAnime: (p: number) => getNewAnime(p),
   getPopularAnime: (p: number) => getPopularAnime(p),
 }));
@@ -64,7 +64,7 @@ function range(from: number, to: number): number[] {
 }
 
 afterEach(() => {
-  getJapaneseTrendingAnime.mockReset();
+  getTrendingAnime.mockReset();
   getNewAnime.mockReset();
   getPopularAnime.mockReset();
 });
@@ -79,28 +79,28 @@ describe("isBrowseCategory", () => {
   });
 });
 
-describe("loadBrowseCategory: トレンド・新着は 1 ページ 70 件", () => {
+describe("loadBrowseCategory: 新着は 1 ページ 70 件", () => {
   it("1 ページ 70 件", () => {
     expect(WIDE_PAGE_SIZE).toBe(70);
   });
 
   it("1 ページ目は TMDb の 1〜4 ページから先頭 70 件", async () => {
-    getJapaneseTrendingAnime.mockImplementation(tmdbPage(1000));
+    getNewAnime.mockImplementation(tmdbPage(1000));
 
-    const data = await loadBrowseCategory("trending", 1, 20);
+    const data = await loadBrowseCategory("new", 1, 20);
 
-    expect(getJapaneseTrendingAnime.mock.calls.map((c) => c[0]).sort()).toEqual(
+    expect(getNewAnime.mock.calls.map((c) => c[0]).sort()).toEqual(
       [1, 2, 3, 4],
     );
     expect(data.results.map((a) => a.id)).toEqual(range(0, 70));
   });
 
   it("2 ページ目は 70〜139 件目。1 ページ目との間に抜けも重複も無い", async () => {
-    getJapaneseTrendingAnime.mockImplementation(tmdbPage(1000));
+    getNewAnime.mockImplementation(tmdbPage(1000));
 
-    const data = await loadBrowseCategory("trending", 2, 20);
+    const data = await loadBrowseCategory("new", 2, 20);
 
-    expect(getJapaneseTrendingAnime.mock.calls.map((c) => c[0]).sort()).toEqual(
+    expect(getNewAnime.mock.calls.map((c) => c[0]).sort()).toEqual(
       [4, 5, 6, 7],
     );
     expect(data.results.map((a) => a.id)).toEqual(range(70, 140));
@@ -155,6 +155,26 @@ describe("loadBrowseCategory: トレンド・新着は 1 ページ 70 件", () =
     expect(beyond.results.length).toBeGreaterThan(0);
   });
 
+  it("総件数より先のページを求められたら、実際の最終ページを返す", async () => {
+    // 直近 7 日の新着は数十〜数百件。page=5 に空のグリッドを出さない
+    getNewAnime.mockImplementation(tmdbPage(150));
+
+    const data = await loadBrowseCategory("new", 5, 20);
+
+    expect(data.page).toBe(3);
+    expect(data.totalPages).toBe(3);
+    expect(data.results.map((a) => a.id)).toEqual(range(140, 150));
+  });
+
+  it("0 件なら 1 ページ目のまま空で返す", async () => {
+    getNewAnime.mockImplementation(tmdbPage(0));
+
+    const data = await loadBrowseCategory("new", 3, 20);
+
+    expect(data.page).toBe(1);
+    expect(data.results).toEqual([]);
+  });
+
   it("TMDb の 1 ページだけ落ちても、残りは正しい位置のまま返す", async () => {
     const ok = tmdbPage(1000);
     getNewAnime.mockImplementation((p: number) =>
@@ -179,9 +199,104 @@ describe("loadBrowseCategory: トレンド・新着は 1 ページ 70 件", () =
   it("同じ作品が隣のページにも返ってきたら 1 回だけ出す", async () => {
     // 人気順のページングは境界で順位が入れ替わり、同じ作品が 2 ページに出ることがある
     const ok = tmdbPage(1000);
-    getJapaneseTrendingAnime.mockImplementation(async (p: number) => {
+    getNewAnime.mockImplementation(async (p: number) => {
       const res = await ok(p);
       if (p === 2) res.results[0] = anime(19);
+      return res;
+    });
+
+    const data = await loadBrowseCategory("new", 1, 20);
+    const ids = data.results.map((a) => a.id);
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("loadBrowseCategory: トレンドは週間トレンドから日本のアニメだけを 70 件ずつ", () => {
+  /**
+   * TMDb の週間トレンドは世界の TV 全体。日本のアニメは 1 ページ 20 件のうち数件しか
+   * 無いため、先頭 20 ページ（400 件）を見てから絞り、絞った一覧を 70 件ずつ区切る
+   */
+  const JP_ANIME = { genre_ids: [16, 10759], origin_country: ["JP"] };
+  const US_ANIME = { genre_ids: [16], origin_country: ["US"] };
+  const JP_DRAMA = { genre_ids: [18], origin_country: ["JP"] };
+
+  /** 1 ページ 20 件のうち、先頭 5 件だけが日本のアニメ（id は通し番号） */
+  function trendingPage(p: number) {
+    const start = (p - 1) * TMDB_PAGE;
+    return Promise.resolve({
+      page: p,
+      total_pages: 1000,
+      total_results: 20_000,
+      results: Array.from({ length: TMDB_PAGE }, (_, i) => {
+        const kind = i < 5 ? JP_ANIME : i < 10 ? US_ANIME : JP_DRAMA;
+        return { ...anime(start + i), ...kind };
+      }),
+    });
+  }
+
+  /** p ページ目の日本のアニメの id */
+  function jpIdsOf(p: number): number[] {
+    const start = (p - 1) * TMDB_PAGE;
+    return range(start, start + 5);
+  }
+
+  it("先頭 20 ページを見て、アニメかつ日本の作品だけを残す", async () => {
+    getTrendingAnime.mockImplementation(trendingPage);
+
+    const data = await loadBrowseCategory("trending", 1, 20);
+
+    expect(getTrendingAnime.mock.calls.map((c) => c[0]).sort((a, b) => a - b))
+      .toEqual(range(1, 21));
+    // 日本の実写ドラマ・海外のアニメは入れない
+    expect(data.results.map((a) => a.id)).toEqual(
+      range(1, 15).flatMap(jpIdsOf),
+    );
+    expect(data.results).toHaveLength(70);
+  });
+
+  it("2 ページ目は絞った一覧の 71 件目から。総ページ数は絞った件数で数える", async () => {
+    getTrendingAnime.mockImplementation(trendingPage);
+
+    const data = await loadBrowseCategory("trending", 2, 20);
+
+    expect(data.results.map((a) => a.id)).toEqual(
+      range(15, 21).flatMap(jpIdsOf),
+    );
+    expect(data.totalResults).toBe(100);
+    expect(data.totalPages).toBe(2);
+  });
+
+  it("範囲外のページは最終ページに寄せる", async () => {
+    getTrendingAnime.mockImplementation(trendingPage);
+
+    const data = await loadBrowseCategory("trending", 9, 20);
+
+    expect(data.page).toBe(2);
+    expect(data.results).toHaveLength(30);
+  });
+
+  it("週間トレンドの 1 ページが落ちても残りで組む", async () => {
+    getTrendingAnime.mockImplementation((p: number) =>
+      p === 3 ? Promise.reject(new Error("TMDb down")) : trendingPage(p),
+    );
+
+    const data = await loadBrowseCategory("trending", 1, 20);
+
+    expect(data.results.map((a) => a.id)).not.toContain(jpIdsOf(3)[0]);
+    expect(data.results).toHaveLength(70);
+  });
+
+  it("全ページ落ちたら throw する", async () => {
+    getTrendingAnime.mockRejectedValue(new Error("TMDb down"));
+
+    await expect(loadBrowseCategory("trending", 1, 20)).rejects.toThrow();
+  });
+
+  it("同じ作品が複数ページに出ても 1 回だけ", async () => {
+    getTrendingAnime.mockImplementation(async (p: number) => {
+      const res = await trendingPage(p);
+      if (p === 2) res.results[0] = { ...anime(0), ...JP_ANIME };
       return res;
     });
 

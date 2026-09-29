@@ -59,6 +59,12 @@ describe("getNewAnime", () => {
     expect(q.has("first_air_date.lte")).toBe(false);
   });
 
+  it("TMDb にも日本時間で解釈させる（air_date の境界を揃える）", async () => {
+    const q = await requestedParams();
+
+    expect(q.get("timezone")).toBe("Asia/Tokyo");
+  });
+
   it("日本のアニメを人気順で取る", async () => {
     const q = await requestedParams();
 

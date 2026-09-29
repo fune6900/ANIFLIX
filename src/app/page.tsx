@@ -23,7 +23,6 @@ import {
   fetchGenreRow,
   fetchSeasonRows,
   pickHomeEras,
-  randomPage,
   shuffle,
 } from "@/lib/home-rows";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -131,7 +130,9 @@ export default async function Home() {
     genreRows,
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
-    getNewAnime(randomPage(3)),
+    // 新着（直近 7 日の放送）は時期によって数十件しか無く、2 ページ目以降が空になりうる。
+    // 1 ページ目を取り、下で shuffle して並びに変化を出す
+    getNewAnime(1),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
