@@ -100,7 +100,7 @@ export default async function RelatedCharacters({
   originalTitle,
   mediaType,
   currentPage = 1,
-  perPage = 24,
+  perPage = 30,
   pageUrl,
   sectionId = "related-characters",
 }: RelatedCharactersProps) {

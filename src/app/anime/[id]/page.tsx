@@ -241,7 +241,8 @@ export default async function AnimeDetailPage({
       />
 
       {/* コンテンツ */}
-      <div className="relative -mt-32 md:-mt-48 pb-20">
+      {/* ヒーロー下端のグラデーション（下 1/4）の中だけ重ねる。深く重ねると動画の下端が隠れる */}
+      <div className="relative -mt-8 md:-mt-12 pb-20">
         <div className="site-container">
           <div className="detail-block flex flex-col md:flex-row gap-6 md:gap-10 xl:gap-12">
             {/* ポスター */}
