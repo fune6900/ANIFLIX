@@ -60,18 +60,27 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
 
 // 実物は limit を TMDb 突き合わせ前の候補数に使い、items はそれより少なく返る
 // （TMDb に無い作品・劇場版が落ちる）。その目減りを再現しておく
+// pastSeasonGate を差し込むと、現クール（2026 夏）以外の取得をそこで止められる
+let pastSeasonGate: Promise<void> | null = null;
+
 vi.mock("@/lib/seasonal-anime", () => ({
-  fetchSeasonalAnime: (_y: number, _s: string, opts: { limit: number }) =>
-    Promise.resolve({
+  fetchSeasonalAnime: async (
+    y: number,
+    s: string,
+    opts: { limit: number },
+  ) => {
+    const isCurrent = y === 2026 && s === "summer";
+    if (!isCurrent && pastSeasonGate) await pastSeasonGate;
+    return {
       items: Array.from({ length: Math.max(0, opts.limit - 15) }, (_, i) =>
         anime(5000 + i),
       ),
-    }),
+    };
+  },
 }));
 
-vi.mock("@/lib/seasonal-cast", () => ({
-  aggregateSeasonalCast: () =>
-    Promise.resolve(
+const aggregateSeasonalCast = vi.fn(() =>
+  Promise.resolve(
       Array.from({ length: 25 }, (_, i) => ({
         id: 9000 + i,
         name: `声優${i}`,
@@ -81,6 +90,10 @@ vi.mock("@/lib/seasonal-cast", () => ({
         bestOrder: i,
       })),
     ),
+);
+
+vi.mock("@/lib/seasonal-cast", () => ({
+  aggregateSeasonalCast: () => aggregateSeasonalCast(),
 }));
 
 const { default: Home } = await import("@/app/page");
@@ -97,6 +110,8 @@ afterAll(() => {
 
 afterEach(() => {
   cleanup();
+  pastSeasonGate = null;
+  aggregateSeasonalCast.mockClear();
 });
 
 async function renderHome() {
@@ -207,5 +222,22 @@ describe("ホーム: 探すセクション", () => {
       .filter((a) => a.getAttribute("href")?.startsWith("/voice-actors/"));
 
     expect(cards).toHaveLength(20);
+  });
+
+  it("過去シーズン行の取得は、声優集約など 2 段目の開始を待たせない", async () => {
+    // 過去シーズンは 1 つずつ順に取るため、冷えたキャッシュでは現クールの数倍かかる。
+    // 1 段目で待つと 2 段目（トレーラー・声優集約）が始まらず、ホームが真っ白のまま延びる
+    let open: () => void = () => {};
+    pastSeasonGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+
+    const rendering = Home();
+
+    await vi.waitFor(() => expect(aggregateSeasonalCast).toHaveBeenCalled());
+
+    open();
+    render(await rendering);
+    expect(allLinkHrefs()).toContain("/browse/season/2025/fall");
   });
 });

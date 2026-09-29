@@ -114,14 +114,19 @@ export default async function Home() {
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
   // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
   // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
-  // シーズン・年代・ジャンルの行も同じ段で取る（各 fetch*Row は失敗しても [] を返す）。
+  // 過去シーズンの行は 1 シーズンずつ順に取るため、冷えたキャッシュでは現クールの数倍かかる。
+  // ここで開始だけして、待つのは 2 段目（トレーラー・声優集約）と一緒にする。
+  // 1 段目で待つと 2 段目の開始がその分だけ遅れ、ホームの初回表示が延びる。
+  // fetchSeasonRows は各シーズンの失敗を [] に丸めるので reject しない
+  const pastSeasonRowsPromise = fetchSeasonRows(rowSeasons.slice(1));
+
+  // 年代・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
   // 現クールの行は TOP10 と同じ取得結果を使い回し、AniList への往復を 1 回減らす
   const [
     currentSeasonResult,
     newData,
     trendingData1,
     trendingData2,
-    pastSeasonRows,
     eraRows,
     genreRows,
   ] = await Promise.allSettled([
@@ -129,8 +134,6 @@ export default async function Home() {
     getNewAnime(randomPage(3)),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
-    // 過去シーズンは AniList へ同時に投げないよう 1 つずつ（fetchSeasonRows 参照）
-    fetchSeasonRows(rowSeasons.slice(1)),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
@@ -149,7 +152,7 @@ export default async function Home() {
   // Hero のトレーラーと人気声優の集約は、どちらも currentSeasonAnime にしか
   // 依存しておらず互いに独立している。直列に await すると往復が1段分まるごと
   // 無駄になるため、同一の Promise.all にまとめて段数を 3 → 2 に減らす。
-  const [trailerKeys, aggregatedCast] = await Promise.all([
+  const [trailerKeys, aggregatedCast, pastSeasonRows] = await Promise.all([
     Promise.all(
       heroCandidates.map((a) =>
         getAnimeVideos(a.id)
@@ -162,6 +165,7 @@ export default async function Home() {
     // 取れないため、「今期人気アニメに出演している声優」を出演本数順に並べる
     // 方が信頼性が高い。
     aggregateSeasonalCast(currentSeasonAnime.slice(0, 12).map((a) => a.id)),
+    pastSeasonRowsPromise,
   ]);
 
   const heroAnime: HeroItem[] = heroCandidates.map((a, i) => ({
@@ -207,9 +211,7 @@ export default async function Home() {
   // シーズン行（rowSeasons と同順）。先頭は現クール = TOP10 と同じ取得結果
   const seasonItems: ContentRowItem[][] = [
     currentSeasonAnime.slice(0, HOME_ROW_SIZE).map(toCardItem),
-    ...(pastSeasonRows.status === "fulfilled"
-      ? pastSeasonRows.value.map((row) => row.map(toCardItem))
-      : []),
+    ...pastSeasonRows.map((row) => row.map(toCardItem)),
   ];
 
   // 年代行（rowEras と同順）・ジャンル行（ANIME_GENRES と同順）
