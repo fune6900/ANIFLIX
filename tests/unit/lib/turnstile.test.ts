@@ -563,6 +563,31 @@ describe("verifyTurnstileToken", () => {
       });
     });
 
+    it("プレビューで許可リストも設定されていれば、明示した値とデプロイ URL の両方を通す", async () => {
+      vi.stubEnv("VERCEL_ENV", "preview");
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "preview.aniflix.example");
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      for (const hostname of [
+        "preview.aniflix.example",
+        "aniflix-abc123-team.vercel.app",
+      ]) {
+        stubFetch({ ...VALID, hostname });
+        expect((await verifyTurnstileToken("token-abc")).ok, hostname).toBe(
+          true,
+        );
+      }
+    });
+
+    it("VERCEL_BRANCH_URL が無くても VERCEL_URL で通す", async () => {
+      vi.stubEnv("VERCEL_ENV", "preview");
+      vi.stubEnv("VERCEL_BRANCH_URL", "");
+      stubFetch({ ...VALID, hostname: "aniflix-abc123-team.vercel.app" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect((await verifyTurnstileToken("token-abc")).ok).toBe(true);
+    });
+
     it("本番（VERCEL_ENV=production）では VERCEL_URL を許可に足さない", async () => {
       vi.stubEnv("VERCEL_ENV", "production");
       vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "aniflix.example");
