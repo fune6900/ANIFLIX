@@ -10,6 +10,8 @@ const ALL_REASONS: TurnstileFailureReason[] = [
   "missing-token",
   "invalid-token",
   "network-error",
+  "action-mismatch",
+  "hostname-mismatch",
 ];
 
 describe("turnstileErrorMessage", () => {

@@ -1,5 +1,6 @@
 import "server-only";
 import type { TurnstileSiteVerifyResponse } from "@/types/turnstile";
+import { TURNSTILE_LOGIN_ACTION } from "@/lib/turnstile-action";
 
 /**
  * Cloudflare Turnstile のサーバー側検証。
@@ -27,7 +28,11 @@ export type TurnstileFailureReason =
   /** siteverify が success: false を返した（失効・二重使用・改竄） */
   | "invalid-token"
   /** siteverify へ到達できなかった */
-  | "network-error";
+  | "network-error"
+  /** 別の action（別フォーム用のウィジェット）で解かれたトークン */
+  | "action-mismatch"
+  /** 想定外のドメインで解かれたトークン（開発用ウィジェットの使い回し等） */
+  | "hostname-mismatch";
 
 /**
  * 検証結果。
@@ -37,6 +42,90 @@ export type TurnstileFailureReason =
 export type TurnstileVerdict =
   | { ok: true; skipped: boolean }
   | { ok: false; reason: TurnstileFailureReason };
+
+/** ログに出す action の上限。action はクライアントの render() で決まる（Cloudflare 側で最大 32 文字） */
+const ACTION_LOG_MAX = 32;
+
+/**
+ * ホスト名を比較用に正規化する（小文字・ポート無し・末尾ドット無し）。
+ * 設定値に `https://aniflix.example/login` のような URL が書かれても読めるようにする
+ */
+function toHostname(raw: string | undefined | null): string | null {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return null;
+  try {
+    const url = new URL(value.includes("://") ? value : `http://${value}`);
+    return url.hostname.replace(/\.$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+type HostnamePolicy =
+  | { kind: "check"; allowed: string[] }
+  /** 開発環境で許可リストを明示していない（照合しない） */
+  | { kind: "skip" }
+  /** 本番で許可リストが無い、または有効な値が 1 つも無い */
+  | { kind: "misconfigured" };
+
+/**
+ * Vercel のプレビューで許可するホスト名。
+ * プレビューは NODE_ENV=production で動き、ホスト名がデプロイ / ブランチごとに変わるため
+ * 許可リストに書き切れない。VERCEL_URL / VERCEL_BRANCH_URL は Vercel が実行環境に入れる値で、
+ * リクエストのヘッダーと違って利用者（bot）には書けない
+ */
+function vercelPreviewHostnames(): string[] {
+  if (process.env.VERCEL_ENV !== "preview") return [];
+  return [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+    .map((h) => toHostname(h))
+    .filter((h): h is string => h !== null);
+}
+
+/**
+ * トークンを解いてよいホスト名は `TURNSTILE_ALLOWED_HOSTNAMES`（カンマ区切り）で決める
+ * （Vercel のプレビューだけはデプロイ URL を足す）。
+ *
+ * リクエストの Host / X-Forwarded-Host には頼らない。bot はブラウザではないので
+ * どちらも自由に書け、「攻撃者が解いたホスト名」を「攻撃者が申告したホスト名」と
+ * 比べるだけになる。AUTH_URL も使わない（www やプレビューを取りこぼして全員を締め出す）。
+ */
+function hostnamePolicy(): HostnamePolicy {
+  const raw = process.env.TURNSTILE_ALLOWED_HOSTNAMES;
+  const explicit: string[] = [];
+  for (const entry of (raw ?? "").split(",")) {
+    const value = entry.trim();
+    if (!value) continue;
+    if (value.includes("*")) {
+      // ワイルドカードは照合できない。黙って「何にも一致しない値」として残さない
+      console.error(
+        "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES のワイルドカードは使えません:",
+        value,
+      );
+      continue;
+    }
+    const hostname = toHostname(value);
+    if (hostname) explicit.push(hostname);
+  }
+
+  if (raw?.trim() && explicit.length === 0) {
+    // 設定しているのに 1 件も読めない = 書き間違い。黙って照合を外さない
+    console.error(
+      "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES に有効なホスト名がありません",
+    );
+    return { kind: "misconfigured" };
+  }
+
+  const allowed = [...explicit, ...vercelPreviewHostnames()];
+  if (allowed.length > 0) return { kind: "check", allowed };
+
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES が未設定のため検証を拒否しました",
+    );
+    return { kind: "misconfigured" };
+  }
+  return { kind: "skip" };
+}
 
 /**
  * Turnstile のトークンを検証する。
@@ -74,6 +163,13 @@ export async function verifyTurnstileToken(
     return { ok: false, reason: "missing-token" };
   }
 
+  // 許可リストの不備は siteverify を呼ぶ前に弾く。呼んでからだと利用者の
+  // 単回使用トークンを無駄に使い切り、設定事故にも最初のログインまで気づけない
+  const policy = hostnamePolicy();
+  if (policy.kind === "misconfigured") {
+    return { ok: false, reason: "misconfigured" };
+  }
+
   const body = new URLSearchParams({ secret, response: token });
   if (remoteIp) body.set("remoteip", remoteIp);
 
@@ -99,6 +195,40 @@ export async function verifyTurnstileToken(
     const data: TurnstileSiteVerifyResponse = await response.json();
 
     if (data.success) {
+      // 公式テストキーの応答は action を返さず hostname も example.com 固定。
+      // 開発では照合を外して通し、本番に入っていたら設定事故として弾く
+      if (data.metadata?.result_with_testing_key === true) {
+        if (process.env.NODE_ENV === "production") {
+          console.error(
+            "[turnstile.verifyTurnstileToken] 本番でテストキーの応答を受け取ったため検証を拒否しました",
+          );
+          return { ok: false, reason: "misconfigured" };
+        }
+        return { ok: true, skipped: false };
+      }
+
+      // Cloudflare 推奨の多層防御。success だけでは「どのフォームで・どのドメインで」
+      // 解かれたかを見ておらず、設定を誤って同じウィジェットを使い回すと素通りする
+      if (data.action !== TURNSTILE_LOGIN_ACTION) {
+        console.error(
+          "[turnstile.verifyTurnstileToken] action mismatch:",
+          data.action?.slice(0, ACTION_LOG_MAX) ?? "(none)",
+        );
+        return { ok: false, reason: "action-mismatch" };
+      }
+
+      if (policy.kind === "check") {
+        const solvedOn = toHostname(data.hostname);
+        if (!solvedOn || !policy.allowed.includes(solvedOn)) {
+          // hostname は Cloudflare 由来のドメイン名で、トークンもシークレットも含まない
+          console.error(
+            "[turnstile.verifyTurnstileToken] hostname mismatch:",
+            solvedOn ?? "(none)",
+          );
+          return { ok: false, reason: "hostname-mismatch" };
+        }
+      }
+
       return { ok: true, skipped: false };
     }
 
