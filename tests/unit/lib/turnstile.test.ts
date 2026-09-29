@@ -489,4 +489,91 @@ describe("verifyTurnstileToken", () => {
       });
     });
   });
+
+  describe("許可リストの不備は siteverify を呼ぶ前に弾く", () => {
+    it("本番で未設定なら siteverify を呼ばない（利用者のトークンを使い切らない）", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "misconfigured",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("開発でも、設定した許可リストが読めなければテストキーより先に弾く（書き間違いに気づける）", async () => {
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "*.aniflix.example");
+      stubFetch(TEST_KEY_RESPONSE);
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "misconfigured",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("ワイルドカード", () => {
+    it("* を含む値は無効として捨て、ログに出す（黙って何にも一致しない状態にしない）", async () => {
+      vi.stubEnv(
+        "TURNSTILE_ALLOWED_HOSTNAMES",
+        "aniflix.example, *.aniflix.example",
+      );
+      stubFetch({ ...VALID, hostname: "preview.aniflix.example" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+      const logged = vi
+        .mocked(console.error)
+        .mock.calls.flat()
+        .map(String)
+        .join(" ");
+      expect(logged).toContain("*.aniflix.example");
+    });
+  });
+
+  describe("Vercel のプレビュー", () => {
+    beforeEach(() => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("VERCEL_URL", "aniflix-abc123-team.vercel.app");
+      vi.stubEnv("VERCEL_BRANCH_URL", "aniflix-git-feat-x-team.vercel.app");
+    });
+
+    it("VERCEL_ENV=preview なら、Vercel が入れるデプロイ URL で解いたトークンを通す", async () => {
+      vi.stubEnv("VERCEL_ENV", "preview");
+      stubFetch({ ...VALID, hostname: "aniflix-git-feat-x-team.vercel.app" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect((await verifyTurnstileToken("token-abc")).ok).toBe(true);
+    });
+
+    it("プレビューでも、他のホストで解いたトークンは弾く", async () => {
+      vi.stubEnv("VERCEL_ENV", "preview");
+      stubFetch({ ...VALID, hostname: "localhost" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+    });
+
+    it("本番（VERCEL_ENV=production）では VERCEL_URL を許可に足さない", async () => {
+      vi.stubEnv("VERCEL_ENV", "production");
+      vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "aniflix.example");
+      stubFetch({ ...VALID, hostname: "aniflix-abc123-team.vercel.app" });
+      const { verifyTurnstileToken } = await loadTurnstile();
+
+      expect(await verifyTurnstileToken("token-abc")).toEqual({
+        ok: false,
+        reason: "hostname-mismatch",
+      });
+    });
+  });
 });
+

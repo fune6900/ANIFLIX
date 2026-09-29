@@ -69,7 +69,21 @@ type HostnamePolicy =
   | { kind: "misconfigured" };
 
 /**
- * トークンを解いてよいホスト名は `TURNSTILE_ALLOWED_HOSTNAMES`（カンマ区切り）だけで決める。
+ * Vercel のプレビューで許可するホスト名。
+ * プレビューは NODE_ENV=production で動き、ホスト名がデプロイ / ブランチごとに変わるため
+ * 許可リストに書き切れない。VERCEL_URL / VERCEL_BRANCH_URL は Vercel が実行環境に入れる値で、
+ * リクエストのヘッダーと違って利用者（bot）には書けない
+ */
+function vercelPreviewHostnames(): string[] {
+  if (process.env.VERCEL_ENV !== "preview") return [];
+  return [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]
+    .map((h) => toHostname(h))
+    .filter((h): h is string => h !== null);
+}
+
+/**
+ * トークンを解いてよいホスト名は `TURNSTILE_ALLOWED_HOSTNAMES`（カンマ区切り）で決める
+ * （Vercel のプレビューだけはデプロイ URL を足す）。
  *
  * リクエストの Host / X-Forwarded-Host には頼らない。bot はブラウザではないので
  * どちらも自由に書け、「攻撃者が解いたホスト名」を「攻撃者が申告したホスト名」と
@@ -77,19 +91,33 @@ type HostnamePolicy =
  */
 function hostnamePolicy(): HostnamePolicy {
   const raw = process.env.TURNSTILE_ALLOWED_HOSTNAMES;
-  const allowed = (raw ?? "")
-    .split(",")
-    .map((h) => toHostname(h))
-    .filter((h): h is string => h !== null);
+  const explicit: string[] = [];
+  for (const entry of (raw ?? "").split(",")) {
+    const value = entry.trim();
+    if (!value) continue;
+    if (value.includes("*")) {
+      // ワイルドカードは照合できない。黙って「何にも一致しない値」として残さない
+      console.error(
+        "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES のワイルドカードは使えません:",
+        value,
+      );
+      continue;
+    }
+    const hostname = toHostname(value);
+    if (hostname) explicit.push(hostname);
+  }
 
-  if (allowed.length > 0) return { kind: "check", allowed };
-  if (raw?.trim()) {
+  if (raw?.trim() && explicit.length === 0) {
     // 設定しているのに 1 件も読めない = 書き間違い。黙って照合を外さない
     console.error(
       "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES に有効なホスト名がありません",
     );
     return { kind: "misconfigured" };
   }
+
+  const allowed = [...explicit, ...vercelPreviewHostnames()];
+  if (allowed.length > 0) return { kind: "check", allowed };
+
   if (process.env.NODE_ENV === "production") {
     console.error(
       "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES が未設定のため検証を拒否しました",
@@ -133,6 +161,13 @@ export async function verifyTurnstileToken(
 
   if (!token) {
     return { ok: false, reason: "missing-token" };
+  }
+
+  // 許可リストの不備は siteverify を呼ぶ前に弾く。呼んでからだと利用者の
+  // 単回使用トークンを無駄に使い切り、設定事故にも最初のログインまで気づけない
+  const policy = hostnamePolicy();
+  if (policy.kind === "misconfigured") {
+    return { ok: false, reason: "misconfigured" };
   }
 
   const body = new URLSearchParams({ secret, response: token });
@@ -182,10 +217,6 @@ export async function verifyTurnstileToken(
         return { ok: false, reason: "action-mismatch" };
       }
 
-      const policy = hostnamePolicy();
-      if (policy.kind === "misconfigured") {
-        return { ok: false, reason: "misconfigured" };
-      }
       if (policy.kind === "check") {
         const solvedOn = toHostname(data.hostname);
         if (!solvedOn || !policy.allowed.includes(solvedOn)) {

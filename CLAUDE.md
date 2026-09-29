@@ -106,7 +106,8 @@ TMDB_ACCESS_TOKEN=...
 ```env
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
 TURNSTILE_SECRET_KEY=...
-# 本番では必須。ログイン画面を開くホストを全部（www・プレビュー含む）
+# 本番では必須（未設定だと本番のログインが全員失敗）。ログイン画面を開くホストを全部。
+# ワイルドカード不可。実行時に読むので再ビルド不要。Vercel プレビューはデプロイ URL を自動で足す
 TURNSTILE_ALLOWED_HOSTNAMES=aniflix.example,www.aniflix.example
 ```
 
