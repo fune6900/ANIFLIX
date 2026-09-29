@@ -241,7 +241,8 @@ export default async function AnimeDetailPage({
       />
 
       {/* コンテンツ */}
-      <div className="relative -mt-32 md:-mt-48 pb-20">
+      {/* 本文はヒーローの下から始める。重ねると不透明のポスターと本文が動画の下端を隠す */}
+      <div className="relative pt-6 md:pt-8 pb-20">
         <div className="site-container">
           <div className="detail-block flex flex-col md:flex-row gap-6 md:gap-10 xl:gap-12">
             {/* ポスター */}

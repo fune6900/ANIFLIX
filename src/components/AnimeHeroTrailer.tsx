@@ -44,18 +44,30 @@ export default function AnimeHeroTrailer({
     : null;
 
   return (
-    <div className="relative w-full h-[55vw] max-h-[70vh] overflow-hidden bg-black">
+    // 箱は 16:9（YouTube の iframe と一致）。70vh の上限が効いて横長になった分は、
+    // 前景を高さ基準で収め、余りを同じ画像のブラーで埋める（HeroSection と同じ手）
+    <div className="relative w-full aspect-video max-h-[70vh] overflow-hidden bg-black">
       {backdropUrl ? (
-        <Image
-          src={backdropUrl}
-          alt={title}
-          fill
-          priority
-          sizes="100vw"
-          className={`object-cover object-top transition-opacity duration-700 ${
-            trailerVisible ? "opacity-0" : "opacity-100"
-          }`}
-        />
+        <>
+          <Image
+            src={backdropUrl}
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="100vw"
+            className="object-cover scale-110 blur-2xl opacity-60"
+          />
+          <Image
+            src={backdropUrl}
+            alt={title}
+            fill
+            priority
+            sizes="100vw"
+            className={`object-contain object-center transition-opacity duration-700 ${
+              trailerVisible ? "opacity-0" : "opacity-100"
+            }`}
+          />
+        </>
       ) : (
         <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
       )}
@@ -66,12 +78,8 @@ export default function AnimeHeroTrailer({
           src={trailerSrc}
           title={`${title} トレーラー`}
           allow="autoplay; encrypted-media"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none border-0"
-          style={{
-            minWidth: "100%",
-            minHeight: "100%",
-            aspectRatio: "16 / 9",
-          }}
+          // 高さ基準で 16:9 に収める（はみ出して切る min-width/min-height 100% はやめた）
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full aspect-video max-w-full pointer-events-none border-0"
           onLoad={() => {
             // YouTube が autoplay を蹴った場合に備えて少し待ってからフェード
             setTimeout(() => setTrailerVisible(true), 800);
@@ -79,7 +87,9 @@ export default function AnimeHeroTrailer({
         />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/50 to-transparent pointer-events-none" />
+      {/* 下端だけを背景色へ寄せる。全面にかけると動画の下半分が沈み、
+          終端を不透明にすると最下段（PV の放送日テロップ等）が消えるので半透明で止める */}
+      <div className="absolute inset-x-0 bottom-0 h-1/6 bg-gradient-to-t from-[#141414]/60 to-transparent pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#141414]/70 via-transparent to-transparent pointer-events-none" />
 
       {trailerSrc && (
