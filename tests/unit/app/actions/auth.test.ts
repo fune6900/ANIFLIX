@@ -16,18 +16,11 @@ const signIn = vi.fn();
 const signOut = vi.fn();
 const verifyTurnstileToken =
   vi.fn<
-    (
-      token: string | null,
-      remoteIp?: string,
-      requestHost?: string,
-    ) => Promise<TurnstileVerdict>
+    (token: string | null, remoteIp?: string) => Promise<TurnstileVerdict>
   >();
 
 /** `next/headers` が返す x-forwarded-for。null ならヘッダー自体が無い */
 let forwardedFor: string | null = null;
-/** `next/headers` が返す x-forwarded-host / host。null ならヘッダー自体が無い */
-let forwardedHost: string | null = null;
-let host: string | null = null;
 
 vi.mock("@/auth", () => ({
   signIn: (...args: unknown[]) => signIn(...args),
@@ -35,21 +28,15 @@ vi.mock("@/auth", () => ({
 }));
 
 vi.mock("@/lib/turnstile", () => ({
-  verifyTurnstileToken: (
-    token: string | null,
-    remoteIp?: string,
-    requestHost?: string,
-  ) => verifyTurnstileToken(token, remoteIp, requestHost),
+  verifyTurnstileToken: (token: string | null, remoteIp?: string) =>
+    verifyTurnstileToken(token, remoteIp),
 }));
 
 vi.mock("next/headers", () => ({
-  headers: async () => {
-    const h = new Headers();
-    if (forwardedFor !== null) h.set("x-forwarded-for", forwardedFor);
-    if (forwardedHost !== null) h.set("x-forwarded-host", forwardedHost);
-    if (host !== null) h.set("host", host);
-    return h;
-  },
+  headers: async () =>
+    new Headers(
+      forwardedFor === null ? {} : { "x-forwarded-for": forwardedFor },
+    ),
 }));
 
 const { signInWithTurnstileAction, signOutAction } =
@@ -65,8 +52,6 @@ function formWithToken(token?: string): FormData {
 
 beforeEach(() => {
   forwardedFor = "203.0.113.7, 10.0.0.1";
-  forwardedHost = null;
-  host = null;
   verifyTurnstileToken.mockResolvedValue({ ok: true, skipped: false });
   signIn.mockResolvedValue(undefined);
 });
@@ -87,7 +72,6 @@ describe("signInWithTurnstileAction", () => {
       expect(verifyTurnstileToken).toHaveBeenCalledWith(
         "token-abc",
         "203.0.113.7",
-        undefined,
       );
     });
 
@@ -104,7 +88,6 @@ describe("signInWithTurnstileAction", () => {
       expect(verifyTurnstileToken).toHaveBeenCalledWith(
         "token-abc",
         "203.0.113.7",
-        undefined,
       );
     });
 
@@ -120,7 +103,6 @@ describe("signInWithTurnstileAction", () => {
       expect(verifyTurnstileToken).toHaveBeenCalledWith(
         "token-abc",
         "198.51.100.42",
-        undefined,
       );
     });
 
@@ -136,7 +118,6 @@ describe("signInWithTurnstileAction", () => {
       expect(verifyTurnstileToken).toHaveBeenCalledWith(
         "token-abc",
         "198.51.100.42",
-        undefined,
       );
     });
 
@@ -149,11 +130,7 @@ describe("signInWithTurnstileAction", () => {
         formWithToken("token-abc"),
       );
 
-      expect(verifyTurnstileToken).toHaveBeenCalledWith(
-        "token-abc",
-        undefined,
-        undefined,
-      );
+      expect(verifyTurnstileToken).toHaveBeenCalledWith("token-abc", undefined);
     });
 
     it("x-forwarded-for が空文字でも IP を渡さない", async () => {
@@ -165,11 +142,7 @@ describe("signInWithTurnstileAction", () => {
         formWithToken("token-abc"),
       );
 
-      expect(verifyTurnstileToken).toHaveBeenCalledWith(
-        "token-abc",
-        undefined,
-        undefined,
-      );
+      expect(verifyTurnstileToken).toHaveBeenCalledWith("token-abc", undefined);
     });
 
     it("トークン欄が無ければ null を渡す", async () => {
@@ -184,7 +157,7 @@ describe("signInWithTurnstileAction", () => {
         formWithToken(),
       );
 
-      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7", undefined);
+      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7");
     });
 
     it("トークン欄が空文字なら null に落として渡す", async () => {
@@ -199,7 +172,7 @@ describe("signInWithTurnstileAction", () => {
         formWithToken(""),
       );
 
-      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7", undefined);
+      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7");
     });
 
     it("トークン欄が File なら文字列として扱わず null に落とす", async () => {
@@ -213,35 +186,8 @@ describe("signInWithTurnstileAction", () => {
 
       await signInWithTurnstileAction("/", LOGIN_INITIAL_STATE, form);
 
-      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7", undefined);
+      expect(verifyTurnstileToken).toHaveBeenCalledWith(null, "203.0.113.7");
       expect(signIn).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("hostname の照合に渡す Host", () => {
-    it("x-forwarded-host を優先して渡す（リバースプロキシ配下）", async () => {
-      forwardedHost = "aniflix.example";
-      host = "internal-lb.local:8080";
-
-      await signInWithTurnstileAction(
-        "/",
-        LOGIN_INITIAL_STATE,
-        formWithToken("token-abc"),
-      );
-
-      expect(verifyTurnstileToken.mock.calls[0][2]).toBe("aniflix.example");
-    });
-
-    it("x-forwarded-host が無ければ host を渡す", async () => {
-      host = "aniflix.example";
-
-      await signInWithTurnstileAction(
-        "/",
-        LOGIN_INITIAL_STATE,
-        formWithToken("token-abc"),
-      );
-
-      expect(verifyTurnstileToken.mock.calls[0][2]).toBe("aniflix.example");
     });
   });
 

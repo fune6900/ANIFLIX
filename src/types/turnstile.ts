@@ -61,6 +61,8 @@ export interface TurnstileSiteVerifyResponse {
   hostname?: string;
   action?: string;
   cdata?: string;
+  /** 公式テストキーで検証した応答には result_with_testing_key: true が付く（action は返らない） */
+  metadata?: { result_with_testing_key?: boolean };
 }
 
 declare global {

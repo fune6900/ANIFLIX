@@ -43,46 +43,60 @@ export type TurnstileVerdict =
   | { ok: true; skipped: boolean }
   | { ok: false; reason: TurnstileFailureReason };
 
-/** "Host:443" / "Host, 中継" から先頭のホスト名だけを小文字で取り出す（siteverify の hostname はポートを含まない） */
+/** ログに出す action の上限。action はクライアントの render() で決まる（Cloudflare 側で最大 32 文字） */
+const ACTION_LOG_MAX = 32;
+
+/**
+ * ホスト名を比較用に正規化する（小文字・ポート無し・末尾ドット無し）。
+ * 設定値に `https://aniflix.example/login` のような URL が書かれても読めるようにする
+ */
 function toHostname(raw: string | undefined | null): string | null {
-  const first = raw?.split(",")[0]?.trim().toLowerCase();
-  if (!first) return null;
+  const value = raw?.trim().toLowerCase();
+  if (!value) return null;
   try {
-    return new URL(`http://${first}`).hostname || null;
+    const url = new URL(value.includes("://") ? value : `http://${value}`);
+    return url.hostname.replace(/\.$/, "") || null;
   } catch {
     return null;
   }
 }
 
+type HostnamePolicy =
+  | { kind: "check"; allowed: string[] }
+  /** 開発環境で許可リストを明示していない（照合しない） */
+  | { kind: "skip" }
+  /** 本番で許可リストが無い、または有効な値が 1 つも無い */
+  | { kind: "misconfigured" };
+
 /**
- * トークンを解いてよいホスト名。優先順:
- * 1. `TURNSTILE_ALLOWED_HOSTNAMES`（カンマ区切り）
- * 2. `AUTH_URL` のホスト名
- * 3. リクエストの Host（x-forwarded-host を優先。リバースプロキシ配下で内部の Host にずれないように）
+ * トークンを解いてよいホスト名は `TURNSTILE_ALLOWED_HOSTNAMES`（カンマ区切り）だけで決める。
  *
- * @returns null なら照合しない（本番以外で許可リストを明示していないとき。
- *   Cloudflare のテストキーは hostname に example.com を返すため、照合すると開発でログインできない）
+ * リクエストの Host / X-Forwarded-Host には頼らない。bot はブラウザではないので
+ * どちらも自由に書け、「攻撃者が解いたホスト名」を「攻撃者が申告したホスト名」と
+ * 比べるだけになる。AUTH_URL も使わない（www やプレビューを取りこぼして全員を締め出す）。
  */
-function allowedHostnames(requestHost: string | undefined): string[] | null {
-  const explicit = (process.env.TURNSTILE_ALLOWED_HOSTNAMES ?? "")
+function hostnamePolicy(): HostnamePolicy {
+  const raw = process.env.TURNSTILE_ALLOWED_HOSTNAMES;
+  const allowed = (raw ?? "")
     .split(",")
     .map((h) => toHostname(h))
     .filter((h): h is string => h !== null);
-  if (explicit.length > 0) return explicit;
 
-  if (process.env.NODE_ENV !== "production") return null;
-
-  let authHost: string | null = null;
-  try {
-    authHost = process.env.AUTH_URL ? new URL(process.env.AUTH_URL).hostname : null;
-  } catch {
-    authHost = null;
+  if (allowed.length > 0) return { kind: "check", allowed };
+  if (raw?.trim()) {
+    // 設定しているのに 1 件も読めない = 書き間違い。黙って照合を外さない
+    console.error(
+      "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES に有効なホスト名がありません",
+    );
+    return { kind: "misconfigured" };
   }
-  if (authHost) return [authHost.toLowerCase()];
-
-  const reqHost = toHostname(requestHost);
-  // 照合先が 1 つも決まらない本番は弾く（fail-closed）
-  return reqHost ? [reqHost] : [];
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[turnstile.verifyTurnstileToken] TURNSTILE_ALLOWED_HOSTNAMES が未設定のため検証を拒否しました",
+    );
+    return { kind: "misconfigured" };
+  }
+  return { kind: "skip" };
 }
 
 /**
@@ -94,12 +108,10 @@ function allowedHostnames(requestHost: string | undefined): string[] | null {
  *
  * @param token フォームの `cf-turnstile-response`。未取得なら null
  * @param remoteIp 利用者の IP。任意だが渡すと Cloudflare 側の判定精度が上がる
- * @param requestHost リクエストの Host（x-forwarded-host 優先）。hostname 照合の最後の拠り所
  */
 export async function verifyTurnstileToken(
   token: string | null,
   remoteIp?: string,
-  requestHost?: string,
 ): Promise<TurnstileVerdict> {
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
 
@@ -148,20 +160,35 @@ export async function verifyTurnstileToken(
     const data: TurnstileSiteVerifyResponse = await response.json();
 
     if (data.success) {
+      // 公式テストキーの応答は action を返さず hostname も example.com 固定。
+      // 開発では照合を外して通し、本番に入っていたら設定事故として弾く
+      if (data.metadata?.result_with_testing_key === true) {
+        if (process.env.NODE_ENV === "production") {
+          console.error(
+            "[turnstile.verifyTurnstileToken] 本番でテストキーの応答を受け取ったため検証を拒否しました",
+          );
+          return { ok: false, reason: "misconfigured" };
+        }
+        return { ok: true, skipped: false };
+      }
+
       // Cloudflare 推奨の多層防御。success だけでは「どのフォームで・どのドメインで」
       // 解かれたかを見ておらず、設定を誤って同じウィジェットを使い回すと素通りする
       if (data.action !== TURNSTILE_LOGIN_ACTION) {
         console.error(
           "[turnstile.verifyTurnstileToken] action mismatch:",
-          data.action ?? "(none)",
+          data.action?.slice(0, ACTION_LOG_MAX) ?? "(none)",
         );
         return { ok: false, reason: "action-mismatch" };
       }
 
-      const allowed = allowedHostnames(requestHost);
-      if (allowed !== null) {
+      const policy = hostnamePolicy();
+      if (policy.kind === "misconfigured") {
+        return { ok: false, reason: "misconfigured" };
+      }
+      if (policy.kind === "check") {
         const solvedOn = toHostname(data.hostname);
-        if (!solvedOn || !allowed.includes(solvedOn)) {
+        if (!solvedOn || !policy.allowed.includes(solvedOn)) {
           // hostname は Cloudflare 由来のドメイン名で、トークンもシークレットも含まない
           console.error(
             "[turnstile.verifyTurnstileToken] hostname mismatch:",

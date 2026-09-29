@@ -106,7 +106,12 @@ TMDB_ACCESS_TOKEN=...
 ```env
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
 TURNSTILE_SECRET_KEY=...
+# 本番では必須。ログイン画面を開くホストを全部（www・プレビュー含む）
+TURNSTILE_ALLOWED_HOSTNAMES=aniflix.example,www.aniflix.example
 ```
+
+siteverify の応答の `action`（`"login"`）と `hostname`（上の許可リスト）も照合する。
+許可リストは Host ヘッダーや `AUTH_URL` から推測しない（Host は bot が自由に書ける）。
 
 未設定時、開発環境では検証をスキップし、本番では必ず検証失敗にする（fail-closed）。
 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` は**ビルド時**にバンドルへ焼き込まれるため、

@@ -26,15 +26,6 @@ function readFormString(formData: FormData, name: string): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/**
- * 利用者が開いたホスト。リバースプロキシ配下では host が内部の値になるため
- * x-forwarded-host を優先する（Turnstile の hostname 照合に使う）
- */
-async function resolveRequestHost(): Promise<string | undefined> {
-  const h = await headers();
-  return h.get("x-forwarded-host") || h.get("host") || undefined;
-}
-
 /** 利用者の IP。プロキシ経由では x-forwarded-for の先頭が元の送信元 */
 async function resolveRemoteIp(): Promise<string | undefined> {
   const forwardedFor = (await headers()).get("x-forwarded-for");
@@ -63,7 +54,6 @@ export async function signInWithTurnstileAction(
   const verdict = await verifyTurnstileToken(
     readFormString(formData, "cf-turnstile-response"),
     await resolveRemoteIp(),
-    await resolveRequestHost(),
   );
 
   if (!verdict.ok) {
