@@ -1,19 +1,30 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import {
   getAnimeByGenre,
   getAnimeByKeywords,
   parsePageParam,
 } from "@/lib/tmdb";
 import { ANIME_GENRES, findGenre } from "@/lib/genres";
-import { detectDevice, itemsPerPage } from "@/lib/device";
+import { requestItemsPerPage } from "@/lib/request-device";
 import type { TMDbAnime } from "@/types/tmdb";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterAnime,
+  isFilterActive,
+  parseBrowseFilter,
+  withFilter,
+} from "@/lib/browse-filter";
 
 interface GenrePageProps {
   params: Promise<{ genreId: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    genre?: string | string[];
+    service?: string | string[];
+  }>;
 }
 
 export default async function GenrePage({
@@ -30,12 +41,12 @@ export default async function GenrePage({
   if (!genre) notFound();
 
   const currentPage = parsePageParam(sp.page);
+  const filter = parseBrowseFilter(sp);
 
-  const ua = (await headers()).get("user-agent") ?? "";
-  const device = detectDevice(ua);
-  const limit = itemsPerPage(device);
+  const limit = await requestItemsPerPage();
 
   let results: TMDbAnime[] = [];
+  let fetchedCount = 0;
   let totalPages = 1;
   let totalResults = 0;
   let error: string | null = null;
@@ -49,7 +60,10 @@ export default async function GenrePage({
       data = await getAnimeByGenre(genreId, currentPage);
     }
     if (data) {
-      results = data.results.slice(0, limit);
+      const pageItems = data.results.slice(0, limit);
+      fetchedCount = pageItems.length;
+      // 取得済みの作品の中だけを絞る
+      results = await filterAnime(pageItems, filter);
       totalPages = data.total_pages;
       totalResults = data.total_results;
     }
@@ -127,6 +141,14 @@ export default async function GenrePage({
           ))}
         </div>
 
+        <BrowseFilterForm
+          action={`/browse/genre/${genreId}`}
+          filter={filter}
+          // 取得に失敗したときは「0 件中 0 件」を出さない
+          fetchedCount={error ? undefined : fetchedCount}
+          shownCount={error ? undefined : results.length}
+        />
+
         {/* エラー */}
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
@@ -134,8 +156,13 @@ export default async function GenrePage({
           </div>
         )}
 
+        {/* 絞り込んだ結果が無い */}
+        {!error && results.length === 0 && isFilterActive(filter) && fetchedCount > 0 && (
+          <BrowseFilterEmpty />
+        )}
+
         {/* 結果なし */}
-        {!error && results.length === 0 && (
+        {!error && results.length === 0 && fetchedCount === 0 && (
           <div className="text-center py-24">
             <p className="text-gray-500 text-lg">
               このジャンルの作品が見つかりませんでした
@@ -163,7 +190,7 @@ export default async function GenrePage({
           <div className="flex items-center justify-center gap-4 mt-12">
             {prevPage ? (
               <Link
-                href={`/browse/genre/${genreId}?page=${prevPage}`}
+                href={withFilter(`/browse/genre/${genreId}?page=${prevPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 <svg
@@ -204,7 +231,7 @@ export default async function GenrePage({
             </span>
             {nextPage ? (
               <Link
-                href={`/browse/genre/${genreId}?page=${nextPage}`}
+                href={withFilter(`/browse/genre/${genreId}?page=${nextPage}`, filter)}
                 className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded transition text-sm font-semibold"
               >
                 次のページ

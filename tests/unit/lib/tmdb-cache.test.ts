@@ -82,6 +82,15 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getNewAnime(1))).toBe("revalidate:86400");
   });
 
+  it("作品のキーワードはほぼ不変なので 24 時間キャッシュする", async () => {
+    expect(await policyFor((m) => m.getAnimeKeywordIds(1))).toBe(
+      "revalidate:86400",
+    );
+    expect(await policyFor((m) => m.getMovieKeywordIds(1))).toBe(
+      "revalidate:86400",
+    );
+  });
+
   it("ユーザー入力を含むクエリは絶対にキャッシュしない", async () => {
     // 任意の入力がキャッシュキーになるため、Data Cache が無制限に膨張する
     expect(await policyFor((m) => m.searchAnime("進撃"))).toBe("no-store");

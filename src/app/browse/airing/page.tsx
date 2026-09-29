@@ -1,17 +1,33 @@
 import { getRecentSeasons } from "@/lib/seasons";
 import { entryKey, fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import SeasonAnimeCard from "@/components/SeasonAnimeCard";
+import BrowseFilterForm from "@/components/BrowseFilterForm";
+import BrowseFilterEmpty from "@/components/BrowseFilterEmpty";
+import {
+  filterEntries,
+  isFilterActive,
+  parseBrowseFilter,
+} from "@/lib/browse-filter";
+import type { BrowseFilterParams } from "@/lib/browse-filter";
 
-export default async function AiringPage() {
+interface AiringPageProps {
+  searchParams: Promise<BrowseFilterParams>;
+}
+
+export default async function AiringPage({ searchParams }: AiringPageProps) {
+  const filter = parseBrowseFilter(await searchParams);
+
   // アクセス日時から現在のシーズンを取得
   const currentSeason = getRecentSeasons(1)[0];
 
   // AniList を季別タイトルリスト源、TMDb を表示データ源として一括取得
   // 上限は既定（1 シーズン分を取り切る）に任せる
-  const { entries } = await fetchSeasonalAnime(
+  const { entries: fetched } = await fetchSeasonalAnime(
     currentSeason.year,
     currentSeason.season,
   );
+  // 取得済みの作品の中だけを絞る
+  const entries = await filterEntries(fetched, filter);
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
@@ -38,6 +54,13 @@ export default async function AiringPage() {
       </div>
 
       <div className="site-container pb-24">
+        <BrowseFilterForm
+          action="/browse/airing"
+          filter={filter}
+          fetchedCount={fetched.length}
+          shownCount={entries.length}
+        />
+
         {entries.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {entries.map((entry) => (
@@ -48,6 +71,8 @@ export default async function AiringPage() {
               />
             ))}
           </div>
+        ) : isFilterActive(filter) && fetched.length > 0 ? (
+          <BrowseFilterEmpty />
         ) : (
           <div className="text-center py-20 text-gray-500">
             データを取得できませんでした
