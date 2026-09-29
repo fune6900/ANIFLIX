@@ -77,6 +77,11 @@ describe("TMDb のキャッシュ方針", () => {
     );
   });
 
+  it("新着（直近 7 日の放送）は日替わりなので 24 時間キャッシュする", async () => {
+    // 期間の日付がキーに入るので、日付が変われば自然に別エントリになる
+    expect(await policyFor((m) => m.getNewAnime(1))).toBe("revalidate:86400");
+  });
+
   it("ユーザー入力を含むクエリは絶対にキャッシュしない", async () => {
     // 任意の入力がキャッシュキーになるため、Data Cache が無制限に膨張する
     expect(await policyFor((m) => m.searchAnime("進撃"))).toBe("no-store");
