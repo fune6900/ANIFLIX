@@ -16,7 +16,9 @@ const getTrendingAnime = vi.fn();
 const getNewAnime = vi.fn();
 const getPopularAnime = vi.fn();
 
-vi.mock("@/lib/tmdb", () => ({
+// 判定関数（isJapaneseAnimeTV）は実物を使う。取得関数だけ差し替える
+vi.mock("@/lib/tmdb", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/tmdb")>()),
   TMDB_MAX_PAGE: 500,
   getTrendingAnime: (p: number) => getTrendingAnime(p),
   getNewAnime: (p: number) => getNewAnime(p),
@@ -274,6 +276,25 @@ describe("loadBrowseCategory: トレンドは週間トレンドから日本の�
 
     expect(data.page).toBe(2);
     expect(data.results).toHaveLength(30);
+  });
+
+  it("国が未登録でも原語が日本語のアニメは残す（他の画面の判定と揃える）", async () => {
+    getTrendingAnime.mockImplementation(async (p: number) => {
+      const res = await trendingPage(p);
+      if (p === 1) {
+        res.results[10] = {
+          ...anime(9999),
+          genre_ids: [16],
+          origin_country: [],
+          original_language: "ja",
+        };
+      }
+      return res;
+    });
+
+    const data = await loadBrowseCategory("trending", 1, 20);
+
+    expect(data.results.map((a) => a.id)).toContain(9999);
   });
 
   it("週間トレンドの 1 ページが落ちても残りで組む", async () => {

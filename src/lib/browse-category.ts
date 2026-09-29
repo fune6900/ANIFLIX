@@ -5,6 +5,7 @@ import {
   getNewAnime,
   getPopularAnime,
   getTrendingAnime,
+  isJapaneseAnimeTV,
 } from "@/lib/tmdb";
 import type { TMDbAnime, TMDbSearchResponse } from "@/types/tmdb";
 
@@ -26,9 +27,6 @@ const MAX_WIDE_PAGE = Math.ceil(
  */
 const TRENDING_SCAN_PAGES = 20;
 
-/** アニメーション（TMDb ジャンル ID） */
-const ANIMATION_GENRE_ID = 16;
-
 type TMDbPageFetcher = (page: number) => Promise<TMDbSearchResponse<TMDbAnime>>;
 
 /**
@@ -48,14 +46,6 @@ interface BrowseCategoryConfig {
   paging: PagingMode;
 }
 
-function isJapaneseAnime(anime: TMDbAnime): boolean {
-  // 「アニメ **または** 日本」だと日本の実写ドラマや海外のアニメまで混ざる
-  return (
-    anime.genre_ids.includes(ANIMATION_GENRE_ID) &&
-    anime.origin_country.includes("JP")
-  );
-}
-
 const BROWSE_CATEGORIES = {
   popular: {
     title: "🔥 今期人気アニメ",
@@ -65,7 +55,13 @@ const BROWSE_CATEGORIES = {
   trending: {
     title: "📈 今週のトレンド",
     fetcher: (page: number) => getTrendingAnime(page),
-    paging: { kind: "scan", pages: TRENDING_SCAN_PAGES, keep: isJapaneseAnime },
+    // 他の画面と同じ「日本のアニメ」判定（アニメ必須 + JP または日本語原作）。
+    // 旧実装の「アニメ または 日本」は日本の実写ドラマや海外のアニメまで通していた
+    paging: {
+      kind: "scan",
+      pages: TRENDING_SCAN_PAGES,
+      keep: isJapaneseAnimeTV,
+    },
   },
   new: {
     title: "🆕 新着アニメ",
