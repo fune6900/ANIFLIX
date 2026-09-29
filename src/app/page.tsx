@@ -6,8 +6,6 @@ import type { ContentRowItem } from "@/components/ContentRow";
 import {
   getNewAnime,
   getJapaneseTrendingAnime,
-  getAnimeByGenre,
-  getAnimeByKeywords,
   getAnimeVideos,
 } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
@@ -16,9 +14,18 @@ import {
   type AggregatedCast,
 } from "@/lib/seasonal-cast";
 import { ANIME_GENRES } from "@/lib/genres";
-import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_ERAS } from "@/lib/eras";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
+import {
+  HOME_ROW_SIZE,
+  HOME_SEASON_ROW_COUNT,
+  fetchEraRow,
+  fetchGenreRow,
+  fetchSeasonRows,
+  pickHomeEras,
+  randomPage,
+  shuffle,
+} from "@/lib/home-rows";
 import type { TMDbAnime } from "@/types/tmdb";
 
 // TMDb アニメデータを ContentRowItem に変換
@@ -53,37 +60,31 @@ function toCastCardItem(c: AggregatedCast): ContentRowItem {
   };
 }
 
-// ─── ランダム系ユーティリティ ───────────────────────────────
-/** Fisher-Yates シャッフル（破壊なし） */
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+/** ピル（シーズン・年代・ジャンル共通）のサイズ */
+const PILL_CLASS =
+  "flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br group";
+
+interface SectionHeaderProps {
+  title: string;
+  href: string;
 }
 
-/** 1〜max のランダムページ番号 */
-function randomPage(max = 3): number {
-  return Math.floor(Math.random() * max) + 1;
-}
-
-// ジャンル1件分のアイテムを取得（genre/keyword どちらにも対応）
-async function fetchGenreItems(genre: AnimeGenre): Promise<ContentRowItem[]> {
-  try {
-    const page = randomPage(3);
-    if (genre.filterType === "keyword" && genre.keyword) {
-      const allKeywords = [genre.keyword, ...(genre.extraKeywords ?? [])];
-      const data = await getAnimeByKeywords(allKeywords, page);
-      return shuffle(data.results).slice(0, 20).map(toCardItem);
-    } else {
-      const data = await getAnimeByGenre(genre.id, page);
-      return shuffle(data.results).slice(0, 20).map(toCardItem);
-    }
-  } catch {
-    return [];
-  }
+/** 「シーズンで探す」等の見出し + 一覧へ → */
+function SectionHeader({ title, href }: SectionHeaderProps) {
+  return (
+    <div className="site-container mt-6 mb-4 flex items-center gap-3">
+      <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
+        {title}
+      </h2>
+      <div className="flex-1 h-px bg-gray-800" />
+      <Link
+        href={href}
+        className="text-[#54b9c5] text-xs md:text-sm font-semibold hover:text-white transition flex-shrink-0"
+      >
+        一覧へ →
+      </Link>
+    </div>
+  );
 }
 
 /**
@@ -103,26 +104,38 @@ async function fetchGenreItems(genre: AnimeGenre): Promise<ContentRowItem[]> {
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  // 現在のシーズンを取得
-  const currentSeason = getRecentSeasons(1)[0];
+  // 現在のシーズンを取得。行は直近 HOME_SEASON_ROW_COUNT クール
+  const rowSeasons = getRecentSeasons(HOME_SEASON_ROW_COUNT);
+  const currentSeason = rowSeasons[0];
+  const rowEras = pickHomeEras();
 
   // 既存4列 + 全ジャンル を並列フェッチ
   // トレンドはフィルタ後に20件確保するため2ページ同時取得
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
   // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
   // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
+  // 過去シーズンの行は 1 シーズンずつ順に取るため、冷えたキャッシュでは現クールの数倍かかる。
+  // ここで開始だけして、待つのは 2 段目（トレーラー・声優集約）と一緒にする。
+  // 1 段目で待つと 2 段目の開始がその分だけ遅れ、ホームの初回表示が延びる。
+  // fetchSeasonRows は各シーズンの失敗を [] に丸めるので reject しない
+  const pastSeasonRowsPromise = fetchSeasonRows(rowSeasons.slice(1));
+
+  // 年代・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
+  // 現クールの行は TOP10 と同じ取得結果を使い回し、AniList への往復を 1 回減らす
   const [
     currentSeasonResult,
     newData,
     trendingData1,
     trendingData2,
-    ...genreResults
+    eraRows,
+    genreRows,
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
     getNewAnime(randomPage(3)),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
-    ...ANIME_GENRES.map((g) => fetchGenreItems(g)),
+    Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
+    Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
 
   const currentSeasonAnime: TMDbAnime[] =
@@ -139,7 +152,7 @@ export default async function Home() {
   // Hero のトレーラーと人気声優の集約は、どちらも currentSeasonAnime にしか
   // 依存しておらず互いに独立している。直列に await すると往復が1段分まるごと
   // 無駄になるため、同一の Promise.all にまとめて段数を 3 → 2 に減らす。
-  const [trailerKeys, aggregatedCast] = await Promise.all([
+  const [trailerKeys, aggregatedCast, pastSeasonRows] = await Promise.all([
     Promise.all(
       heroCandidates.map((a) =>
         getAnimeVideos(a.id)
@@ -152,6 +165,7 @@ export default async function Home() {
     // 取れないため、「今期人気アニメに出演している声優」を出演本数順に並べる
     // 方が信頼性が高い。
     aggregateSeasonalCast(currentSeasonAnime.slice(0, 12).map((a) => a.id)),
+    pastSeasonRowsPromise,
   ]);
 
   const heroAnime: HeroItem[] = heroCandidates.map((a, i) => ({
@@ -194,10 +208,21 @@ export default async function Home() {
     .slice(0, 20)
     .map(toCastCardItem);
 
-  // ジャンル別アイテム（ANIME_GENRES と同順）
-  const genreItems = genreResults.map((r) =>
-    r.status === "fulfilled" ? (r.value as ContentRowItem[]) : [],
-  );
+  // シーズン行（rowSeasons と同順）。先頭は現クール = TOP10 と同じ取得結果
+  const seasonItems: ContentRowItem[][] = [
+    currentSeasonAnime.slice(0, HOME_ROW_SIZE).map(toCardItem),
+    ...pastSeasonRows.map((row) => row.map(toCardItem)),
+  ];
+
+  // 年代行（rowEras と同順）・ジャンル行（ANIME_GENRES と同順）
+  const eraItems: ContentRowItem[][] =
+    eraRows.status === "fulfilled"
+      ? eraRows.value.map((row) => row.map(toCardItem))
+      : [];
+  const genreItems: ContentRowItem[][] =
+    genreRows.status === "fulfilled"
+      ? genreRows.value.map((row) => row.map(toCardItem))
+      : [];
 
   return (
     <div className="bg-[#141414] min-h-screen">
@@ -230,18 +255,7 @@ export default async function Home() {
         )}
 
         {/* シーズン別セクション */}
-        <div className="site-container mt-6 mb-4 flex items-center gap-3">
-          <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
-            シーズンで探す
-          </h2>
-          <div className="flex-1 h-px bg-gray-800" />
-          <Link
-            href="/browse/seasons"
-            className="text-[#54b9c5] text-xs md:text-sm font-semibold hover:text-white transition flex-shrink-0"
-          >
-            一覧へ →
-          </Link>
-        </div>
+        <SectionHeader title="シーズンで探す" href="/browse/seasons" />
         <div
           className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
@@ -250,7 +264,7 @@ export default async function Home() {
             <Link
               key={s.href}
               href={s.href}
-              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br ${SEASON_COLORS[s.season]} group`}
+              className={`${PILL_CLASS} ${SEASON_COLORS[s.season]}`}
             >
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
               <div className="absolute bottom-2 right-3 text-white/10 font-black text-4xl leading-none select-none">
@@ -271,14 +285,21 @@ export default async function Home() {
             </Link>
           ))}
         </div>
+        {rowSeasons.map((s, i) => {
+          const items = seasonItems[i] ?? [];
+          if (items.length === 0) return null;
+          return (
+            <ContentRow
+              key={s.href}
+              title={`${s.emoji} ${s.label}`}
+              items={items}
+              allHref={s.href}
+            />
+          );
+        })}
 
         {/* 年代別セクション */}
-        <div className="site-container mt-6 mb-4 flex items-center gap-3">
-          <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
-            年代で探す
-          </h2>
-          <div className="flex-1 h-px bg-gray-800" />
-        </div>
+        <SectionHeader title="年代で探す" href="/browse/eras" />
         <div
           className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
@@ -287,7 +308,7 @@ export default async function Home() {
             <Link
               key={era.decade}
               href={`/browse/era/${era.decade}`}
-              className={`flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br ${era.color} group`}
+              className={`${PILL_CLASS} ${era.color}`}
             >
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
               <div className="absolute bottom-2 right-3 text-white/10 font-black text-5xl leading-none select-none">
@@ -307,13 +328,40 @@ export default async function Home() {
             </Link>
           ))}
         </div>
+        {rowEras.map((era, i) => {
+          const items = eraItems[i] ?? [];
+          if (items.length === 0) return null;
+          return (
+            <ContentRow
+              key={era.decade}
+              title={`${era.emoji} ${era.label}`}
+              items={items}
+              allHref={`/browse/era/${era.decade}`}
+            />
+          );
+        })}
 
         {/* ジャンル別セクション */}
-        <div className="site-container mt-6 mb-4 flex items-center gap-3">
-          <h2 className="text-white font-black text-lg md:text-xl xl:text-2xl">
-            ジャンルで探す
-          </h2>
-          <div className="flex-1 h-px bg-gray-800" />
+        <SectionHeader title="ジャンルで探す" href="/browse/genres" />
+        <div
+          className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {ANIME_GENRES.map((genre) => (
+            <Link
+              key={genre.id}
+              href={`/browse/genre/${genre.id}`}
+              className={`${PILL_CLASS} ${genre.color}`}
+            >
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+              <div className="relative p-3 h-full flex flex-col justify-between">
+                <span className="text-2xl">{genre.emoji}</span>
+                <p className="text-white font-black text-base leading-tight">
+                  {genre.name}
+                </p>
+              </div>
+            </Link>
+          ))}
         </div>
 
         {ANIME_GENRES.map((genre, i) => {

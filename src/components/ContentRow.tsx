@@ -352,6 +352,15 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
             <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
           )}
 
+          {/* 声優カード: 写真の中に名前を常に出す（ホバーの無いタッチ端末でも誰か分かる） */}
+          {item.isPortrait && (item.posterPath || item.backdropPath) && (
+            <div className="absolute inset-x-0 bottom-0 p-2 xl:p-2.5">
+              <p className="text-white text-xs md:text-sm xl:text-base font-bold truncate drop-shadow-md">
+                {item.title}
+              </p>
+            </div>
+          )}
+
           {/* PC: 横長表示ではタイトルをオーバーレイ */}
           {useLandscapeOnDesktop && (item.posterPath || item.backdropPath) && (
             <div className="hidden md:block absolute inset-x-0 bottom-0 p-2.5">
@@ -404,9 +413,6 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
                 <span className="text-gray-400 truncate">{item.year}</span>
               )}
             </div>
-            <p className="text-white text-xs font-semibold truncate">
-              {item.title}
-            </p>
           </div>
         )}
       </div>
