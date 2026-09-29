@@ -33,6 +33,7 @@ const {
   fetchGenreRow,
   fetchEraRow,
   fetchSeasonRow,
+  fetchSeasonRows,
 } = await import("@/lib/home-rows");
 
 function anime(id: number): TMDbAnime {
@@ -130,6 +131,19 @@ describe("fetchGenreRow", () => {
     expect(items).toHaveLength(30);
   });
 
+  it("開始ページが 2 のときは 2・3 ページ目を取る", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    getAnimeByGenre.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+
+    const items = await fetchGenreRow(GENRE);
+
+    const pages = getAnimeByGenre.mock.calls.map((c) => c[1]).sort();
+    expect(pages).toEqual([2, 3]);
+    expect(items).toHaveLength(30);
+  });
+
   it("キーワードジャンルは追加キーワードも含めて引く", async () => {
     getAnimeByKeywords.mockImplementation((_kw: string[], p: number) =>
       Promise.resolve(page(p * 100)),
@@ -196,28 +210,93 @@ describe("fetchEraRow", () => {
 });
 
 describe("fetchSeasonRow", () => {
-  it("AniList 一次ソースで 30 件を人気順のまま返す", async () => {
-    const items = Array.from({ length: 30 }, (_, i) => anime(i + 1));
-    fetchSeasonalAnime.mockResolvedValue({ items });
+  /**
+   * 実物の fetchSeasonalAnime は limit を「TMDb と突き合わせる前の AniList 候補数」
+   * に使う。TMDb に無い作品・劇場版・重複ヒットが後から落ちるため、items は
+   * limit より少なく返る。ここではその目減りを再現する
+   */
+  function shrinkingSeasonal(lost: number) {
+    return (_y: number, _s: string, opts: { limit: number }) =>
+      Promise.resolve({
+        items: Array.from({ length: Math.max(0, opts.limit - lost) }, (_, i) =>
+          anime(i + 1),
+        ),
+      });
+  }
+
+  it("突き合わせで候補が目減りしても 30 件を満たす", async () => {
+    fetchSeasonalAnime.mockImplementation(shrinkingSeasonal(15));
 
     const row = await fetchSeasonRow(2026, "spring");
 
-    expect(fetchSeasonalAnime).toHaveBeenCalledWith(2026, "spring", {
-      limit: 30,
-    });
-    expect(row.map((a) => a.id)).toEqual(items.map((a) => a.id));
+    expect(row).toHaveLength(30);
   });
 
-  it("30 件を超えて返ってきても 30 件で切る", async () => {
-    const items = Array.from({ length: 45 }, (_, i) => anime(i + 1));
-    fetchSeasonalAnime.mockResolvedValue({ items });
+  it("人気順のまま返す（shuffle しない）", async () => {
+    fetchSeasonalAnime.mockImplementation(shrinkingSeasonal(0));
 
-    await expect(fetchSeasonRow(2026, "spring")).resolves.toHaveLength(30);
+    const row = await fetchSeasonRow(2026, "spring");
+
+    expect(row.map((a) => a.id)).toEqual(
+      Array.from({ length: 30 }, (_, i) => i + 1),
+    );
   });
 
   it("失敗したら空配列", async () => {
     fetchSeasonalAnime.mockRejectedValue(new Error("AniList down"));
 
     await expect(fetchSeasonRow(2026, "spring")).resolves.toEqual([]);
+  });
+});
+
+describe("fetchSeasonRows", () => {
+  it("シーズンを 1 つずつ順に取る（AniList へ同時に投げない）", async () => {
+    // キャッシュが冷えていると 1 シーズンで AniList を最大 8 回叩く。
+    // 並列にすると現クールの取得まで 429 に巻き込まれる
+    const resolvers: Array<() => void> = [];
+    fetchSeasonalAnime.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve({ items: [anime(1)] }));
+        }),
+    );
+
+    const pending = fetchSeasonRows([
+      { year: 2026, season: "spring" },
+      { year: 2026, season: "winter" },
+      { year: 2025, season: "fall" },
+    ]);
+
+    await Promise.resolve();
+    expect(fetchSeasonalAnime).toHaveBeenCalledTimes(1);
+
+    for (let i = 0; i < 3; i++) {
+      await vi.waitFor(() => expect(resolvers[i]).toBeDefined());
+      resolvers[i]();
+    }
+    const rows = await pending;
+
+    expect(fetchSeasonalAnime).toHaveBeenCalledTimes(3);
+    expect(fetchSeasonalAnime.mock.calls.map((c) => c[1])).toEqual([
+      "spring",
+      "winter",
+      "fall",
+    ]);
+    expect(rows).toHaveLength(3);
+  });
+
+  it("途中のシーズンが落ちても残りを取る", async () => {
+    fetchSeasonalAnime
+      .mockResolvedValueOnce({ items: [anime(1)] })
+      .mockRejectedValueOnce(new Error("AniList down"))
+      .mockResolvedValueOnce({ items: [anime(3)] });
+
+    const rows = await fetchSeasonRows([
+      { year: 2026, season: "spring" },
+      { year: 2026, season: "winter" },
+      { year: 2025, season: "fall" },
+    ]);
+
+    expect(rows.map((r) => r.map((a) => a.id))).toEqual([[1], [], [3]]);
   });
 });

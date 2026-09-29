@@ -21,7 +21,7 @@ import {
   HOME_SEASON_ROW_COUNT,
   fetchEraRow,
   fetchGenreRow,
-  fetchSeasonRow,
+  fetchSeasonRows,
   pickHomeEras,
   randomPage,
   shuffle,
@@ -114,7 +114,7 @@ export default async function Home() {
   // 現クール作品は AniList を一次ソースとして取得（TMDb のシーズン取りこぼし対策）
   // 声優は /person/popular がワールドワイド (Hollywood 偏重) で日本人がほぼ取れないため、
   // 後段で「人気シーズンアニメのキャスト集約」方式に切り替える（fetchSeasonalAnime 後）
-  // シーズン・年代・ジャンルの行も同じ段で並列に取る（各 fetch*Row は失敗しても [] を返す）。
+  // シーズン・年代・ジャンルの行も同じ段で取る（各 fetch*Row は失敗しても [] を返す）。
   // 現クールの行は TOP10 と同じ取得結果を使い回し、AniList への往復を 1 回減らす
   const [
     currentSeasonResult,
@@ -129,9 +129,8 @@ export default async function Home() {
     getNewAnime(randomPage(3)),
     getJapaneseTrendingAnime(1),
     getJapaneseTrendingAnime(2),
-    Promise.all(
-      rowSeasons.slice(1).map((s) => fetchSeasonRow(s.year, s.season)),
-    ),
+    // 過去シーズンは AniList へ同時に投げないよう 1 つずつ（fetchSeasonRows 参照）
+    fetchSeasonRows(rowSeasons.slice(1)),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);

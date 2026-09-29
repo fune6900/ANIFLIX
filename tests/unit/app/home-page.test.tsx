@@ -58,15 +58,29 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
   };
 });
 
+// 実物は limit を TMDb 突き合わせ前の候補数に使い、items はそれより少なく返る
+// （TMDb に無い作品・劇場版が落ちる）。その目減りを再現しておく
 vi.mock("@/lib/seasonal-anime", () => ({
   fetchSeasonalAnime: (_y: number, _s: string, opts: { limit: number }) =>
     Promise.resolve({
-      items: Array.from({ length: opts.limit }, (_, i) => anime(5000 + i)),
+      items: Array.from({ length: Math.max(0, opts.limit - 15) }, (_, i) =>
+        anime(5000 + i),
+      ),
     }),
 }));
 
 vi.mock("@/lib/seasonal-cast", () => ({
-  aggregateSeasonalCast: () => Promise.resolve([]),
+  aggregateSeasonalCast: () =>
+    Promise.resolve(
+      Array.from({ length: 25 }, (_, i) => ({
+        id: 9000 + i,
+        name: `声優${i}`,
+        profilePath: `/va${i}.jpg`,
+        topCharacter: `役${i}`,
+        appearances: 1,
+        bestOrder: i,
+      })),
+    ),
 }));
 
 const { default: Home } = await import("@/app/page");
@@ -162,11 +176,18 @@ describe("ホーム: 探すセクション", () => {
     for (const href of [
       `/browse/genre/${ANIME_GENRES[0].id}`,
       "/browse/era/2020",
+      "/browse/season/2026/summer",
       "/browse/season/2026/spring",
+      "/browse/season/2025/fall",
     ]) {
       const more = screen
         .getAllByRole("link", { name: /すべて見る/ })
-        .find((a) => a.getAttribute("href") === href);
+        // 現クールは TOP10 行も同じ専用ページへ飛ぶので、TOP10 の行は除く
+        .find(
+          (a) =>
+            a.getAttribute("href") === href &&
+            !/TOP10/.test(a.closest("h2")?.textContent ?? ""),
+        );
       const row = more?.closest("h2")?.parentElement;
 
       expect(row, href).toBeTruthy();
@@ -175,5 +196,16 @@ describe("ホーム: 探すセクション", () => {
         .filter((a) => a.getAttribute("href")?.startsWith("/anime/"));
       expect(cards, href).toHaveLength(30);
     }
+  });
+
+  it("人気声優は 20 件のまま", async () => {
+    await renderHome();
+
+    const heading = screen.getByRole("heading", { name: /人気声優/ });
+    const cards = within(heading.parentElement as HTMLElement)
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.startsWith("/voice-actors/"));
+
+    expect(cards).toHaveLength(20);
   });
 });

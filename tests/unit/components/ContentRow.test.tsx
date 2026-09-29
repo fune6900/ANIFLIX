@@ -32,7 +32,13 @@ describe("ContentRow の声優カード", () => {
     const photo = screen.getByAltText("花澤香菜").parentElement;
 
     expect(photo).not.toBeNull();
-    expect(within(photo as HTMLElement).getByText("花澤香菜")).toBeVisible();
+    const name = within(photo as HTMLElement).getByText("花澤香菜");
+    expect(name).toBeVisible();
+
+    // jsdom は Tailwind を評価しない。スマホで隠すクラスが祖先に無いことを見る
+    for (let el: HTMLElement | null = name; el && el !== photo; el = el.parentElement) {
+      expect(el.className.split(/\s+/)).not.toContain("hidden");
+    }
   });
 
   it("写真が無い声優も名前が出る", () => {

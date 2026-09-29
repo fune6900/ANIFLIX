@@ -17,6 +17,14 @@ export const HOME_ROW_SIZE = 30;
  */
 export const HOME_SEASON_ROW_COUNT = 4;
 
+/**
+ * シーズン行で fetchSeasonalAnime に渡す候補数。
+ * limit は TMDb と突き合わせる前の AniList 候補数に効き、TMDb に無い作品・
+ * 劇場版・重複ヒットが後から落ちる。30 件ちょうどを頼むと行が 30 件を割るため、
+ * 現クール（TOP10 と共用）と同じ 50 件を頼んでから切る
+ */
+const SEASON_CANDIDATE_LIMIT = 50;
+
 /** 年代行の数。ピル列（全年代）とは別に、直近の年代だけ行にする */
 export const HOME_ERA_ROW_COUNT = 3;
 
@@ -97,10 +105,33 @@ export async function fetchSeasonRow(
 ): Promise<TMDbAnime[]> {
   try {
     const { items } = await fetchSeasonalAnime(year, season, {
-      limit: HOME_ROW_SIZE,
+      limit: SEASON_CANDIDATE_LIMIT,
     });
     return items.slice(0, HOME_ROW_SIZE);
   } catch {
     return [];
   }
+}
+
+interface SeasonKey {
+  year: number;
+  season: SeasonSlug;
+}
+
+/**
+ * 複数シーズンの行を **1 シーズンずつ順に** 取る。
+ *
+ * キャッシュが冷えていると 1 シーズンで AniList を最大 8 回（2 系統 × 4 ページ）叩く。
+ * 全部並列にすると、同じ段で走る現クールの取得（TOP10・Hero・人気声優の元）まで
+ * AniList の分間制限に巻き込まれて TMDb フォールバックに落ちる。
+ * AniList のシーズン取得は 6 時間キャッシュされるので、直列で遅くなるのは冷えた時だけ
+ */
+export async function fetchSeasonRows(
+  seasons: SeasonKey[],
+): Promise<TMDbAnime[][]> {
+  const rows: TMDbAnime[][] = [];
+  for (const s of seasons) {
+    rows.push(await fetchSeasonRow(s.year, s.season));
+  }
+  return rows;
 }
