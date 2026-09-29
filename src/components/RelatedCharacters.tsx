@@ -141,7 +141,8 @@ export default async function RelatedCharacters({
           このページに表示するキャラはない
         </p>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+        {/* 列数は 1 ページ 30 件を割り切る値（3 / 5 / 6 / 10）。最終行を欠けさせない */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
           {edges.map((edge) => {
             const name = pickCharacterName(edge);
             const img = pickCharacterImage(edge);

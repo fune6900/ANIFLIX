@@ -6,7 +6,7 @@ import { join } from "node:path";
  * 詳細ページ（アニメ / 映画。どちらも AnimeHeroTrailer を使う）の本文とヒーローの重なり（#78）。
  *
  * 本文が `-mt-32 md:-mt-48`（128 / 192px）でヒーローに重なり、背景動画の下端が
- * 隠れていた。重なりはヒーロー下端のグラデーション（下 1/4）の中に収める。
+ * 隠れていた。本文はヒーローの下から始める。
  * ページ全体の描画は TMDb / AniList の取得が多く重いので、クラス指定を契約として固定する
  */
 
@@ -21,10 +21,9 @@ function contentWrapperClasses(SOURCE: string): string[] {
   return (m?.[1] ?? "").split(/\s+/);
 }
 
-/** `-mt-N` / `md:-mt-N` の N（Tailwind の 1 = 4px） */
-function overlapPx(classes: string[], prefix: string): number {
-  const c = classes.find((x) => x.startsWith(`${prefix}-mt-`));
-  return c ? Number(c.slice(`${prefix}-mt-`.length)) * 4 : 0;
+/** 負のマージン（どのブレークポイントでも）= ヒーローに重ねる指定 */
+function negativeMargins(classes: string[]): string[] {
+  return classes.filter((c) => /(^|:)-mt-/.test(c));
 }
 
 describe.each([
@@ -37,12 +36,8 @@ describe.each([
     expect(classes).toContain("relative");
   });
 
-  it("モバイルは 32px 以下（16:9 の 375px 幅でヒーロー 211px、グラデーションは下 1/4 = 52px）", () => {
-    expect(overlapPx(classes, "")).toBeLessThanOrEqual(32);
-  });
-
-  it("md 以上は 48px 以下（768px 幅でヒーロー 432px、グラデーションは下 1/4 = 108px）", () => {
-    const md = overlapPx(classes, "md:") || overlapPx(classes, "");
-    expect(md).toBeLessThanOrEqual(48);
+  it("本文をヒーローに重ねない（lg 以上も含めて）", () => {
+    // 重ねると不透明のポスターと本文が動画の下端を隠す
+    expect(negativeMargins(classes)).toEqual([]);
   });
 });

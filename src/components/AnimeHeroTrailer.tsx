@@ -87,8 +87,9 @@ export default function AnimeHeroTrailer({
         />
       )}
 
-      {/* 下端だけを背景色へ溶かす（全面にかけると動画の下半分が暗く沈む） */}
-      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-[#141414] to-transparent pointer-events-none" />
+      {/* 下端だけを背景色へ寄せる。全面にかけると動画の下半分が沈み、
+          終端を不透明にすると最下段（PV の放送日テロップ等）が消えるので半透明で止める */}
+      <div className="absolute inset-x-0 bottom-0 h-1/6 bg-gradient-to-t from-[#141414]/60 to-transparent pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#141414]/70 via-transparent to-transparent pointer-events-none" />
 
       {trailerSrc && (

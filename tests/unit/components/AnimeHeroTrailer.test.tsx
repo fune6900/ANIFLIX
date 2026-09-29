@@ -31,6 +31,8 @@ describe("AnimeHeroTrailer", () => {
     const classes = box(container).className.split(/\s+/);
     expect(classes).toContain("aspect-video");
     expect(classes).not.toContain("h-[55vw]");
+    // 上限が無いと 3440px 幅で箱の高さが約 1935px に膨らむ
+    expect(classes).toContain("max-h-[70vh]");
   });
 
   it("動画は cover で敷かず、箱の高さに合わせて収める", () => {
@@ -68,7 +70,8 @@ describe("AnimeHeroTrailer", () => {
     expect(visual.className).not.toContain("object-cover");
   });
 
-  it("下端のグラデーションは下側だけ（動画全体を暗く沈めない）", () => {
+  it("下端のグラデーションは下側だけで、最下段も透けて見える", () => {
+    // 全面にかけると動画の下半分が沈み、終端を不透明にすると最下段（PV のテロップ等）が消える
     const { container } = render(<AnimeHeroTrailer {...PROPS} />);
 
     const bottomFades = [
@@ -79,6 +82,8 @@ describe("AnimeHeroTrailer", () => {
       const classes = fade.className.split(/\s+/);
       expect(classes).not.toContain("inset-0");
       expect(classes).toContain("bottom-0");
+      const from = classes.find((c) => c.startsWith("from-"));
+      expect(from, "終端の色に不透明度を付ける").toMatch(/\/\d+$/);
     }
   });
 
