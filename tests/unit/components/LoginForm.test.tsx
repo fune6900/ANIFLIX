@@ -49,6 +49,7 @@ function button(): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  scriptProps = {};
   api = {
     render: vi.fn<TurnstileApi["render"]>(() => "widget-1"),
     reset: vi.fn<TurnstileApi["reset"]>(),

@@ -16,7 +16,15 @@ import type {
  * （testing.md モック方針の例外 7）
  */
 
-vi.mock("next/script", () => ({ default: () => null }));
+/** next/script に渡された props（api.js の読み込み完了を起こすために捕まえる） */
+let scriptProps: { onReady?: () => void; onError?: () => void } = {};
+
+vi.mock("next/script", () => ({
+  default: (props: { onReady?: () => void; onError?: () => void }) => {
+    scriptProps = props;
+    return null;
+  },
+}));
 
 const { default: TurnstileWidget } =
   await import("@/components/TurnstileWidget");
@@ -38,6 +46,7 @@ function lastOptions(): TurnstileRenderOptions {
 }
 
 beforeEach(() => {
+  scriptProps = {};
   api = {
     render: vi.fn<TurnstileApi["render"]>(() => WIDGET_ID),
     reset: vi.fn<TurnstileApi["reset"]>(),
@@ -147,20 +156,43 @@ describe("TurnstileWidget", () => {
     const { onToken } = renderWidget();
 
     act(() => {
-      const event = new Event("pageshow") as PageTransitionEvent; // jsdom に PageTransitionEvent のコンストラクタが無い
-      Object.defineProperty(event, "persisted", { value: true });
-      window.dispatchEvent(event);
+      window.dispatchEvent(
+        new PageTransitionEvent("pageshow", { persisted: true }),
+      );
     });
 
     expect(api.reset).toHaveBeenCalledWith(WIDGET_ID);
     expect(onToken).toHaveBeenCalledWith(null);
   });
 
-  it("window.turnstile が未定義でも throw しない", () => {
+  it("初回訪問: api.js が後から読み込まれたら、その時点で render() する", () => {
+    // 初めて開いた時は window.turnstile がまだ無い。onReady を合図に描画する
+    vi.unstubAllGlobals();
+    renderWidget();
+    expect(api.render).not.toHaveBeenCalled();
+
+    vi.stubGlobal("turnstile", api);
+    act(() => scriptProps.onReady?.());
+
+    expect(api.render).toHaveBeenCalledTimes(1);
+    expect(lastOptions().sitekey).toBe("site-key-1");
+  });
+
+  it("window.turnstile が未定義のままでも throw しない（マウント・reset・アンマウント）", () => {
     vi.unstubAllGlobals();
 
-    expect(() => renderWidget()).not.toThrow();
     const { ref, unmount } = renderWidget();
+
+    expect(() => act(() => ref.current?.reset())).not.toThrow();
+    expect(() => unmount()).not.toThrow();
+  });
+
+  it("描画後に window.turnstile が消えても reset・アンマウントで throw しない", () => {
+    const { ref, unmount } = renderWidget();
+    expect(api.render).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+
     expect(() => act(() => ref.current?.reset())).not.toThrow();
     expect(() => unmount()).not.toThrow();
   });

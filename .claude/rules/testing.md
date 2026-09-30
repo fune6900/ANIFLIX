@@ -200,6 +200,8 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    この呼ばれ方にしか現れない。`vi.mock("next/script", ...)` で潰し、`vi.stubGlobal("turnstile", ...)`
    で差し込む。読み込み失敗（`onError`）を確かめる時はモックに渡った props を捕まえて呼ぶ。
    例: `tests/unit/components/TurnstileWidget.test.tsx` / `tests/unit/components/LoginForm.test.tsx`
+   `next/script` のモックは Turnstile（`TurnstileWidget` とそれを含む `LoginForm`）のテストに限る。
+   他のコンポーネントの `Script` へ広げる場合は ISSUE を起票すること。
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して
