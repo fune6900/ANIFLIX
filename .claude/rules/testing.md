@@ -23,7 +23,7 @@
    - `@playwright/test`、`playwright.config.ts`
    - `package.json` に `"e2e": "playwright test"` を追加
    - CI では `npx playwright install --with-deps` の後に実行する
-2. コンポーネントテスト（React Testing Library は導入済みだが未使用）
+2. ~~コンポーネントテスト~~（RTL で運用中。`tests/unit/components/`）
 
 導入する PR は `chore/<issue>-introduce-playwright` のように切り出すこと。
 
@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 6 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 7 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -192,6 +192,14 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    Vitest 環境では解決できない。ログアウトの配線自体は
    `tests/unit/app/actions/auth.test.ts` が受け持っているため、
    コンポーネント側では検証対象ではない。例: `tests/unit/components/Navbar.test.tsx`
+
+7. **Turnstile のコンポーネントテストで `next/script` をモックし、`window.turnstile` をスタブする**
+   `next/script` は Cloudflare の `api.js` を読み込むだけで、Vitest 環境では外部スクリプトを
+   読めない。`window.turnstile` はその `api.js` が生やすグローバルで、ウィジェットの配線
+   （`render()` を 1 回だけ呼ぶ・失敗時の `reset()`・アンマウント時の `remove()`）は
+   この呼ばれ方にしか現れない。`vi.mock("next/script", ...)` で潰し、`vi.stubGlobal("turnstile", ...)`
+   で差し込む。読み込み失敗（`onError`）を確かめる時はモックに渡った props を捕まえて呼ぶ。
+   例: `tests/unit/components/TurnstileWidget.test.tsx` / `tests/unit/components/LoginForm.test.tsx`
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して
