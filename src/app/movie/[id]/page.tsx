@@ -1,4 +1,5 @@
 import type React from "react";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -18,6 +19,7 @@ import AnimeHeroTrailer from "@/components/AnimeHeroTrailer";
 import ContentRow from "@/components/ContentRow";
 import type { ContentRowItem } from "@/components/ContentRow";
 import RelatedCharacters from "@/components/RelatedCharacters";
+import RelatedCharactersSkeleton from "@/components/RelatedCharactersSkeleton";
 import WatchProviders, {
   pickProviderCountry,
 } from "@/components/WatchProviders";
@@ -467,13 +469,15 @@ export default async function MovieDetailPage({
           )}
 
           {/* 関連キャラクター（AniList 経由・クリックで /characters/[id] へ） */}
-          <RelatedCharacters
-            title={movie.title}
-            originalTitle={movie.original_title}
-            mediaType="MOVIE"
-            currentPage={charactersPage}
-            pageUrl={(p) => `/movie/${numId}?cpage=${p}#related-characters`}
-          />
+          <Suspense fallback={<RelatedCharactersSkeleton />}>
+            <RelatedCharacters
+              title={movie.title}
+              originalTitle={movie.original_title}
+              mediaType="MOVIE"
+              currentPage={charactersPage}
+              pageUrl={(p) => `/movie/${numId}?cpage=${p}#related-characters`}
+            />
+          </Suspense>
 
           {/* 関連映画 */}
           {relatedMovies.length > 0 && (
