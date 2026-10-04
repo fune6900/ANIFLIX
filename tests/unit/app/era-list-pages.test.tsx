@@ -143,6 +143,7 @@ const MEDIA = [
     load: loadEraAnimeList,
     cardPrefix: "/anime/",
     providers: getAnimeWatchProviders,
+    back: { href: "/", label: "ホームに戻る" },
   },
   {
     label: "アニメ映画",
@@ -152,6 +153,7 @@ const MEDIA = [
     load: loadEraMovieList,
     cardPrefix: "/movie/",
     providers: getMovieWatchProviders,
+    back: { href: "/browse/movies", label: "アニメ映画に戻る" },
   },
 ] as const;
 
@@ -353,6 +355,40 @@ describe.each(MEDIA)("年代の一覧（$label）", (m) => {
     }
   });
 
+  it("他の年代へのリンクはジャンル・配信サービスの絞り込みも引き継ぐ（タブ・並び替えと揃える）", async () => {
+    await renderPage(m, "1990", {
+      sort: "year_asc",
+      genre: "35",
+      service: "netflix",
+      page: "3",
+    });
+
+    const links = linksStartingWith(`${m.base}/`);
+    for (const e of ANIME_ERAS.filter((e) => e.decade !== 1990)) {
+      // ページ番号は引き継がない（年代が違えば件数も違う）
+      expect(links).toContain(
+        `${m.base}/${e.decade}?sort=year_asc&genre=35&service=netflix`,
+      );
+    }
+  });
+
+  it("戻るリンクはアニメならホーム、アニメ映画ならアニメ映画ホームへ", async () => {
+    await renderPage(m, "1990", {});
+
+    const back = screen.getByRole("link", { name: m.back.label });
+    expect(back.getAttribute("href")).toBe(m.back.href);
+  });
+
+  it("グリッドは作り直し前の年代ページの段を保つ（1920px 超は auto-fill 300px）", async () => {
+    await renderPage(m, "1990", {});
+
+    const card = document.querySelector(`a[href^="${m.cardPrefix}"]`);
+    const grid = card?.closest(".grid");
+    expect(grid?.className).toBe(
+      "grid grid-cols-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5",
+    );
+  });
+
   it("取得に失敗したらエラーを出す（ページは落とさない）", async () => {
     listFails = true;
     await renderPage(m, "1990", {});
@@ -367,5 +403,19 @@ describe.each(MEDIA)("年代の一覧（$label）", (m) => {
     await expect(renderPage(m, "abc", {})).rejects.toThrow();
     await expect(renderPage(m, "1990abc", {})).rejects.toThrow();
     expect(m.load).not.toHaveBeenCalled();
+  });
+
+  // Number() なら 1990 に読めてしまう表記。通すと同じ年代の重複 URL になる
+  it.each(["0x7C6", "1990.0", "01990", " 1990", "1990 ", "1e3"])(
+    "4 桁の数字以外の表記（%j）は 404",
+    async (raw) => {
+      await expect(renderPage(m, raw, {})).rejects.toThrow();
+      expect(m.load).not.toHaveBeenCalled();
+    },
+  );
+
+  it("4 桁の年代はそのまま通す（上の 404 が正規表現のせいでないことの対照）", async () => {
+    await renderPage(m, "1990", {});
+    expect(m.load).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,6 +5,7 @@ import BrowseListBody from "@/components/BrowseListBody";
 import { ANIME_ERAS } from "@/lib/eras";
 import type { AnimeEra } from "@/lib/eras";
 import { eraListHref } from "@/lib/era-list";
+import { withFilter } from "@/lib/browse-filter";
 import type { BrowseFilter } from "@/lib/browse-filter";
 import type { ListMediaType, ListSort } from "@/lib/list-sort";
 import type { SeasonalEntry } from "@/lib/seasonal-anime";
@@ -101,7 +102,7 @@ export default function EraListView({
             </div>
           </div>
 
-          {/* 他の年代へ（同じ種類・同じ並びのまま） */}
+          {/* 他の年代へ（同じ種類・同じ並び・同じ絞り込みのまま。ページ番号は件数が違うので引き継がない） */}
           <div
             className="mt-8 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide"
             style={{ scrollbarWidth: "none" }}
@@ -109,7 +110,7 @@ export default function EraListView({
             {ANIME_ERAS.map((e) => (
               <Link
                 key={e.decade}
-                href={eraListHref(media, e.decade, sort)}
+                href={withFilter(eraListHref(media, e.decade, sort), filter)}
                 aria-current={e.decade === era.decade ? "page" : undefined}
                 className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
                   e.decade === era.decade
