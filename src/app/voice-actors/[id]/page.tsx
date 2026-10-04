@@ -5,7 +5,8 @@ import { getPersonDetail, getImageUrl } from "@/lib/tmdb";
 import VoicedCharacters from "@/components/VoicedCharacters";
 import type { TMDbPersonCreditCast } from "@/types/tmdb";
 
-const PER_PAGE = 20;
+// 列数（3 / 5 / 6 / 10）はどれも 30 を割り切る。最終行を欠けさせない
+const PER_PAGE = 30;
 
 interface VoiceActorDetailPageProps {
   params: Promise<{ id: string }>;
@@ -203,28 +204,8 @@ export default async function VoiceActorDetailPage({
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-      {/* ヒーロー背景（プロフィール画像をぼかして使用） */}
-      <div className="relative w-full h-[40vw] max-h-[50vh] overflow-hidden">
-        {person.profile_path ? (
-          <>
-            <Image
-              src={getImageUrl(person.profile_path, "original")}
-              alt={person.name}
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover object-top scale-110 blur-sm"
-            />
-          </>
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/60 to-black/40" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#141414]/80 via-transparent to-transparent" />
-      </div>
-
-      {/* コンテンツ */}
-      <div className="relative -mt-28 md:-mt-40 pb-20">
+      {/* コンテンツ（背景写真は置かない。固定ヘッダーの下から始める） */}
+      <div className="pt-24 pb-20">
         <div className="site-container">
           <div className="detail-block flex flex-col md:flex-row gap-6 md:gap-10 xl:gap-12">
             {/* プロフィール写真 */}
@@ -235,6 +216,7 @@ export default async function VoiceActorDetailPage({
                     src={getImageUrl(person.profile_path, "w500")}
                     alt={person.name}
                     fill
+                    priority
                     sizes="(max-width: 767px) 144px, (max-width: 1023px) 192px, (max-width: 1279px) 240px, (max-width: 1919px) 288px, 320px"
                     className="object-cover object-top"
                   />
@@ -327,7 +309,7 @@ export default async function VoiceActorDetailPage({
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 md:gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 md:gap-3">
                 {pagedWorks.map((credit) => (
                   <AnimeWorkCard
                     key={`${credit.id}-${credit.character}`}

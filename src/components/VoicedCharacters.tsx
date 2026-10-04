@@ -95,7 +95,8 @@ export default async function VoicedCharacters({
   originalName,
   alsoKnownAs,
   currentPage = 1,
-  perPage = 24,
+  // AniList の perPage 上限。列数（2 / 5 / 10）はどれも 50 を割り切る
+  perPage = 50,
   pageUrl,
   sectionId = "voiced-characters",
 }: VoicedCharactersProps) {
@@ -118,7 +119,9 @@ export default async function VoicedCharacters({
   return (
     <section id={sectionId} className="mt-10 scroll-mt-24">
       <div className="flex items-baseline gap-3 mb-4">
-        <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">演じたキャラクター</h2>
+        <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">
+          演じたキャラクター
+        </h2>
         <span className="text-gray-500 text-sm">{hit.pageInfo.total}件</span>
         {hit.pageInfo.lastPage > 1 && (
           <span className="text-gray-500 text-sm">
@@ -131,7 +134,7 @@ export default async function VoicedCharacters({
           このページに表示するキャラはない
         </p>
       ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 xl:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
           {hit.edges.map((edge) => {
             const name = pickCharacterName(edge);
             const img = pickCharacterImage(edge);
