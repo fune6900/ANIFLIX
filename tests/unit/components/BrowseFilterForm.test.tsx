@@ -120,6 +120,24 @@ describe("BrowseFilterForm", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("showGenre={false} ならジャンル選択を出さず、配信サービスは残す（#87）", () => {
+    const { container } = render(
+      <BrowseFilterForm
+        action="/browse/genre/10751"
+        filter={NO_FILTER}
+        showGenre={false}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("combobox", { name: "ジャンル" }),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector('[name="genre"]')).toBeNull();
+    expect(
+      screen.getByRole("combobox", { name: "配信サービス" }),
+    ).toBeInTheDocument();
+  });
+
   it("このページで取得した作品の中だけを絞ることを明示する", () => {
     render(<BrowseFilterForm action="/browse/new" filter={NO_FILTER} />);
 
