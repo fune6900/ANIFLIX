@@ -52,6 +52,45 @@ describe("MediaTypeTabs（アニメ ⇄ アニメ映画）", () => {
   });
 });
 
+describe("MediaTypeTabs（年代の一覧 #100）", () => {
+  it("同じ年代のアニメ / アニメ映画の一覧へリンクし、表示中の側を示す", () => {
+    render(
+      <MediaTypeTabs
+        decade={1990}
+        current="movie"
+        sort="year_desc"
+        filter={{ genreId: null, service: null }}
+      />,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "作品の種類" });
+    const anime = within(nav).getByRole("link", { name: "アニメ" });
+    const movie = within(nav).getByRole("link", { name: "アニメ映画" });
+    expect(anime.getAttribute("href")).toBe("/browse/era/1990");
+    expect(anime.hasAttribute("aria-current")).toBe(false);
+    expect(movie.getAttribute("href")).toBe("/browse/movies/era/1990");
+    expect(movie.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("並び替えとジャンル・配信サービスの絞り込みを引き継ぐ", () => {
+    render(
+      <MediaTypeTabs
+        decade={2020}
+        current="anime"
+        sort="year_asc"
+        filter={{ genreId: 35, service: "netflix" }}
+      />,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "作品の種類" });
+    expect(
+      within(nav)
+        .getByRole("link", { name: "アニメ映画" })
+        .getAttribute("href"),
+    ).toBe("/browse/movies/era/2020?sort=year_asc&genre=35&service=netflix");
+  });
+});
+
 describe("ListSortTabs（並び替え）", () => {
   it("TV は放送年、映画は公開年の新しい順 / 古い順を出し、現在の並びを示す", () => {
     render(

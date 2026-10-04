@@ -60,14 +60,15 @@ src/
 │   │   ├── airing/             放送中（現クール）
 │   │   ├── movies/             アニメ映画ホーム（旧 ?q= は検索結果へ redirect）
 │   │   │   ├── latest/         最新作のすべて見る
-│   │   │   └── genre/[genreId]/ ジャンル別のすべて見る
+│   │   │   ├── genre/[genreId]/ ジャンル別のすべて見る
+│   │   │   └── era/[decade]/   年代別のすべて見る（アニメの年代別とタブで切り替え）
 │   │   ├── seasons/            シーズン一覧
 │   │   ├── genres/             ジャンル一覧
 │   │   ├── eras/               年代一覧
 │   │   ├── [category]/         popular / trending / new
 │   │   ├── season/[year]/[season]/
 │   │   ├── genre/[genreId]/
-│   │   ├── era/[decade]/
+│   │   ├── era/[decade]/       年代別（70 件/ページ・放送年順・ジャンル / 配信の絞り込み）
 │   │   └── studio/[id]/
 │   ├── login/                  ログイン画面・認証エラー画面（未認証で到達可）
 │   ├── actions/                Server Actions（認証操作のみ）

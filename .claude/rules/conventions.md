@@ -61,6 +61,7 @@ src/
     browse/                     カテゴリ別ブラウズ
       movies/latest/            アニメ映画の最新作（「すべて見る」の専用ページ）
       movies/genre/[genreId]/   アニメ映画のジャンル別（「すべて見る」の専用ページ）
+      movies/era/[decade]/      アニメ映画の年代別（era/[decade]/ とタブで切り替え）
     login/                      ログイン画面・認証エラー画面
     actions/                    Server Actions（認証操作のみ）
     api/                        Route Handlers

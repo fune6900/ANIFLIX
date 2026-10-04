@@ -616,24 +616,70 @@ export async function getAnimeMovieByKeywords(
 // 年代別アニメ
 // ──────────────────────────────────────────
 
-/** 指定した年代（decade = 1990 → 1990〜1999年）の日本アニメを取得
- *  sortBy: "popularity.desc"（人気順）または "first_air_date.asc"（放送日順）
+/** 年代（decade = 1990 → 1990-01-01〜1999-12-31）の期間 */
+function eraDateRange(decade: number): { from: string; to: string } {
+  return { from: `${decade}-01-01`, to: `${decade + 9}-12-31` };
+}
+
+/** 期間の末日を今日（日本時間）までに縮める。YYYY-MM-DD は文字列の大小で比べられる */
+function capAtTodayJst(date: string): string {
+  const today = jstDateString(new Date());
+  return date < today ? date : today;
+}
+
+/**
+ * 指定した年代の日本アニメ（TV）。
+ * - `options.sort` あり（年代の一覧 #100）: 放送開始日で並べ、今日（日本時間）より後に
+ *   始まる作品（未放送）を除く。票数の下限は付けない
+ * - なし（ホームの年代行）: 従来どおり人気順・年代の末日まで
+ * `decade` は `ANIME_ERAS` で照合したものだけを渡す（キャッシュキーになる）
  */
 export async function getAnimeByEra(
   decade: number,
   page = 1,
-  sortBy: "popularity.desc" | "first_air_date.asc" = "popularity.desc",
+  options?: DatedListOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const startDate = `${decade}-01-01`;
-  const endDate = `${decade + 9}-12-31`;
+  const { from, to } = eraDateRange(decade);
+  const base = {
+    with_genres: String(ANIMATION_GENRE_ID),
+    with_origin_country: "JP",
+    "first_air_date.gte": from,
+    page: String(page),
+  };
+  const query = options?.sort
+    ? {
+        ...base,
+        sort_by: tvSortBy(options.sort),
+        // 日付が URL に入るので、今の年代は日付が変われば別エントリになる
+        "first_air_date.lte": capAtTodayJst(to),
+      }
+    : { ...base, sort_by: "popularity.desc", "first_air_date.lte": to };
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/discover/tv",
+    query,
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/**
+ * 指定した年代の日本のアニメ映画（年代の一覧 #100）。
+ * 公開日（primary_release_date）で並べ、今日（日本時間）より後の公開予定を除く。
+ * `decade` は `ANIME_ERAS`、`sort` は `parseListSort()` で照合したものだけを渡す
+ */
+export async function getAnimeMoviesByEra(
+  decade: number,
+  page: number,
+  options: Required<DatedListOptions>,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const { from, to } = eraDateRange(decade);
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
     {
       with_genres: String(ANIMATION_GENRE_ID),
       with_origin_country: "JP",
-      "first_air_date.gte": startDate,
-      "first_air_date.lte": endDate,
-      sort_by: sortBy,
+      "primary_release_date.gte": from,
+      "primary_release_date.lte": capAtTodayJst(to),
+      sort_by: movieSortBy(options.sort),
       page: String(page),
     },
     DISCOVER_CACHE_TIME,
