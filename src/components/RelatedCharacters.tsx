@@ -111,26 +111,48 @@ export default async function RelatedCharacters({
   const mediaId = await resolveAniListMediaId(title, originalTitle, mediaType);
   if (mediaId == null) return null;
 
-  // AniList の pageInfo（total / lastPage）は実態と食い違うので使わない。
-  // 実在するページ数は別に数える（失敗してもページ自体は出す）
-  const [pageResult, countResult] = await Promise.allSettled([
-    getAniListMediaCharacters(mediaId, currentPage, perPage),
-    getAniListMediaCharacterCount(mediaId, perPage),
-  ]);
-  if (pageResult.status === "rejected") return null;
-  const edges: AniListRelatedCharacterEdge[] = pageResult.value.edges;
+  // AniList の pageInfo（total / lastPage）は実態と食い違うので件数には使わない。
+  // 実在するページ数は別に数える（失敗してもページ自体は出す）。
+  // 1 ページ目を開いている時は、その結果を数え始めの 1 ページ目として使い回す
+  let pageResult: Awaited<ReturnType<typeof getAniListMediaCharacters>>;
+  try {
+    pageResult = await getAniListMediaCharacters(mediaId, currentPage, perPage);
+  } catch {
+    return null;
+  }
+  const edges: AniListRelatedCharacterEdge[] = pageResult.edges;
+  const reportedLastPage = pageResult.pageInfo.lastPage;
 
-  // 数えられなかったら、今のページが満杯なら次がある、とだけ判断する（件数は出さない）
-  const lastPage =
-    countResult.status === "fulfilled"
-      ? countResult.value.lastPage
-      : edges.length >= perPage
-        ? currentPage + 1
-        : currentPage;
-  const total =
-    countResult.status === "fulfilled" ? countResult.value.total : null;
+  const countResult = await getAniListMediaCharacterCount(
+    mediaId,
+    perPage,
+    currentPage === 1 && reportedLastPage > 0
+      ? { reportedLastPage, firstPageCount: edges.length }
+      : undefined,
+  ).then(
+    (value) => value,
+    () => null,
+  );
+
+  // 数えられなかったとき（fallback）:
+  //   - 今のページが満杯なら次のページがあるかもしれないので 1 つ先まで出す。
+  //     ちょうど 30 の倍数だと次は空ページになるが、件数を数えられない以上これ以上は分からない。
+  //     空ページを開いたら下の分岐が 1 ページ目へ戻すので、行き止まりにはならない
+  //   - 満杯でなければ今のページが最終ページ
+  const lastPage = countResult
+    ? countResult.lastPage
+    : edges.length >= perPage
+      ? currentPage + 1
+      : currentPage;
+  const total = countResult ? countResult.total : null;
 
   if (total === 0 || (edges.length === 0 && currentPage === 1)) return null;
+
+  // fallback で空ページ: 実在ページ数が分からないので 1 ページ目へ戻す。
+  // 1 ページ目は上の分岐で null になりここへ来ないため、リダイレクトはループしない
+  if (!countResult && edges.length === 0 && currentPage > 1) {
+    redirect(pageUrl(1));
+  }
 
   // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
   if (lastPage >= 1 && currentPage > lastPage) {

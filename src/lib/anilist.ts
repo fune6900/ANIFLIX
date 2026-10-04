@@ -480,26 +480,23 @@ const MEDIA_CHARACTERS_QUERY = `
   }
 `;
 
-/** Media（作品）に属するキャラ一覧を取得 → 関連キャラ表示に使う */
-export async function getAniListMediaCharacters(
-  mediaId: number,
-  page = 1,
-  perPage = 24,
-): Promise<{
-  edges: AniListRelatedCharacterEdge[];
-  pageInfo: AniListPageInfo;
-}> {
+/**
+ * AniList へ GraphQL を 1 回投げて JSON を返す（タイムアウト・HTTP エラーの扱いを 1 箇所に集約）。
+ * GraphQL の `errors` をどう扱うかは呼び出し側が決める。
+ */
+async function postAniListQuery<T>(
+  query: string,
+  variables: Record<string, number>,
+  revalidate: number,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(ANILIST_ENDPOINT, {
       method: "POST",
       headers: ANILIST_HEADERS,
-      body: JSON.stringify({
-        query: MEDIA_CHARACTERS_QUERY,
-        variables: { id: mediaId, page, perPage },
-      }),
+      body: JSON.stringify({ query, variables }),
       signal: AbortSignal.timeout(8000),
-      next: { revalidate: 3600 },
+      next: { revalidate },
     });
   } catch (err) {
     if (err instanceof Error && err.name === "TimeoutError") {
@@ -514,7 +511,24 @@ export async function getAniListMediaCharacters(
     );
   }
 
-  const data = (await response.json()) as AniListMediaCharactersResponse;
+  // 形は呼び出し側が渡す T の宣言に委ねる（AniList のレスポンスは実行時検証していない）
+  return (await response.json()) as T;
+}
+
+/** Media（作品）に属するキャラ一覧を取得 → 関連キャラ表示に使う */
+export async function getAniListMediaCharacters(
+  mediaId: number,
+  page = 1,
+  perPage = 24,
+): Promise<{
+  edges: AniListRelatedCharacterEdge[];
+  pageInfo: AniListPageInfo;
+}> {
+  const data = await postAniListQuery<AniListMediaCharactersResponse>(
+    MEDIA_CHARACTERS_QUERY,
+    { id: mediaId, page, perPage },
+    3600,
+  );
   if (data.errors && data.errors.length > 0) {
     return { edges: [], pageInfo: EMPTY_PAGE_INFO };
   }
@@ -549,27 +563,19 @@ interface AniListCharacterIdsResponse {
   errors?: Array<{ message: string }>;
 }
 
+/** 件数はほとんど変わらないので長く持つ（1 日） */
+const CHARACTER_COUNT_CACHE_TIME = 86400;
+
 async function fetchCharacterIdsPage(
   mediaId: number,
   page: number,
   perPage: number,
 ): Promise<{ count: number; reportedLastPage: number }> {
-  const response = await fetch(ANILIST_ENDPOINT, {
-    method: "POST",
-    headers: ANILIST_HEADERS,
-    body: JSON.stringify({
-      query: MEDIA_CHARACTER_IDS_QUERY,
-      variables: { id: mediaId, page, perPage },
-    }),
-    signal: AbortSignal.timeout(8000),
-    next: { revalidate: 3600 },
-  });
-  if (!response.ok) {
-    throw new Error(
-      `AniList API error: ${response.status} ${response.statusText}`,
-    );
-  }
-  const data = (await response.json()) as AniListCharacterIdsResponse;
+  const data = await postAniListQuery<AniListCharacterIdsResponse>(
+    MEDIA_CHARACTER_IDS_QUERY,
+    { id: mediaId, page, perPage },
+    CHARACTER_COUNT_CACHE_TIME,
+  );
   if (data.errors && data.errors.length > 0) {
     throw new Error("AniList API returned errors");
   }
@@ -580,18 +586,30 @@ async function fetchCharacterIdsPage(
   };
 }
 
+/** 呼び出し側が既に持っている 1 ページ目の情報（取得し直しを省く） */
+export interface CharacterCountHint {
+  /** 1 ページ目の問い合わせで AniList が申告した最終ページ */
+  reportedLastPage: number;
+  /** 1 ページ目の実際の件数 */
+  firstPageCount: number;
+}
+
 /**
  * 作品のキャラの、実在するページ数と件数。
  *
  * `Media.characters` の pageInfo（total / lastPage）は実態と食い違う
  * （葬送のフリーレン: 申告 500 件・20 ページ / 実際 100 件・4 ページ）。
- * 申告の最終ページを上限に二分探索で数える（`src/lib/page-probe.ts`）。失敗したら throw する
+ * 申告の最終ページを上限に二分探索で数える（`src/lib/page-probe.ts`）。失敗したら throw する。
+ * `hint` を渡すと 1 ページ目の問い合わせを省く
  */
 export async function getAniListMediaCharacterCount(
   mediaId: number,
   perPage: number,
+  hint?: CharacterCountHint,
 ): Promise<ProbedPages> {
-  const first = await fetchCharacterIdsPage(mediaId, 1, perPage);
+  const first = hint
+    ? { count: hint.firstPageCount, reportedLastPage: hint.reportedLastPage }
+    : await fetchCharacterIdsPage(mediaId, 1, perPage);
   return probeLastPage(first.reportedLastPage, perPage, async (page) =>
     page === 1
       ? first.count

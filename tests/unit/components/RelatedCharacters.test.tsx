@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import type { AniListRelatedCharacterEdge } from "@/types/anilist";
 
@@ -7,7 +7,10 @@ interface CharactersPage {
   pageInfo: { lastPage: number; total: number };
 }
 
-const EMPTY: CharactersPage = { edges: [], pageInfo: { lastPage: 1, total: 0 } };
+const EMPTY: CharactersPage = {
+  edges: [],
+  pageInfo: { lastPage: 1, total: 0 },
+};
 
 /**
  * 関連キャラクターの 1 ページあたりの件数（#78）: 24 → 30。
@@ -27,6 +30,7 @@ const getAniListMediaCharacterCount = vi.fn(
   async (
     _mediaId: number,
     _perPage: number,
+    _hint?: { reportedLastPage: number; firstPageCount: number },
   ): Promise<{ lastPage: number; total: number }> => ({
     lastPage: 0,
     total: 0,
@@ -37,8 +41,11 @@ vi.mock("@/lib/anilist", () => ({
   searchAniListMedia: async () => [{ id: 77, popularity: 1 }],
   getAniListMediaCharacters: (mediaId: number, page: number, perPage: number) =>
     getAniListMediaCharacters(mediaId, page, perPage),
-  getAniListMediaCharacterCount: (mediaId: number, perPage: number) =>
-    getAniListMediaCharacterCount(mediaId, perPage),
+  getAniListMediaCharacterCount: (
+    mediaId: number,
+    perPage: number,
+    hint?: { reportedLastPage: number; firstPageCount: number },
+  ) => getAniListMediaCharacterCount(mediaId, perPage, hint),
 }));
 
 const redirect = vi.fn((url: string) => {
@@ -50,9 +57,8 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
 }));
 
-const { default: RelatedCharacters } = await import(
-  "@/components/RelatedCharacters"
-);
+const { default: RelatedCharacters } =
+  await import("@/components/RelatedCharacters");
 
 afterEach(() => {
   getAniListMediaCharacterCount.mockReset();
@@ -162,7 +168,11 @@ describe("RelatedCharacters", () => {
       expect(container.textContent).toContain("100件");
       expect(container.textContent).toContain("1 / 4 ページ");
       expect(container.textContent).not.toContain("500件");
-      expect(getAniListMediaCharacterCount).toHaveBeenCalledWith(77, 30);
+      // 1 ページ目の結果を数え始めに使い回す（同じページを 2 回取りに行かない）
+      expect(getAniListMediaCharacterCount).toHaveBeenCalledWith(77, 30, {
+        reportedLastPage: 20,
+        firstPageCount: 30,
+      });
     });
 
     it("実在しないページを開いたら実在する最終ページへ寄せる", async () => {
@@ -178,7 +188,9 @@ describe("RelatedCharacters", () => {
 
     it("数えるのに失敗しても申告値は使わず、次のページがあるかだけで出す", async () => {
       lyingAniList();
-      getAniListMediaCharacterCount.mockRejectedValue(new Error("AniList down"));
+      getAniListMediaCharacterCount.mockRejectedValue(
+        new Error("AniList down"),
+      );
 
       const { container } = await renderAt(2);
 
@@ -187,6 +199,52 @@ describe("RelatedCharacters", () => {
       expect(container.textContent).not.toContain("500件");
       expect(container.textContent).not.toContain("/ 20 ページ");
     });
+
+    describe("数えられない時の fallback", () => {
+      beforeEach(() => {
+        getAniListMediaCharacterCount.mockRejectedValue(new Error("down"));
+      });
+
+      it("空ページ（2 ページ目以降）は 1 ページ目へ戻す", async () => {
+        getAniListMediaCharacters.mockImplementation(async () => EMPTY);
+
+        await expect(renderAt(6)).rejects.toThrow("NEXT_REDIRECT");
+        expect(redirect).toHaveBeenCalledWith("/anime/1?cpage=1");
+      });
+
+      it("1 ページ目が空なら何も出さず、リダイレクトもしない", async () => {
+        getAniListMediaCharacters.mockImplementation(async () => EMPTY);
+
+        const { container } = await renderAt(1);
+
+        expect(container.textContent).toBe("");
+        expect(redirect).not.toHaveBeenCalled();
+      });
+
+      it("ちょうど 30 件の満杯ページでは次ページへのリンクを出す", async () => {
+        getAniListMediaCharacters.mockImplementation(async () => ({
+          edges: fullPage(),
+          pageInfo: { lastPage: 2, total: 60 },
+        }));
+
+        const { container } = await renderAt(2);
+
+        expect(Math.max(...pageNumbersLinked(container))).toBe(3);
+        expect(redirect).not.toHaveBeenCalled();
+      });
+
+      it("満杯でないページは最終ページとして次ページを出さない", async () => {
+        getAniListMediaCharacters.mockImplementation(async () => ({
+          edges: fullPage().slice(0, 7),
+          pageInfo: { lastPage: 2, total: 37 },
+        }));
+
+        const { container } = await renderAt(2);
+
+        expect(Math.max(...pageNumbersLinked(container))).toBeLessThanOrEqual(
+          2,
+        );
+      });
+    });
   });
 });
-
