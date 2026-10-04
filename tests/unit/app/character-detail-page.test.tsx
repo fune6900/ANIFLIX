@@ -329,3 +329,80 @@ describe("2 つのページ送りの共存", () => {
     );
   });
 });
+
+describe("両方のページ番号が範囲外", () => {
+  it("1 回のリダイレクトで両方を最終ページへ寄せ、出演作品のセクションへ飛ばす", async () => {
+    await expect(renderPage({ wpage: "9", cpage: "99" })).rejects.toThrow(
+      `NEXT_REDIRECT:/characters/${CHARACTER_ID}?wpage=3&cpage=4#works`,
+    );
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("出演作品の取得失敗", () => {
+  it("取得に失敗したら「出演作はない」ではなく取得できなかった旨を出す", async () => {
+    getAniListCharacterMedia.mockRejectedValueOnce(new Error("AniList down"));
+
+    await renderPage();
+
+    const text = document.getElementById("works")?.textContent ?? "";
+    expect(text).toContain("出演作品を取得できなかった");
+    expect(text).not.toContain("登録されている出演作はない");
+  });
+});
+
+describe("関連キャラクターの表示条件", () => {
+  /** 関連キャラのカード（キャラ詳細へのリンク。ページ送りは除く） */
+  function relatedCardHrefs(): string[] {
+    const section = document.getElementById("related-characters");
+    return [
+      ...(section?.querySelectorAll<HTMLAnchorElement>(
+        'a[href^="/characters/"]',
+      ) ?? []),
+    ]
+      .map((a) => a.getAttribute("href") ?? "")
+      .filter((h) => /^\/characters\/\d+$/.test(h));
+  }
+
+  it("実在する件数が 0 なら関連キャラクターのセクションを出さない", async () => {
+    getAniListMediaCharacters.mockResolvedValueOnce({
+      edges: [],
+      pageInfo: pageInfo(0, 0),
+    });
+    getAniListMediaCharacterCount.mockResolvedValueOnce({
+      lastPage: 0,
+      total: 0,
+    });
+
+    await renderPage();
+
+    expect(document.getElementById("related-characters")).toBeNull();
+  });
+
+  it("代表作が無ければ関連キャラを取りに行かず、セクションも出さない", async () => {
+    getAniListCharacter.mockResolvedValueOnce({
+      ...DETAIL,
+      media: { edges: [] },
+    });
+
+    await renderPage();
+
+    expect(getAniListMediaCharacters).not.toHaveBeenCalled();
+    expect(document.getElementById("related-characters")).toBeNull();
+  });
+
+  it("自分自身は関連キャラクターから除く", async () => {
+    getAniListMediaCharacters.mockResolvedValueOnce({
+      edges: [relatedEdge(CHARACTER_ID), relatedEdge(2), relatedEdge(3)],
+      pageInfo: pageInfo(1, 3),
+    });
+    getAniListMediaCharacterCount.mockResolvedValueOnce({
+      lastPage: 1,
+      total: 3,
+    });
+
+    await renderPage();
+
+    expect(relatedCardHrefs()).toEqual(["/characters/2", "/characters/3"]);
+  });
+});
