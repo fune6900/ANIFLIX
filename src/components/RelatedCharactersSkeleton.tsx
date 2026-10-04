@@ -3,7 +3,8 @@
 export default function RelatedCharactersSkeleton() {
   return (
     <section
-      className="mt-10"
+      id="related-characters"
+      className="mt-10 scroll-mt-24"
       aria-busy="true"
       aria-label="関連キャラクターを読み込み中"
     >

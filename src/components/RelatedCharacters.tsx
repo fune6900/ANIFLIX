@@ -113,26 +113,50 @@ export default async function RelatedCharacters({
 
   // AniList の pageInfo（total / lastPage）は実態と食い違うので件数には使わない。
   // 実在するページ数は別に数える（失敗してもページ自体は出す）。
-  // 1 ページ目を開いている時は、その結果を数え始めの 1 ページ目として使い回す
+  //
+  // 1 ページ目: キャラ取得の結果を数え始めのヒントに使い回すため、直列で待つ。
+  // 2 ページ目以降: ヒントを渡さないので待つ理由がなく、並列で取る。
+  // 件数のキャッシュ（CHARACTER_COUNT_CACHE_TIME = 86400）がページ取得（3600）より長いのは、
+  // 件数が数百リクエスト級の走査でほぼ変わらないため。代償として、キャラ追加直後は最大 1 日
+  // 古い件数が出ることがある（許容）。
+  const countPromise = (hint?: {
+    reportedLastPage: number;
+    firstPageCount: number;
+  }) =>
+    getAniListMediaCharacterCount(mediaId, perPage, hint).then(
+      (value) => value,
+      () => null,
+    );
+
   let pageResult: Awaited<ReturnType<typeof getAniListMediaCharacters>>;
+  let countResult: Awaited<ReturnType<typeof countPromise>>;
   try {
-    pageResult = await getAniListMediaCharacters(mediaId, currentPage, perPage);
+    if (currentPage === 1) {
+      pageResult = await getAniListMediaCharacters(mediaId, 1, perPage);
+      const reportedLastPage = pageResult.pageInfo.lastPage;
+      countResult = await countPromise(
+        reportedLastPage > 0
+          ? { reportedLastPage, firstPageCount: pageResult.edges.length }
+          : undefined,
+      );
+    } else {
+      const counting = countPromise();
+      try {
+        pageResult = await getAniListMediaCharacters(
+          mediaId,
+          currentPage,
+          perPage,
+        );
+      } catch (error) {
+        await counting; // 未処理にしない（countPromise は reject しない）
+        throw error;
+      }
+      countResult = await counting;
+    }
   } catch {
     return null;
   }
   const edges: AniListRelatedCharacterEdge[] = pageResult.edges;
-  const reportedLastPage = pageResult.pageInfo.lastPage;
-
-  const countResult = await getAniListMediaCharacterCount(
-    mediaId,
-    perPage,
-    currentPage === 1 && reportedLastPage > 0
-      ? { reportedLastPage, firstPageCount: edges.length }
-      : undefined,
-  ).then(
-    (value) => value,
-    () => null,
-  );
 
   // 数えられなかったとき（fallback）:
   //   - 今のページが満杯なら次のページがあるかもしれないので 1 つ先まで出す。
@@ -148,6 +172,8 @@ export default async function RelatedCharacters({
 
   if (total === 0 || (edges.length === 0 && currentPage === 1)) return null;
 
+  // 注意: Suspense の内側（ストリーミング開始後）では redirect() は 307 にならず、
+  // HTTP 200 + meta refresh / クライアントの RedirectBoundary で届く。
   // fallback で空ページ: 実在ページ数が分からないので 1 ページ目へ戻す。
   // 1 ページ目は上の分岐で null になりここへ来ないため、リダイレクトはループしない
   if (!countResult && edges.length === 0 && currentPage > 1) {

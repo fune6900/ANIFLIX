@@ -175,6 +175,50 @@ describe("RelatedCharacters", () => {
       });
     });
 
+    it("2 ページ目以降は 1 ページ目のヒントを渡さない", async () => {
+      lyingAniList();
+      getAniListMediaCharacterCount.mockResolvedValue({
+        lastPage: 4,
+        total: 100,
+      });
+
+      await renderAt(2);
+
+      expect(getAniListMediaCharacterCount).toHaveBeenCalledWith(
+        77,
+        30,
+        undefined,
+      );
+    });
+
+    it("2 ページ目以降は件数の取得をキャラ取得の完了待ちにしない（並列）", async () => {
+      let release: (page: CharactersPage) => void = () => {};
+      getAniListMediaCharacters.mockImplementation(
+        () => new Promise<CharactersPage>((resolve) => (release = resolve)),
+      );
+      getAniListMediaCharacterCount.mockResolvedValue({
+        lastPage: 4,
+        total: 100,
+      });
+
+      const rendering = RelatedCharacters({
+        title: "作品A",
+        originalTitle: null,
+        mediaType: "ANIME",
+        currentPage: 2,
+        pageUrl: (p: number) => `/anime/1?cpage=${p}`,
+      });
+      // キャラ取得が未完了のまま、件数取得が始まっていること
+      await vi.waitFor(() =>
+        expect(getAniListMediaCharacters).toHaveBeenCalled(),
+      );
+      await Promise.resolve();
+      expect(getAniListMediaCharacterCount).toHaveBeenCalled();
+
+      release({ edges: fullPage(), pageInfo: { lastPage: 20, total: 500 } });
+      await rendering;
+    });
+
     it("実在しないページを開いたら実在する最終ページへ寄せる", async () => {
       lyingAniList();
       getAniListMediaCharacterCount.mockResolvedValue({
