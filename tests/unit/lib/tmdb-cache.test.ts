@@ -116,6 +116,40 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getAiringAnime(1))).toBe("revalidate:1800");
   });
 
+  it("ジャンル一覧（#99）は一覧モードでも 1800 秒キャッシュする", async () => {
+    // sort はホワイトリスト照合済みの 2 値、日付上限は日付が変われば別エントリになるだけ
+    expect(
+      await policyFor((m) => m.getAnimeByGenre(35, 1, { sort: "year_desc" })),
+    ).toBe("revalidate:1800");
+    expect(
+      await policyFor((m) =>
+        m.getAnimeByKeyword([10046], 1, { sort: "year_asc" }),
+      ),
+    ).toBe("revalidate:1800");
+    expect(
+      await policyFor((m) =>
+        m.getAnimeMoviesByGenre(12, 1, [28], { sort: "year_desc" }),
+      ),
+    ).toBe("revalidate:1800");
+    expect(
+      await policyFor((m) =>
+        m.getAnimeMovieByKeyword([10046], 1, { sort: "year_asc" }),
+      ),
+    ).toBe("revalidate:1800");
+  });
+
+  it("年代の一覧（#100）は一覧モードでも 1800 秒キャッシュする", async () => {
+    // 年代は ANIME_ERAS、sort はホワイトリスト照合済みの 2 値。日付上限は日付が変われば別エントリになるだけ
+    expect(
+      await policyFor((m) => m.getAnimeByEra(1990, 1, { sort: "year_desc" })),
+    ).toBe("revalidate:1800");
+    expect(
+      await policyFor((m) =>
+        m.getAnimeMoviesByEra(2020, 1, { sort: "year_asc" }),
+      ),
+    ).toBe("revalidate:1800");
+  });
+
   it("新着（直近 7 日の放送）は日替わりなので 24 時間キャッシュする", async () => {
     // 期間の日付がキーに入るので、日付が変われば自然に別エントリになる
     expect(await policyFor((m) => m.getNewAnime(1))).toBe("revalidate:86400");

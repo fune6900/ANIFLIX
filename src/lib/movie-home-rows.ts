@@ -1,6 +1,7 @@
 // アニメ映画画面（/browse/movies）の行を組み立てる
 
 import {
+  getAnimeMovieByKeyword,
   getAnimeMovieByKeywords,
   getAnimeMoviesByGenre,
   getAnimeMoviesByStudio,
@@ -10,7 +11,7 @@ import {
   getTrendingMovies,
   getUpcomingMovies,
 } from "@/lib/tmdb";
-import { ANIME_GENRES } from "@/lib/genres";
+import { ANIME_GENRES, genreKeywordIds } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_STUDIOS } from "@/lib/studios";
 import type { AnimeStudio } from "@/lib/studios";
@@ -203,9 +204,10 @@ export function fetchTheatricalRow(): Promise<TMDbMovie[]> {
 export async function fetchMovieGenreRow(
   genre: AnimeGenre,
 ): Promise<TMDbMovie[]> {
-  if (genre.filterType === "keyword" && genre.keyword) {
-    const keywords = [genre.keyword, ...(genre.extraKeywords ?? [])];
-    return fetchShuffledRow((p) => getAnimeMovieByKeywords(keywords, p));
+  if (genre.filterType === "keyword") {
+    // 固定のキーワード ID（同義語込み）で引く（#99）
+    const ids = genreKeywordIds(genre);
+    return fetchShuffledRow((p) => getAnimeMovieByKeyword(ids, p));
   }
   const movieGenreIds = movieGenreIdsFor(genre.id);
   if (movieGenreIds.length === 1) {

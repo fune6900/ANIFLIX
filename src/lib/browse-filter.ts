@@ -5,9 +5,8 @@ import {
   getAnimeWatchProviders,
   getMovieKeywordIds,
   getMovieWatchProviders,
-  resolveKeywordId,
 } from "@/lib/tmdb";
-import { ANIME_GENRES } from "@/lib/genres";
+import { ANIME_GENRES, genreKeywordIds } from "@/lib/genres";
 import { movieGenreIdsFor } from "@/lib/movie-genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { findStreamingService, streamingServicesIn } from "@/lib/providers";
@@ -122,19 +121,6 @@ function hasTmdbGenre(target: FilterTarget, genreId: number): boolean {
   return movieGenreIdsFor(genreId).some((id) => target.genreIds.includes(id));
 }
 
-/** キーワード由来ジャンルのキーワード ID（名前の解決はジャンルごとに 1 回だけ） */
-async function genreKeywordIds(genre: AnimeGenre): Promise<Set<number>> {
-  const names = [genre.keyword, ...(genre.extraKeywords ?? [])].filter(
-    (n): n is string => Boolean(n),
-  );
-  const settled = await Promise.allSettled(names.map(resolveKeywordId));
-  const ids = new Set<number>();
-  for (const r of settled) {
-    if (r.status === "fulfilled" && r.value !== null) ids.add(r.value);
-  }
-  return ids;
-}
-
 async function hasKeyword(
   target: FilterTarget,
   wanted: Set<number>,
@@ -182,7 +168,8 @@ async function applyFilter<T>(
   if (genre?.filterType === "genre") {
     pool = pool.filter((p) => hasTmdbGenre(p.target, genre.id));
   } else if (genre?.filterType === "keyword") {
-    const wanted = await genreKeywordIds(genre);
+    // 一覧と同じ固定のキーワード ID（#99）
+    const wanted = new Set(genreKeywordIds(genre));
     pool =
       wanted.size === 0
         ? []

@@ -16,6 +16,8 @@ import type {
   TMDbTVKeywordsResponse,
   TMDbMovieKeywordsResponse,
 } from "@/types/tmdb";
+import { movieSortBy, tvSortBy } from "@/lib/list-sort";
+import type { ListSort } from "@/lib/list-sort";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -441,21 +443,75 @@ export async function getJapaneseVoiceActors(
   );
 }
 
+/**
+ * 「すべて見る」一覧（ジャンル一覧 #99）のモード。
+ * 渡すと放送開始日 / 公開日で並べ、今日（日本時間）より後に始まる作品を除き、
+ * vote_count の下限を外す（票の少ない作品も一覧には出す。ポスターの無い作品は呼び出し側で落とす）。
+ * 渡さない場合はホームの行・関連作品向けの人気順（下限あり）
+ */
+export interface DatedListOptions {
+  /** ホワイトリスト照合済みの並び（`parseListSort()`）。URL の値を直接渡さない */
+  sort?: ListSort;
+}
+
+/** 人気順で出す時の票数の下限（数票だけの作品で行が埋まらないように） */
+const POPULAR_MIN_VOTES = "5";
+
+/** TV の discover に一覧モード / 人気順の条件を足す */
+function tvListQuery(
+  query: Record<string, string>,
+  options: DatedListOptions | undefined,
+  popularSortBy = "popularity.desc",
+): Record<string, string> {
+  if (options?.sort) {
+    return {
+      ...query,
+      sort_by: tvSortBy(options.sort),
+      // 未放送（放送開始日が今日より後）を除く。日付が URL に入るので日付が変われば別エントリ
+      "first_air_date.lte": jstDateString(new Date()),
+    };
+  }
+  return {
+    ...query,
+    sort_by: popularSortBy,
+    "vote_count.gte": POPULAR_MIN_VOTES,
+  };
+}
+
+/** 映画の discover に一覧モードの条件を足す（人気順は従来どおり下限なし） */
+function movieListQuery(
+  query: Record<string, string>,
+  options: DatedListOptions | undefined,
+  popularSortBy = "popularity.desc",
+): Record<string, string> {
+  if (options?.sort) {
+    return {
+      ...query,
+      sort_by: movieSortBy(options.sort),
+      // 公開予定の作品を除く
+      "primary_release_date.lte": jstDateString(new Date()),
+    };
+  }
+  return { ...query, sort_by: popularSortBy };
+}
+
 // ジャンル別アニメ（日本アニメ + 指定ジャンル）
 export async function getAnimeByGenre(
   genreId: number,
   page = 1,
+  options?: DatedListOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/discover/tv",
-    {
-      // アニメーション(16) AND 指定ジャンル を組み合わせ
-      with_genres: `${ANIMATION_GENRE_ID},${genreId}`,
-      with_origin_country: "JP",
-      sort_by: "popularity.desc",
-      "vote_count.gte": "5",
-      page: String(page),
-    },
+    tvListQuery(
+      {
+        // アニメーション(16) AND 指定ジャンル を組み合わせ
+        with_genres: `${ANIMATION_GENRE_ID},${genreId}`,
+        with_origin_country: "JP",
+        page: String(page),
+      },
+      options,
+    ),
     DISCOVER_CACHE_TIME,
   );
 }
@@ -483,29 +539,40 @@ export async function resolveKeywordId(query: string): Promise<number | null> {
   return data.results[0]?.id ?? null;
 }
 
-/** キーワード discover 用のオプション（シーズン範囲などを上乗せ可） */
-export interface KeywordDiscoverOptions {
+/**
+ * キーワード discover 用のオプション（シーズン範囲などを上乗せ可）。
+ * `sort` を渡すと一覧モード（`DatedListOptions`）になり、`sortBy` より優先する
+ */
+export interface KeywordDiscoverOptions extends DatedListOptions {
   /** YYYY-MM-DD（シーズン範囲などを上乗せ） */
   dateFrom?: string;
   dateTo?: string;
   sortBy?: string;
 }
 
+/** キーワード ID の OR 条件（固定値の `genreKeywordIds()` などから渡す） */
+function keywordQuery(keywordIds: number | readonly number[]): string {
+  return (typeof keywordIds === "number" ? [keywordIds] : keywordIds).join(
+    "|", // | = OR 検索
+  );
+}
+
 /** キーワード ID（複数可・OR 検索）で日本アニメを取得 */
 export async function getAnimeByKeyword(
-  keywordIds: number | number[],
+  keywordIds: number | readonly number[],
   page = 1,
   options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
-  const query: Record<string, string> = {
-    with_keywords: ids.join("|"), // | = OR 検索
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: options?.sortBy ?? "popularity.desc",
-    "vote_count.gte": "5",
-    page: String(page),
-  };
+  const query = tvListQuery(
+    {
+      with_keywords: keywordQuery(keywordIds),
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      page: String(page),
+    },
+    options,
+    options?.sortBy,
+  );
   if (options?.dateFrom) query["first_air_date.gte"] = options.dateFrom;
   if (options?.dateTo) query["first_air_date.lte"] = options.dateTo;
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
@@ -515,36 +582,22 @@ export async function getAnimeByKeyword(
   );
 }
 
-/** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */
-export async function getAnimeByKeywords(
-  keywords: string[],
-  page = 1,
-  options?: KeywordDiscoverOptions,
-): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const ids = (
-    await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
-  ).filter((id): id is number => id !== null);
-
-  if (ids.length === 0) {
-    return { page: 1, results: [], total_pages: 0, total_results: 0 };
-  }
-  return getAnimeByKeyword(ids, page, options);
-}
-
 /** キーワード ID（複数可・OR 検索）で日本アニメ映画を取得 */
 export async function getAnimeMovieByKeyword(
-  keywordIds: number | number[],
+  keywordIds: number | readonly number[],
   page = 1,
   options?: KeywordDiscoverOptions,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
-  const ids = Array.isArray(keywordIds) ? keywordIds : [keywordIds];
-  const query: Record<string, string> = {
-    with_keywords: ids.join("|"),
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: options?.sortBy ?? "popularity.desc",
-    page: String(page),
-  };
+  const query = movieListQuery(
+    {
+      with_keywords: keywordQuery(keywordIds),
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      page: String(page),
+    },
+    options,
+    options?.sortBy,
+  );
   if (options?.dateFrom) query["primary_release_date.gte"] = options.dateFrom;
   if (options?.dateTo) query["primary_release_date.lte"] = options.dateTo;
   return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
@@ -574,24 +627,70 @@ export async function getAnimeMovieByKeywords(
 // 年代別アニメ
 // ──────────────────────────────────────────
 
-/** 指定した年代（decade = 1990 → 1990〜1999年）の日本アニメを取得
- *  sortBy: "popularity.desc"（人気順）または "first_air_date.asc"（放送日順）
+/** 年代（decade = 1990 → 1990-01-01〜1999-12-31）の期間 */
+function eraDateRange(decade: number): { from: string; to: string } {
+  return { from: `${decade}-01-01`, to: `${decade + 9}-12-31` };
+}
+
+/** 期間の末日を今日（日本時間）までに縮める。YYYY-MM-DD は文字列の大小で比べられる */
+function capAtTodayJst(date: string): string {
+  const today = jstDateString(new Date());
+  return date < today ? date : today;
+}
+
+/**
+ * 指定した年代の日本アニメ（TV）。
+ * - `options.sort` あり（年代の一覧 #100）: 放送開始日で並べ、今日（日本時間）より後に
+ *   始まる作品（未放送）を除く。票数の下限は付けない
+ * - なし（ホームの年代行）: 従来どおり人気順・年代の末日まで
+ * `decade` は `ANIME_ERAS` で照合したものだけを渡す（キャッシュキーになる）
  */
 export async function getAnimeByEra(
   decade: number,
   page = 1,
-  sortBy: "popularity.desc" | "first_air_date.asc" = "popularity.desc",
+  options?: DatedListOptions,
 ): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const startDate = `${decade}-01-01`;
-  const endDate = `${decade + 9}-12-31`;
+  const { from, to } = eraDateRange(decade);
+  const base = {
+    with_genres: String(ANIMATION_GENRE_ID),
+    with_origin_country: "JP",
+    "first_air_date.gte": from,
+    page: String(page),
+  };
+  const query = options?.sort
+    ? {
+        ...base,
+        sort_by: tvSortBy(options.sort),
+        // 日付が URL に入るので、今の年代は日付が変われば別エントリになる
+        "first_air_date.lte": capAtTodayJst(to),
+      }
+    : { ...base, sort_by: "popularity.desc", "first_air_date.lte": to };
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>(
     "/discover/tv",
+    query,
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/**
+ * 指定した年代の日本のアニメ映画（年代の一覧 #100）。
+ * 公開日（primary_release_date）で並べ、今日（日本時間）より後の公開予定を除く。
+ * `decade` は `ANIME_ERAS`、`sort` は `parseListSort()` で照合したものだけを渡す
+ */
+export async function getAnimeMoviesByEra(
+  decade: number,
+  page: number,
+  options: Required<DatedListOptions>,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const { from, to } = eraDateRange(decade);
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
     {
       with_genres: String(ANIMATION_GENRE_ID),
       with_origin_country: "JP",
-      "first_air_date.gte": startDate,
-      "first_air_date.lte": endDate,
-      sort_by: sortBy,
+      "primary_release_date.gte": from,
+      "primary_release_date.lte": capAtTodayJst(to),
+      sort_by: movieSortBy(options.sort),
       page: String(page),
     },
     DISCOVER_CACHE_TIME,
@@ -669,13 +768,16 @@ export async function getAnimeMoviesByGenre(
   movieGenreId: number,
   page = 1,
   excludeMovieGenreIds: readonly number[] = [],
+  options?: DatedListOptions,
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
-  const query: Record<string, string> = {
-    with_genres: `${ANIMATION_GENRE_ID},${movieGenreId}`,
-    with_origin_country: "JP",
-    sort_by: "popularity.desc",
-    page: String(page),
-  };
+  const query = movieListQuery(
+    {
+      with_genres: `${ANIMATION_GENRE_ID},${movieGenreId}`,
+      with_origin_country: "JP",
+      page: String(page),
+    },
+    options,
+  );
   if (excludeMovieGenreIds.length > 0) {
     query.without_genres = excludeMovieGenreIds.join(",");
   }

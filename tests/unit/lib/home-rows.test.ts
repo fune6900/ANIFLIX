@@ -11,13 +11,13 @@ import { ANIME_ERAS } from "@/lib/eras";
  */
 
 const getAnimeByGenre = vi.fn();
-const getAnimeByKeywords = vi.fn();
+const getAnimeByKeyword = vi.fn();
 const getAnimeByEra = vi.fn();
 const fetchSeasonalAnime = vi.fn();
 
 vi.mock("@/lib/tmdb", () => ({
   getAnimeByGenre: (...a: unknown[]) => getAnimeByGenre(...a),
-  getAnimeByKeywords: (...a: unknown[]) => getAnimeByKeywords(...a),
+  getAnimeByKeyword: (...a: unknown[]) => getAnimeByKeyword(...a),
   getAnimeByEra: (...a: unknown[]) => getAnimeByEra(...a),
 }));
 
@@ -74,7 +74,7 @@ const KEYWORD_GENRE: AnimeGenre = {
   id: 9001,
   filterType: "keyword",
   keyword: "isekai",
-  extraKeywords: ["reincarnation"],
+  keywordIds: [237451, 213756],
   name: "異世界転生",
   emoji: "🌀",
   color: "",
@@ -87,7 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   getAnimeByGenre.mockReset();
-  getAnimeByKeywords.mockReset();
+  getAnimeByKeyword.mockReset();
   getAnimeByEra.mockReset();
   fetchSeasonalAnime.mockReset();
 });
@@ -131,6 +131,26 @@ describe("fetchGenreRow", () => {
     expect(items).toHaveLength(30);
   });
 
+  it("ホームの行は一覧モード（{ sort }）で呼ばない（人気順・票数の下限ありのまま。#99）", async () => {
+    getAnimeByGenre.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+    getAnimeByKeyword.mockImplementation((_ids: number[], p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+
+    await fetchGenreRow(GENRE);
+    await fetchGenreRow(KEYWORD_GENRE);
+
+    // 第 3 引数（一覧モードのオプション）を渡していない
+    for (const call of [
+      ...getAnimeByGenre.mock.calls,
+      ...getAnimeByKeyword.mock.calls,
+    ]) {
+      expect(call).toHaveLength(2);
+    }
+  });
+
   it("開始ページが 2 のときは 2・3 ページ目を取る", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     getAnimeByGenre.mockImplementation((_id: number, p: number) =>
@@ -144,18 +164,15 @@ describe("fetchGenreRow", () => {
     expect(items).toHaveLength(30);
   });
 
-  it("キーワードジャンルは追加キーワードも含めて引く", async () => {
-    getAnimeByKeywords.mockImplementation((_kw: string[], p: number) =>
+  it("キーワードジャンルは固定のキーワード ID（同義語込み）で引く（#99）", async () => {
+    getAnimeByKeyword.mockImplementation((_ids: number[], p: number) =>
       Promise.resolve(page(p * 100)),
     );
 
     const items = await fetchGenreRow(KEYWORD_GENRE);
 
-    expect(getAnimeByKeywords).toHaveBeenCalledTimes(2);
-    expect(getAnimeByKeywords.mock.calls[0][0]).toEqual([
-      "isekai",
-      "reincarnation",
-    ]);
+    expect(getAnimeByKeyword).toHaveBeenCalledTimes(2);
+    expect(getAnimeByKeyword.mock.calls[0][0]).toEqual([237451, 213756]);
     expect(items).toHaveLength(30);
   });
 

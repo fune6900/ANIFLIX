@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import type { TMDbMovie, TMDbWatchProvidersResponse } from "@/types/tmdb";
 import type { MovieListPage } from "@/lib/movie-list";
-import { ANIME_GENRES } from "@/lib/genres";
 
 /**
  * アニメ映画の「すべて見る」専用ページ（#91）。
@@ -65,15 +64,10 @@ const listPage = vi.fn(async (page: number): Promise<MovieListPage> =>
 );
 
 const loadLatestMovieList = vi.fn((page: number) => listPage(page));
-const loadGenreMovieList = vi.fn((_genre: unknown, page: number) =>
-  listPage(page),
-);
 
 vi.mock("@/lib/movie-list", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/movie-list")>()),
   loadLatestMovieList: (page: number) => loadLatestMovieList(page),
-  loadGenreMovieList: (genre: unknown, page: number) =>
-    loadGenreMovieList(genre, page),
 }));
 
 const getMovieWatchProviders = vi.fn(async (id: number) =>
@@ -97,14 +91,11 @@ const { default: SeasonAnimeCard } =
 const cardSpy = vi.mocked(SeasonAnimeCard);
 
 const { default: LatestPage } = await import("@/app/browse/movies/latest/page");
-const { default: GenrePage } =
-  await import("@/app/browse/movies/genre/[genreId]/page");
 
 afterEach(() => {
   cleanup();
   cardSpy.mockClear();
   loadLatestMovieList.mockClear();
-  loadGenreMovieList.mockClear();
   getMovieWatchProviders.mockClear();
   listFails = false;
   listOverride = null;
@@ -130,15 +121,6 @@ function cardKinds(): string[] {
 
 async function renderLatest(sp: Record<string, string>) {
   render(await LatestPage({ searchParams: Promise.resolve(sp) }));
-}
-
-async function renderGenre(genreId: string, sp: Record<string, string>) {
-  render(
-    await GenrePage({
-      params: Promise.resolve({ genreId }),
-      searchParams: Promise.resolve(sp),
-    }),
-  );
 }
 
 describe("最新作の専用ページ（/browse/movies/latest）", () => {
@@ -242,69 +224,3 @@ describe("最新作の専用ページ（/browse/movies/latest）", () => {
   });
 });
 
-describe("ジャンルの専用ページ（/browse/movies/genre/[genreId]）", () => {
-  it("見出しにジャンル名を出し、そのジャンルで取得する", async () => {
-    await renderGenre("10759", {});
-
-    expect(document.querySelector("h1")?.textContent).toContain(
-      "アクション・冒険",
-    );
-    const [genre] = loadGenreMovieList.mock.calls[0];
-    expect(genre).toMatchObject({ id: 10759 });
-    expect(shownMovieIds()).toEqual([1, 2, 3, 4, 5, 6]);
-  });
-
-  it("カードに渡す作品はすべて映画として扱う（kind: movie）", async () => {
-    await renderGenre("35", {});
-
-    expect(cardKinds()).toHaveLength(6);
-    expect(cardKinds().every((k) => k === "movie")).toBe(true);
-  });
-
-  it("ジャンル選択を出さず、URL の genre= も読まない（#87 と同じ）", async () => {
-    // 35（コメディ）はホワイトリストにある値。読んでしまうと 1〜3 だけに絞られる
-    await renderGenre("10759", { genre: "35" });
-
-    expect(document.querySelector('select[name="genre"]')).toBeNull();
-    expect(document.querySelector('select[name="service"]')).not.toBeNull();
-    expect(shownMovieIds()).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(document.body.textContent).not.toContain("件を表示中");
-  });
-
-  it("ページ送りのリンクに genre= を引き継がない", async () => {
-    await renderGenre("10759", { genre: "35", service: "netflix", page: "2" });
-
-    const pageLinks = linksStartingWith("/browse/movies/genre/10759?page=");
-    expect(pageLinks.length).toBeGreaterThan(0);
-    for (const href of pageLinks) {
-      expect(href).not.toContain("genre=35");
-      expect(href).toContain("service=netflix");
-    }
-  });
-
-  it("配信サービスで絞り、ページ送りに引き継ぐ", async () => {
-    await renderGenre("35", { service: "netflix", page: "2" });
-
-    expect(shownMovieIds()).toEqual([2, 4, 6]);
-    expect(loadGenreMovieList.mock.calls[0][1]).toBe(2);
-    const pageLinks = linksStartingWith("/browse/movies/genre/35?page=");
-    expect(pageLinks.length).toBeGreaterThan(0);
-    for (const href of pageLinks) expect(href).toContain("service=netflix");
-  });
-
-  it("他のジャンルの専用ページへのリンクを出す", async () => {
-    await renderGenre("35", {});
-
-    const others = ANIME_GENRES.filter((g) => g.id !== 35).map(
-      (g) => `/browse/movies/genre/${g.id}`,
-    );
-    const links = linksStartingWith("/browse/movies/genre/");
-    for (const href of others) expect(links).toContain(href);
-  });
-
-  it("定義に無いジャンル ID は 404", async () => {
-    await expect(renderGenre("12345", {})).rejects.toThrow();
-    await expect(renderGenre("abc", {})).rejects.toThrow();
-    expect(loadGenreMovieList).not.toHaveBeenCalled();
-  });
-});

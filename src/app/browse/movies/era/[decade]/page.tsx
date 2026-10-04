@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 import { parsePageParam } from "@/lib/tmdb";
 import { findEra } from "@/lib/eras";
-import { loadEraAnimeList } from "@/lib/era-list";
+import { loadEraMovieList } from "@/lib/era-list";
 import { parseListSort } from "@/lib/list-sort";
+import { toMovieEntry } from "@/lib/movie-card-item";
 import { filterEntries, parseBrowseFilter } from "@/lib/browse-filter";
 import type { SeasonalEntry } from "@/lib/seasonal-anime";
 import EraListView from "@/components/EraListView";
 
-interface EraPageProps {
+interface EraMoviesPageProps {
   params: Promise<{ decade: string }>;
-  // 旧実装のタイトル検索（q=）は読まない（ヘッダーの検索に一本化 #101）
   searchParams: Promise<{
     page?: string;
     sort?: string | string[];
@@ -18,8 +18,11 @@ interface EraPageProps {
   }>;
 }
 
-/** アニメの年代別（70 件/ページ・放送年順。アニメ映画の同じ年代へ切り替えられる） */
-export default async function EraPage({ params, searchParams }: EraPageProps) {
+/** アニメ映画の年代別（70 件/ページ・公開年順。アニメの同じ年代へ切り替えられる） */
+export default async function EraMoviesPage({
+  params,
+  searchParams,
+}: EraMoviesPageProps) {
   const { decade: raw } = await params;
   const sp = await searchParams;
 
@@ -38,12 +41,9 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   let error: string | null = null;
 
   try {
-    const data = await loadEraAnimeList(era, currentPage, sort);
+    const data = await loadEraMovieList(era, currentPage, sort);
     currentPage = data.page;
-    const pageEntries: SeasonalEntry[] = data.results.map((anime) => ({
-      kind: "tv",
-      anime,
-    }));
+    const pageEntries = data.results.map(toMovieEntry);
     fetchedCount = pageEntries.length;
     // 取得済みの作品の中だけを絞る
     entries = await filterEntries(pageEntries, filter);
@@ -56,7 +56,7 @@ export default async function EraPage({ params, searchParams }: EraPageProps) {
   return (
     <EraListView
       era={era}
-      media="anime"
+      media="movie"
       sort={sort}
       filter={filter}
       entries={entries}
