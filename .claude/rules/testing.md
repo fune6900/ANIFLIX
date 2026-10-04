@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 7 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 8 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -202,6 +202,15 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    例: `tests/unit/components/TurnstileWidget.test.tsx` / `tests/unit/components/LoginForm.test.tsx`
    `next/script` のモックは Turnstile（`TurnstileWidget` とそれを含む `LoginForm`）のテストに限る。
    他のコンポーネントの `Script` へ広げる場合は ISSUE を起票すること。
+
+8. **ページのテストで、カードを並べるコンポーネントを「実物を包んだスパイ」に差し替える**
+   映画のカードに `mediaType: "movie"`（グリッドなら `kind: "movie"`）が付いているかは
+   props にしか現れず、DOM には出ない（付け忘れるとホバーで同じ ID の TV アニメのトレーラーを引く）。
+   `vi.mock(path, async (orig) => ({ ...actual, default: vi.fn(actual.default) }))` のように
+   **実物の実装をそのまま描かせ、呼び出しを記録するだけ**にする。描画結果を差し替えるスタブは不可。
+   対象は `@/components/ContentRow` と `@/components/SeasonAnimeCard` に限る。
+   呼び出し記録はテストごとに消えるため、`beforeAll` で描画したら直後に控えること。
+   例: `tests/unit/app/movies-home-page.test.tsx` / `tests/unit/app/movie-list-pages.test.tsx`
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して

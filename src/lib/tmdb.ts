@@ -680,20 +680,29 @@ export async function getTopRatedAnimeMovies(
 
 /**
  * 映画ジャンル別の日本のアニメ映画。
- * `movieGenreId` は映画のジャンル ID（TV 専用 ID は `movieGenreIdsFor()` で読み替えてから渡す）
+ * `movieGenreId` は映画のジャンル ID（TV 専用 ID は `movieGenreIdsFor()` で読み替えてから渡す）。
+ *
+ * `excludeMovieGenreIds` を持つ作品は除く。読み替え先が複数あるジャンル（28 ∪ 12 など）を
+ * 重ならない区分（28 / 12 から 28 を除いた残り）に割り、ページングで重複させないために使う。
+ * 値は `movieGenreIdsFor()` の対応表からだけ渡すこと（URL の値を直接渡さない。キャッシュキーになる）
  */
 export async function getAnimeMoviesByGenre(
   movieGenreId: number,
   page = 1,
+  excludeMovieGenreIds: readonly number[] = [],
 ): Promise<TMDbSearchResponse<TMDbMovie>> {
+  const query: Record<string, string> = {
+    with_genres: `${ANIMATION_GENRE_ID},${movieGenreId}`,
+    with_origin_country: "JP",
+    sort_by: "popularity.desc",
+    page: String(page),
+  };
+  if (excludeMovieGenreIds.length > 0) {
+    query.without_genres = excludeMovieGenreIds.join(",");
+  }
   return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
     "/discover/movie",
-    {
-      with_genres: `${ANIMATION_GENRE_ID},${movieGenreId}`,
-      with_origin_country: "JP",
-      sort_by: "popularity.desc",
-      page: String(page),
-    },
+    query,
     DISCOVER_CACHE_TIME,
   );
 }

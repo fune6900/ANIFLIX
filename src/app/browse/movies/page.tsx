@@ -9,23 +9,16 @@ import type { AnimeMovieSearchParams } from "@/components/AnimeMovieSearch";
 import { getMovieVideos } from "@/lib/tmdb";
 import { loadAnimeMovieHome } from "@/lib/movie-home-rows";
 import {
+  MOVIE_LATEST_LIST_HREF,
+  movieGenreListHref,
+} from "@/lib/movie-list";
+import {
   toMovieCardItem,
   toUpcomingMovieCardItem,
 } from "@/lib/movie-card-item";
 
 interface MoviesPageProps {
   searchParams: Promise<AnimeMovieSearchParams>;
-}
-
-/**
- * 「すべて見る」の遷移先。専用ページとフィルターは #91 で作るため、それまでは
- * 既存の検索画面（詳細フィルター）の該当条件へ飛ばす
- */
-const LATEST_ALL_HREF =
-  "/browse/movies?mode=filter&sort=primary_release_date.desc";
-
-function genreAllHref(genreId: number): string {
-  return `/browse/movies?mode=filter&genre=${genreId}`;
 }
 
 /** 検索画面（キーワード未入力）への入口 */
@@ -104,7 +97,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
           <ContentRow
             title="🆕 最新作"
             items={home.latest.map(toMovieCardItem)}
-            allHref={LATEST_ALL_HREF}
+            allHref={MOVIE_LATEST_LIST_HREF}
           />
         )}
         {home.japanTop10.length > 0 && (
@@ -163,7 +156,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
               key={genre.id}
               title={`${genre.emoji} ${genre.name}`}
               items={movies.map(toMovieCardItem)}
-              allHref={genreAllHref(genre.id)}
+              allHref={movieGenreListHref(genre.id)}
             />
           ) : null,
         )}
