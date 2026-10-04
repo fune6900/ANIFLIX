@@ -47,12 +47,6 @@ export default function Navbar() {
             >
               ホーム
             </Link>
-            <Link
-              href="/search?q=アニメ"
-              className="hover:text-white transition"
-            >
-              アニメ
-            </Link>
             <Link href="/browse/movies" className="hover:text-white transition">
               映画
             </Link>
@@ -133,13 +127,6 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   ホーム
-                </Link>
-                <Link
-                  href="/search?q=アニメ"
-                  className="block px-5 py-2 text-sm text-gray-200 hover:text-white hover:underline"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  アニメ
                 </Link>
                 <Link
                   href="/browse/movies"
