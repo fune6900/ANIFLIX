@@ -13,6 +13,11 @@ interface BrowseFilterFormProps {
   fetchedCount?: number;
   /** 絞り込み後に表示している作品数 */
   shownCount?: number;
+  /**
+   * ジャンル選択を出すか（既定 true）。
+   * ジャンル専用ページは既にそのジャンルに絞っているので false にする
+   */
+  showGenre?: boolean;
 }
 
 /**
@@ -25,6 +30,7 @@ export default function BrowseFilterForm({
   preserve = {},
   fetchedCount,
   shownCount,
+  showGenre = true,
 }: BrowseFilterFormProps) {
   const active = isFilterActive(filter);
   const preserveQuery = new URLSearchParams(preserve).toString();
@@ -43,27 +49,29 @@ export default function BrowseFilterForm({
 
       {/* フィールドは auto-fill（auto-fit だとウルトラワイドで select が 1000px を超える） */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-[repeat(auto-fill,minmax(500px,1fr))] gap-4 xl:gap-5 items-end">
-        <div>
-          <label
-            htmlFor="browse-filter-genre"
-            className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wider"
-          >
-            ジャンル
-          </label>
-          <select
-            id="browse-filter-genre"
-            name="genre"
-            defaultValue={filter.genreId !== null ? String(filter.genreId) : ""}
-            className="w-full bg-[#2a2a2a] border border-gray-600 text-white text-sm rounded px-3 py-2 outline-none focus:border-gray-400 transition"
-          >
-            <option value="">すべて</option>
-            {FILTER_GENRES.map((g) => (
-              <option key={g.id} value={String(g.id)}>
-                {g.emoji} {g.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {showGenre && (
+          <div>
+            <label
+              htmlFor="browse-filter-genre"
+              className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wider"
+            >
+              ジャンル
+            </label>
+            <select
+              id="browse-filter-genre"
+              name="genre"
+              defaultValue={filter.genreId !== null ? String(filter.genreId) : ""}
+              className="w-full bg-[#2a2a2a] border border-gray-600 text-white text-sm rounded px-3 py-2 outline-none focus:border-gray-400 transition"
+            >
+              <option value="">すべて</option>
+              {FILTER_GENRES.map((g) => (
+                <option key={g.id} value={String(g.id)}>
+                  {g.emoji} {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label

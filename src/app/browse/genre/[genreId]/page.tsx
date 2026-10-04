@@ -22,7 +22,6 @@ interface GenrePageProps {
   params: Promise<{ genreId: string }>;
   searchParams: Promise<{
     page?: string;
-    genre?: string | string[];
     service?: string | string[];
   }>;
 }
@@ -41,7 +40,8 @@ export default async function GenrePage({
   if (!genre) notFound();
 
   const currentPage = parsePageParam(sp.page);
-  const filter = parseBrowseFilter(sp);
+  // 既にこのジャンルに絞ったページなので、URL の genre= は読まない（ページ送りにも引き継がない）
+  const filter = parseBrowseFilter({ service: sp.service });
 
   const limit = await requestItemsPerPage();
 
@@ -144,6 +144,7 @@ export default async function GenrePage({
         <BrowseFilterForm
           action={`/browse/genre/${genreId}`}
           filter={filter}
+          showGenre={false}
           // 取得に失敗したときは「0 件中 0 件」を出さない
           fetchedCount={error ? undefined : fetchedCount}
           shownCount={error ? undefined : results.length}

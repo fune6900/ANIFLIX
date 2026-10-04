@@ -283,18 +283,49 @@ describe("シーズンページ", () => {
 });
 
 describe("ジャンルページ", () => {
-  it("絞り込み、ページ送りのリンクにフィルターを引き継ぐ", async () => {
+  async function renderGenre(sp: Record<string, string>) {
     render(
       await GenrePage({
         params: Promise.resolve({ genreId: "10759" }),
-        searchParams: Promise.resolve({ ...FILTER, page: "2" }),
+        searchParams: Promise.resolve(sp),
       }),
     );
+  }
 
-    expect(shownAnimeIds()).toEqual([2]);
+  it("ジャンル選択は出さず、配信サービスの選択は残す（#87）", async () => {
+    await renderGenre({});
+
+    const form = screen.getByRole("search");
+    expect(form.querySelector('[name="genre"]')).toBeNull();
+    expect(
+      screen.getByRole("combobox", { name: "配信サービス" }),
+    ).toBeInTheDocument();
+  });
+
+  it("URL の genre= は無視し、配信サービスだけで絞る（#87）", async () => {
+    await renderGenre({ ...FILTER, page: "2" });
+
+    // genre=35（コメディ）は効かない。Netflix（偶数）= 2, 4, 6
+    expect(shownAnimeIds()).toEqual([2, 4, 6]);
+  });
+
+  it("ページ送りのリンクは配信サービスを引き継ぎ、genre= は付けない（#87）", async () => {
+    await renderGenre({ ...FILTER, page: "2" });
+
     const pageLinks = linksStartingWith("/browse/genre/10759?page=");
     expect(pageLinks.length).toBeGreaterThan(0);
-    expect(pageLinks.every(keepsFilter)).toBe(true);
+    expect(pageLinks.every((h) => h.includes("service=netflix"))).toBe(true);
+    expect(pageLinks.some((h) => h.includes("genre="))).toBe(false);
+  });
+
+  it("genre= だけが付いていても絞り込み中として扱わない（#87）", async () => {
+    await renderGenre({ genre: "35" });
+
+    expect(shownAnimeIds()).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(
+      screen.queryByRole("link", { name: "絞り込みを解除" }),
+    ).not.toBeInTheDocument();
+    expect(getAnimeWatchProviders).not.toHaveBeenCalled();
   });
 });
 
