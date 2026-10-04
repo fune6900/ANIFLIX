@@ -1,13 +1,29 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 interface AnimeHeroTrailerProps {
   trailerKey: string | null;
   backdropUrl: string | null;
   title: string;
 }
+
+/**
+ * 前景のキービジュアルの四辺を背景（ブラーの塗り）へ溶かすマスク。
+ * 横・縦 2 本のグラデーションの共通部分（intersect）だけを残す。
+ * Safari は標準の mask-* を持たない版があるため -webkit- も併記する
+ */
+const FEATHER_GRADIENTS =
+  "linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), " +
+  "linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)";
+
+const FEATHER_MASK: CSSProperties = {
+  maskImage: FEATHER_GRADIENTS,
+  WebkitMaskImage: FEATHER_GRADIENTS,
+  maskComposite: "intersect",
+  WebkitMaskComposite: "source-in",
+};
 
 /**
  * アニメ詳細ヒーロー領域の背景にトレーラーをループ再生する。
@@ -57,16 +73,23 @@ export default function AnimeHeroTrailer({
             sizes="100vw"
             className="object-cover scale-110 blur-2xl opacity-60"
           />
-          <Image
-            src={backdropUrl}
-            alt={title}
-            fill
-            priority
-            sizes="100vw"
-            className={`object-contain object-center transition-opacity duration-700 ${
-              trailerVisible ? "opacity-0" : "opacity-100"
-            }`}
-          />
+          {/* マスクは画像の実寸（16:9）の箱に掛ける。object-contain の img 要素は
+              箱いっぱいに広がるため、要素へ直接掛けると画像の無い縁がフェードするだけになる */}
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full aspect-video max-w-full"
+            style={FEATHER_MASK}
+          >
+            <Image
+              src={backdropUrl}
+              alt={title}
+              fill
+              priority
+              sizes="100vw"
+              className={`object-contain object-center transition-opacity duration-700 ${
+                trailerVisible ? "opacity-0" : "opacity-100"
+              }`}
+            />
+          </div>
         </>
       ) : (
         <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black" />

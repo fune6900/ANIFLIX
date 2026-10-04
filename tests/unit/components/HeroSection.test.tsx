@@ -89,6 +89,45 @@ describe("HeroSection", () => {
     });
   });
 
+  it("前景のキービジュアルは固定ヘッダーの下から始まる（#98）", () => {
+    // ヘッダー（Navbar）は fixed top-0 で py-4 + ロゴ行。
+    // mobile: 16 + 32(text-2xl の行高) + 16 = 64px / md 以上: 16 + 36(text-3xl) + 16 = 68px
+    render(<HeroSection items={ITEMS} />);
+
+    for (const item of ITEMS) {
+      const layer = screen.getByAltText(item.title).parentElement;
+      expect(layer).not.toBeNull();
+      const classes = (layer?.className ?? "").split(/\s+/);
+
+      expect(classes).not.toContain("inset-0");
+      expect(classes).toContain("top-16");
+      expect(classes).toContain("md:top-[68px]");
+      expect(classes).toContain("bottom-0");
+      expect(classes).toContain("inset-x-0");
+    }
+  });
+
+  it("ブラーの塗りはヘッダーの裏まで全面に敷いたまま（#98）", () => {
+    // 前景だけを下げる。塗りまで下げるとヘッダーの裏に黒帯が出る
+    const { container } = render(<HeroSection items={ITEMS} />);
+
+    for (const fill of container.querySelectorAll<HTMLImageElement>(
+      'img[aria-hidden="true"]',
+    )) {
+      const classes = (fill.parentElement?.className ?? "").split(/\s+/);
+      expect(classes).toContain("inset-0");
+      expect(classes).not.toContain("top-16");
+    }
+  });
+
+  it("文字ブロックの位置は前景の移動に引きずられない（#98）", () => {
+    render(<HeroSection items={ITEMS} />);
+
+    const classes = (heading().parentElement?.className ?? "").split(/\s+/);
+    expect(classes).toContain("bottom-[24%]");
+    expect(classes).toContain("md:bottom-[28%]");
+  });
+
   it("左右の切り替えボタンに名前が付いている", () => {
     render(<HeroSection items={ITEMS} />);
 

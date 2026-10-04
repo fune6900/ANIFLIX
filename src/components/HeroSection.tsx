@@ -72,15 +72,19 @@ export default function HeroSection({ items }: HeroSectionProps) {
                 className="object-cover scale-110 blur-2xl opacity-60"
                 priority={i < 2}
               />
-              {/* 前景: キービジュアル全体を切らずに収める */}
-              <Image
-                src={getImageUrl(it.backdropPath, "original")}
-                alt={it.title}
-                fill
-                sizes="100vw"
-                className="object-contain object-center"
-                priority={i < 2}
-              />
+              {/* 前景: キービジュアル全体を切らずに収める。固定ヘッダー（Navbar の
+                  py-4 + ロゴ行 = mobile 64px / md 以上 68px）の下から始め、
+                  ヘッダーに上端を隠させない。塗りは上の全面のまま */}
+              <div className="absolute inset-x-0 top-16 md:top-[68px] bottom-0">
+                <Image
+                  src={getImageUrl(it.backdropPath, "original")}
+                  alt={it.title}
+                  fill
+                  sizes="100vw"
+                  className="object-contain object-center"
+                  priority={i < 2}
+                />
+              </div>
             </div>
           ) : (
             <div
