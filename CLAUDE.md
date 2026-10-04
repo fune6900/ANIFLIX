@@ -52,6 +52,9 @@ src/
 │   ├── voice-actors/           声優ホーム（Hero + 特集の行。旧 ?q= は検索結果へ redirect）
 │   ├── voice-actors/collections/[slug]/  声優の行の「すべて見る」（slug はホワイトリスト）
 │   ├── voice-actors/[id]/      声優詳細（出演作ページング）
+│   ├── characters/             キャラクターホーム（Hero + 特集の行。検索は search/characters）
+│   ├── characters/collections/[slug]/  キャラの行の「すべて見る」（slug はホワイトリスト）
+│   ├── characters/[id]/        キャラ詳細（AniList の Character id。出演作・関連キャラのページング）
 │   ├── search/                 ヘッダー検索の結果画面（旧 /search?q= は anime へ redirect）
 │   │   ├── anime/              アニメの検索結果
 │   │   ├── movies/             アニメ映画の検索結果
@@ -78,9 +81,11 @@ src/
 ├── lib/                        TMDb クライアント・ジャンル / 年代 / シーズン / スタジオ定義
 │                               + 認証周辺（auth-routes / api-client / login-backdrops
 │                               / safe-callback-url / turnstile / turnstile-messages / login-action）
-│                               + 声優ホームの行（voice-actor-home）・定番シリーズ定義（franchises）
-└── types/                      TMDb / AniList / Turnstile / 声優ホームの型定義
-                                （tmdb.ts, anilist.ts, turnstile.ts, voice-actor-home.ts）
+│                               + 声優ホームの行（voice-actor-home）・キャラホームの行（character-home）
+│                               / 両ホームの共通部分（featured-rows）・定番シリーズ定義（franchises）
+└── types/                      TMDb / AniList / Turnstile / 声優ホーム / キャラホームの型定義
+                                （tmdb.ts, anilist.ts, turnstile.ts, portrait-card.ts,
+                                 voice-actor-home.ts, character-home.ts）
 ```
 
 ## 🎯 主要機能
@@ -91,6 +96,7 @@ src/
 - **Hero スライダー**: 6 件クロスフェード + YouTube トレーラーモーダル
 - **ContentRow**: ホバー 800ms で YouTube プレビュー（`/api/videos` 経由、モジュールキャッシュ）
 - **声優ホーム**: `/voice-actors` は Hero（今期人気作品 + 主演声優）+ 特集の行（今期放送中・今期の主演・今期人気作品 ×5・定番シリーズ ×5・人気ランキング・今日が誕生日・前クール・最新アニメ映画・新世代・レジェンド）。行は全件表示で、「すべて見る」は `/voice-actors/collections/[slug]`。定義は `lib/voice-actor-home.ts`、シリーズは `lib/franchises.ts`（`/characters` と共有）。AniList の問い合わせは冷えたキャッシュで 1 描画最大 17 回
+- **キャラクターホーム**: `/characters`（ヘッダーの「キャラ」。ボトムナビは #36 の 5 項目のままで置かない）は Hero（今期人気作品 + 主要キャラ）+ 特集の行（今期放送中・今期の主人公・今期人気作品 ×5・定番シリーズ ×5・人気キャラランキング・今日が誕生日・前クールの人気キャラ・最新アニメ映画・今週トレンド作品・年代別名作 90 / 00 / 10 年代）。行は全件表示で、「すべて見る」は `/characters/collections/[slug]`。定義は `lib/character-home.ts`。今期 / 前クール / シリーズのキャストと今期の作品一覧は声優ホームと同じ問い合わせ（`lib/featured-rows.ts`）で Data Cache を共有する。AniList の問い合わせは冷えたキャッシュで 1 描画最大 20 回（声優ホームが温まっていれば 5 回）。AniList の実際の上限は 30 回/分（応答ヘッダー）。キャラ名の検索結果は `/search/characters`
 - **検索**: ヘッダー検索に一本化。Navbar ドロップダウン（アニメ / 映画 / 声優 / キャラ、300ms デバウンス、最近の検索、矢印キー操作）→ Enter / 「すべての結果」で部門別の結果画面 `/search/{anime,movies,voice-actors,characters}?q=`（共通コンポーネント `SearchResults`）。ページ内のキーワード検索・詳細フィルター検索は持たない。未ログインで結果画面を開いた場合、ログイン後はトップへ戻す（`lib/safe-callback-url.ts`）
 - **アニメ詳細**: メタ・あらすじ・トレーラー・OP/ED・キャスト・**ヒストリー年表**（SeasonTimeline）・**エピソード一覧**（SeasonEpisodes）・関連作品
 - **ウルトラワイド対応**: 横幅の上限なし。ガターは `.site-container`、1920px 超のグリッドは `auto-fill`（`3xl` / `4xl` / `5xl` = 1920 / 2560 / 3200px）

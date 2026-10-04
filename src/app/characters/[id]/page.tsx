@@ -430,11 +430,8 @@ export default async function CharacterDetailPage({
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
       <div className="site-container">
         <nav className="mb-6 text-xs text-gray-500">
-          <Link
-            href="/search/characters"
-            className="hover:text-white transition"
-          >
-            ← キャラクター検索
+          <Link href="/characters" className="hover:text-white transition">
+            ← キャラクター
           </Link>
         </nav>
 

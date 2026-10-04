@@ -54,6 +54,9 @@ src/
     voice-actors/page.tsx       声優ホーム（Hero + 特集の行）
     voice-actors/collections/[slug]/page.tsx  声優の行の「すべて見る」
     voice-actors/[id]/page.tsx  声優詳細
+    characters/page.tsx         キャラクターホーム（Hero + 特集の行）
+    characters/collections/[slug]/page.tsx  キャラの行の「すべて見る」
+    characters/[id]/page.tsx    キャラ詳細（AniList の Character id）
     search/page.tsx             旧検索画面（?q= を search/anime へ redirect）
     search/anime/page.tsx       ヘッダー検索の結果画面（4 部門で components/SearchResults を共有）
     search/movies/page.tsx
@@ -70,8 +73,9 @@ src/
   lib/                          TMDb クライアント・ドメイン定義（genres / eras / seasons / studios / device）
                                 + 認証周辺（auth-routes / api-client / login-backdrops
                                 / safe-callback-url / turnstile / turnstile-messages / login-action）
-                                + 声優ホームの行（voice-actor-home）・定番シリーズ定義（franchises）
-  types/                        TMDb / AniList / Turnstile / 声優ホームの型定義
+                                + 声優ホームの行（voice-actor-home）・キャラホームの行（character-home）
+                                / 両ホームの共通部分（featured-rows）・定番シリーズ定義（franchises）
+  types/                        TMDb / AniList / Turnstile / 声優・キャラホーム（portrait-card）の型定義
 ```
 
 > 現状 `src/hooks/` / `src/services/` は未使用。導入は ISSUE を起票してから。

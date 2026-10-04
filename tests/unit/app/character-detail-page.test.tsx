@@ -406,3 +406,15 @@ describe("関連キャラクターの表示条件", () => {
     expect(relatedCardHrefs()).toEqual(["/characters/2", "/characters/3"]);
   });
 });
+
+describe("戻るリンク", () => {
+  it("キャラクターページ（/characters）へ戻る。検索結果へは戻さない（#104）", async () => {
+    await renderPage();
+
+    const back = [
+      ...document.querySelectorAll<HTMLAnchorElement>("a[href]"),
+    ].find((a) => (a.textContent ?? "").startsWith("←"));
+    expect(back?.getAttribute("href")).toBe("/characters");
+    expect(back?.textContent).toBe("← キャラクター");
+  });
+});

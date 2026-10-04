@@ -15,29 +15,37 @@
 //   今期の作品一覧（fetchSeasonalAnime: 最大 8。トップ画面とキャッシュ共有）
 //   + 今期のキャスト 1 + 前クールのキャスト 1 + シリーズ 5 + お気に入り数 1 + 誕生日 1
 //   = 最大 17 回（今期の作品一覧が温まっていれば 9 回）。
-// キャラクターページ（#104）も AniList を使うため、ここでは 1 リクエストでも削る。
+// 今期の作品一覧・今期 / 前クールのキャスト・シリーズのキャストはキャラクターページ（#104）と
+// 同じ問い合わせなので Data Cache を共有する（`src/lib/featured-rows.ts`）。
 
-import {
-  getAniListBirthdayStaff,
-  getAniListFranchiseCast,
-  getAniListPopularStaff,
-  getAniListSeasonCast,
-  toAniListSeason,
-} from "@/lib/anilist";
+import { getAniListBirthdayStaff, getAniListPopularStaff } from "@/lib/anilist";
 import { getAnimeCredits, getImageUrl, getLatestAnimeMovies } from "@/lib/tmdb";
-import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import {
   aggregateMovieCast,
   aggregateSeasonalCast,
   type AggregatedCast,
 } from "@/lib/seasonal-cast";
-import { getRecentSeasons, type AnimeSeason } from "@/lib/seasons";
 import {
   ANIME_FRANCHISES,
-  findFranchise,
   matchesFranchiseTitle,
   type AnimeFranchise,
 } from "@/lib/franchises";
+import {
+  FEATURED_HERO_SIZE,
+  FEATURED_WORK_COUNT,
+  aniListImage,
+  castEdgesOf,
+  castWorkTitle,
+  createSharedCastSources,
+  franchiseRowSlug,
+  isHeroReady,
+  isMainRole,
+  loadCollectionRow,
+  once,
+  safeRow as safeFeaturedRow,
+  workRowSlug,
+  type SharedCastSources,
+} from "@/lib/featured-rows";
 import type {
   AniListCastEdge,
   AniListCastMedia,
@@ -49,12 +57,6 @@ import type { VoiceActorCard, VoiceActorRow } from "@/types/voice-actor-home";
 // ──────────────────────────────────────────
 // 定数
 // ──────────────────────────────────────────
-
-/** カルーセルの枚数（トップ画面と同じ） */
-export const VOICE_ACTOR_HERO_SIZE = 6;
-
-/** 「今期人気作品の特集」の行数 */
-export const FEATURED_WORK_COUNT = 5;
 
 /** 「今期放送中アニメの声優」で credits を集約する作品数（旧 /voice-actors と同じ） */
 const AIRING_WORK_COUNT = 30;
@@ -74,15 +76,9 @@ const LEGEND_LAST_DEBUT_YEAR = 1990;
 /** 「前クールに活躍」: 前クールの人気作品のうち、この本数以上に出演 */
 const ACTIVE_MIN_WORKS = 2;
 
-/** AniList の既定画像（写真の未登録）。`.../staff/large/default.jpg` */
-const ANILIST_DEFAULT_IMAGE = "/default.";
-
 const COLLECTION_BASE = "/voice-actors/collections";
 
-/** 特集の slug。作品 id は AniList の Media id（先頭 0 と桁数の暴走を弾く） */
-const WORK_SLUG_PATTERN = /^work-([1-9]\d{0,8})$/;
-
-const FRANCHISE_SLUG_PREFIX = "franchise-";
+const LOG_TAG = "voice-actor-home";
 
 // ──────────────────────────────────────────
 // URL
@@ -93,53 +89,17 @@ export function voiceActorCollectionHref(slug: string): string {
   return `${COLLECTION_BASE}/${slug}`;
 }
 
-function workRowSlug(aniListMediaId: number): string {
-  return `work-${aniListMediaId}`;
-}
-
-function franchiseRowSlug(franchise: AnimeFranchise): string {
-  return `${FRANCHISE_SLUG_PREFIX}${franchise.slug}`;
-}
-
 /** AniList の声優は TMDb の id を持たないので、名前で TMDb の人物へ解決する */
 function resolveHref(name: string): string {
   return `/voice-actors/resolve?name=${encodeURIComponent(name)}`;
 }
 
 // ──────────────────────────────────────────
-// 日付
-// ──────────────────────────────────────────
-
-interface JstDate {
-  year: number;
-  month: number;
-  day: number;
-  /** `YYYY-MM-DD` */
-  key: string;
-}
-
-/** 日本時間の今日。誕生日・活動年数は日本の日付で数える */
-function todayJst(): JstDate {
-  const key = new Date(Date.now() + 9 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
-  const [year, month, day] = key.split("-").map(Number);
-  return { year, month, day, key };
-}
-
-// ──────────────────────────────────────────
 // 取得元（1 描画につき 1 回だけ引く）
 // ──────────────────────────────────────────
 
-interface VoiceActorSources {
-  currentSeason: AnimeSeason;
-  previousSeason: AnimeSeason;
-  today: JstDate;
-  /** 今期の人気作品（TMDb の TV 作品。Hero と「今期放送中」） */
-  seasonalAnime(): Promise<TMDbAnime[]>;
-  currentSeasonCast(): Promise<AniListCastMedia[]>;
-  previousSeasonCast(): Promise<AniListCastMedia[]>;
-  franchiseCast(franchise: AnimeFranchise): Promise<AniListCastMedia[]>;
+/** キャラクターページと共有する取得元（`src/lib/featured-rows.ts`）+ 声優だけの取得元 */
+interface VoiceActorSources extends SharedCastSources {
   /** お気に入り数順の Staff（声優以外も混ざる） */
   popularStaff(): Promise<AniListStaff[]>;
   /** 今日が誕生日の Staff（声優以外も混ざる） */
@@ -147,62 +107,17 @@ interface VoiceActorSources {
   latestMovies(): Promise<TMDbMovie[]>;
 }
 
-/** 最初の呼び出しの Promise を使い回す */
-function once<T>(load: () => Promise<T>): () => Promise<T> {
-  let cached: Promise<T> | null = null;
-  return () => {
-    cached ??= load();
-    return cached;
-  };
-}
-
 /**
  * 行が共有する取得元を作る。各取得元は呼ばれた時に初めて引き、以降は同じ結果を返す。
  * 専用ページでは、その行が使う取得元だけが引かれる
  */
 function createVoiceActorSources(): VoiceActorSources {
-  const [currentSeason, previousSeason] = getRecentSeasons(2);
-  const today = todayJst();
-  const franchises = new Map<string, Promise<AniListCastMedia[]>>();
-
+  const shared = createSharedCastSources();
   return {
-    currentSeason,
-    previousSeason,
-    today,
-    seasonalAnime: once(async () => {
-      const result = await fetchSeasonalAnime(
-        currentSeason.year,
-        currentSeason.season,
-        { limit: AIRING_WORK_COUNT },
-      );
-      return result.items;
-    }),
-    currentSeasonCast: once(() =>
-      getAniListSeasonCast(
-        currentSeason.year,
-        toAniListSeason(currentSeason.season),
-      ),
-    ),
-    previousSeasonCast: once(() =>
-      getAniListSeasonCast(
-        previousSeason.year,
-        toAniListSeason(previousSeason.season),
-      ),
-    ),
-    franchiseCast: (franchise) => {
-      let cached = franchises.get(franchise.slug);
-      if (!cached) {
-        cached = getAniListFranchiseCast(
-          franchise.search,
-          franchise.castPerWork,
-        );
-        franchises.set(franchise.slug, cached);
-      }
-      return cached;
-    },
+    ...shared,
     // 1 ページ（50 人、うち声優は 30 人前後）だけ。AniList の分間制限のため 2 ページ目は引かない
     popularStaff: once(() => getAniListPopularStaff(1)),
-    birthdayStaff: once(() => getAniListBirthdayStaff(today.key)),
+    birthdayStaff: once(() => getAniListBirthdayStaff(shared.today.key)),
     latestMovies: once(async () => {
       const page = await getLatestAnimeMovies(1);
       // 公開直後の作品はポスター（＝ credits）が未登録のことが多い
@@ -228,8 +143,7 @@ function staffName(staff: AniListStaff): string {
 }
 
 function staffImage(staff: AniListStaff): string | null {
-  const url = staff.image.large;
-  return url && !url.includes(ANILIST_DEFAULT_IMAGE) ? url : null;
+  return aniListImage(staff.image.large);
 }
 
 function staffCard(staff: AniListStaff, note?: string): VoiceActorCard {
@@ -273,18 +187,7 @@ function roleNote(edge: AniListCastEdge): string | undefined {
   return name ? `役: ${name}` : undefined;
 }
 
-function workTitle(media: AniListCastMedia): string {
-  return (
-    media.title.native ??
-    media.title.romaji ??
-    media.title.english ??
-    `(id:${media.id})`
-  );
-}
-
-function edgesOf(media: AniListCastMedia): AniListCastEdge[] {
-  return media.characters?.edges ?? [];
-}
+const edgesOf = castEdgesOf;
 
 /** 作品群のキャストを出てきた順に、声優の重複なくカードにする */
 function castCards(
@@ -343,7 +246,7 @@ function tallyWorks(
   );
 }
 
-const isMain = (edge: AniListCastEdge): boolean => edge.role === "MAIN";
+const isMain = isMainRole;
 
 /** キャストの付いた作品（放送前でキャスト未発表の作品を飛ばす） */
 function hasCast(media: AniListCastMedia): boolean {
@@ -355,18 +258,12 @@ function hasCast(media: AniListCastMedia): boolean {
 // ──────────────────────────────────────────
 
 /** 取得に失敗した行は空にする（1 行の失敗でページ全体を落とさない） */
-async function safeRow(
+function safeRow(
   slug: string,
   title: string,
   load: () => Promise<VoiceActorRow>,
 ): Promise<VoiceActorRow> {
-  try {
-    return await load();
-  } catch (error) {
-    // 行は黙って消えるので、AniList の 429 などを追えるようログには残す
-    console.error(`[voice-actor-home] row "${slug}" failed:`, error);
-    return { slug, title, cards: [] };
-  }
+  return safeFeaturedRow(LOG_TAG, slug, title, load);
 }
 
 const AIRING_TITLE = "🎙️ 今期放送中アニメの声優";
@@ -422,11 +319,11 @@ async function loadFeaturedWorkRows(
       .slice(0, FEATURED_WORK_COUNT);
     return works.map((media) => ({
       slug: workRowSlug(media.id),
-      title: `📺 『${workTitle(media)}』の声優`,
+      title: `📺 『${castWorkTitle(media)}』の声優`,
       cards: castCards([media]),
     }));
   } catch (error) {
-    console.error("[voice-actor-home] featured work rows failed:", error);
+    console.error(`[${LOG_TAG}] featured work rows failed:`, error);
     return [];
   }
 }
@@ -646,11 +543,6 @@ export interface VoiceActorHeroItem {
   leadVoiceActors: string[];
 }
 
-/** カルーセルに使える作品（名前・あらすじ・背景画像が揃っている） */
-function isHeroReady(a: TMDbAnime): boolean {
-  return Boolean(a.backdrop_path && a.name && a.overview);
-}
-
 async function leadVoiceActorsOf(animeId: number): Promise<string[]> {
   try {
     const { cast } = await getAnimeCredits(animeId);
@@ -668,11 +560,11 @@ async function loadHero(src: VoiceActorSources): Promise<VoiceActorHeroItem[]> {
   try {
     const anime = (await src.seasonalAnime())
       .filter(isHeroReady)
-      .slice(0, VOICE_ACTOR_HERO_SIZE);
+      .slice(0, FEATURED_HERO_SIZE);
     const leads = await Promise.all(anime.map((a) => leadVoiceActorsOf(a.id)));
     return anime.map((a, i) => ({ anime: a, leadVoiceActors: leads[i] }));
   } catch (error) {
-    console.error("[voice-actor-home] hero failed:", error);
+    console.error(`[${LOG_TAG}] hero failed:`, error);
     return [];
   }
 }
@@ -739,28 +631,15 @@ export async function loadVoiceActorHome(): Promise<VoiceActorHome> {
 
 /**
  * 「すべて見る」の専用ページの 1 行。定義に無い slug は null（ページ側で 404）。
- *
- * 作品特集（`work-{AniList id}`）は、今期の特集に入っている作品の id だけを受け付ける。
- * 中身は今期のキャスト（固定のキャッシュキー）から切り出すので、URL の id が
- * そのまま AniList への問い合わせやキャッシュキーに載ることは無い
+ * 照合の規則は `loadCollectionRow`（`src/lib/featured-rows.ts`）を参照
  */
-export async function loadVoiceActorCollection(
+export function loadVoiceActorCollection(
   slug: string,
 ): Promise<VoiceActorRow | null> {
-  const loadStatic = STATIC_ROWS.get(slug);
-  if (loadStatic) return loadStatic(createVoiceActorSources());
-
-  if (slug.startsWith(FRANCHISE_SLUG_PREFIX)) {
-    const franchise = findFranchise(slug.slice(FRANCHISE_SLUG_PREFIX.length));
-    return franchise
-      ? loadFranchiseRow(createVoiceActorSources(), franchise)
-      : null;
-  }
-
-  if (WORK_SLUG_PATTERN.test(slug)) {
-    const rows = await loadFeaturedWorkRows(createVoiceActorSources());
-    return rows.find((r) => r.slug === slug) ?? null;
-  }
-
-  return null;
+  return loadCollectionRow(slug, {
+    createSources: createVoiceActorSources,
+    staticRows: STATIC_ROWS,
+    loadFranchiseRow,
+    loadFeaturedWorkRows,
+  });
 }

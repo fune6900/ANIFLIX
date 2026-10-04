@@ -49,7 +49,7 @@ const NAV_HREFS = [
   "/browse/genres",
   "/browse/eras",
   "/voice-actors",
-  "/search/characters",
+  "/characters",
   "/diagnosis",
 ];
 
