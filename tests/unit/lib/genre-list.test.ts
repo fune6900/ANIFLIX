@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 import { findGenre, genreKeywordIds } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
+import type { DatedListOptions } from "@/lib/tmdb";
 
 /**
  * ジャンルの一覧（/browse/genre/[id] と /browse/movies/genre/[id]）の取得（#99）。
@@ -62,7 +63,12 @@ const tmdb = {
     one(p, [anime(11)]),
   ),
   getAnimeMoviesByGenre: vi.fn(
-    async (g: number, p: number, _ex?: readonly number[], _o?: unknown) =>
+    async (
+      g: number,
+      p: number,
+      _ex?: readonly number[],
+      _o?: DatedListOptions,
+    ) =>
       one(
         p,
         // 28 は奇数日、12 は偶数日に公開（どちらも新しい順）
@@ -87,7 +93,7 @@ vi.mock("@/lib/tmdb", async (importOriginal) => ({
     g: number,
     p: number,
     ex?: readonly number[],
-    o?: unknown,
+    o?: DatedListOptions,
   ) => tmdb.getAnimeMoviesByGenre(g, p, ex, o),
   getAnimeMovieByKeyword: (ids: number[], p: number, o?: unknown) =>
     tmdb.getAnimeMovieByKeyword(ids, p, o),
@@ -170,6 +176,44 @@ describe("loadGenreMovieList: アニメ映画", () => {
       sort: "year_desc",
     });
     expect(page.results.map((m) => m.id)).toEqual([281, 121, 282, 122]);
+  });
+
+  it("古い順（year_asc）は 2 本を公開日の古い順で 1 本に並べる（ページの境目をまたいでも）", async () => {
+    // 28 は奇数日・12 は偶数日に 40 本ずつ。TMDb と同じく sort に従った順で返す
+    const day = (n: number) =>
+      new Date(Date.UTC(2020, 0, 1) + n * 86400000).toISOString().split("T")[0];
+    const asc = (base: number, parity: number) =>
+      Array.from({ length: 40 }, (_, i) =>
+        movie(base + i, day(2 * i + parity)),
+      );
+    const lists: Record<number, TMDbMovie[]> = {
+      28: asc(2800, 1),
+      12: asc(1200, 0),
+    };
+    const original = tmdb.getAnimeMoviesByGenre.getMockImplementation();
+    tmdb.getAnimeMoviesByGenre.mockImplementation(
+      async (g: number, p: number, _ex?: readonly number[], o?: DatedListOptions) => {
+        const all =
+          o?.sort === "year_asc" ? lists[g] : [...lists[g]].reverse();
+        return {
+          page: p,
+          total_pages: 2,
+          total_results: all.length,
+          results: all.slice((p - 1) * 20, p * 20),
+        };
+      },
+    );
+
+    try {
+      const p1 = await loadGenreMovieList(genre(10759), 1, "year_asc");
+      const p2 = await loadGenreMovieList(genre(10759), 2, "year_asc");
+      const shown = [...p1.results, ...p2.results].map((m) => m.release_date);
+
+      expect(shown).toHaveLength(80);
+      expect(shown).toEqual([...shown].sort());
+    } finally {
+      if (original) tmdb.getAnimeMoviesByGenre.mockImplementation(original);
+    }
   });
 
   it("SF・ファンタジーは 878 ∪ 14（14 は 878 を除いた残り）で取る", async () => {

@@ -131,6 +131,26 @@ describe("fetchGenreRow", () => {
     expect(items).toHaveLength(30);
   });
 
+  it("ホームの行は一覧モード（{ sort }）で呼ばない（人気順・票数の下限ありのまま。#99）", async () => {
+    getAnimeByGenre.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+    getAnimeByKeyword.mockImplementation((_ids: number[], p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+
+    await fetchGenreRow(GENRE);
+    await fetchGenreRow(KEYWORD_GENRE);
+
+    // 第 3 引数（一覧モードのオプション）を渡していない
+    for (const call of [
+      ...getAnimeByGenre.mock.calls,
+      ...getAnimeByKeyword.mock.calls,
+    ]) {
+      expect(call).toHaveLength(2);
+    }
+  });
+
   it("開始ページが 2 のときは 2・3 ページ目を取る", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     getAnimeByGenre.mockImplementation((_id: number, p: number) =>

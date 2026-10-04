@@ -342,3 +342,95 @@ describe("loadListPage: 重ならない日付順の一覧 2 つを日付で合�
     ).rejects.toThrow();
   });
 });
+
+describe("loadListPage: 同じ日付の扱い", () => {
+  it("同じ日付なら先の一覧（A）を先に並べる。ページの境目でもこの順を保つ", async () => {
+    const same = "2020-04-01";
+    const a = Array.from({ length: 50 }, (_, i) =>
+      movie(1 + i, { date: same }),
+    );
+    const b = Array.from({ length: 50 }, (_, i) =>
+      movie(1001 + i, { date: same }),
+    );
+    const sources = [fakeSource(a).fetchPage, fakeSource(b).fetchPage];
+
+    const p1 = await loadListPage(sources, 1, { compare: newestFirst });
+    const p2 = await loadListPage(sources, 2, { compare: newestFirst });
+
+    expect(p1.results.map((m) => m.id)).toEqual([
+      ...a.map((m) => m.id),
+      ...b.slice(0, 20).map((m) => m.id),
+    ]);
+    expect(p2.results.map((m) => m.id)).toEqual(b.slice(20).map((m) => m.id));
+  });
+});
+
+/**
+ * 取得を手で進めるソース。1 ラウンド = TMDb への往復 1 回ぶん。
+ * 直列に待つ取得が増えるほどラウンド数が増える（時間に依存しない数え方）
+ */
+function gatedSources(lists: TMDbMovie[][]) {
+  const pending: Array<() => void> = [];
+  const sources = lists.map(
+    (items) =>
+      (page: number): Promise<TMDbSearchResponse<TMDbMovie>> =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve({
+              page,
+              total_pages: Math.ceil(items.length / TMDB_PAGE),
+              total_results: items.length,
+              results: items.slice((page - 1) * TMDB_PAGE, page * TMDB_PAGE),
+            }),
+          ),
+        ),
+  );
+  /** 終わるまで往復を進め、何ラウンドかかったかを返す */
+  async function rounds(run: Promise<unknown>): Promise<number> {
+    let done = false;
+    run.then(
+      () => (done = true),
+      () => (done = true),
+    );
+    let n = 0;
+    for (let guard = 0; guard < 1000; guard++) {
+      // マイクロタスクを流し切ってから、その時点で待っている取得を一斉に返す
+      await new Promise((r) => setTimeout(r, 0));
+      if (done) return n;
+      const batch = pending.splice(0);
+      if (batch.length === 0) throw new Error("取得待ちが無いのに終わらない");
+      n++;
+      batch.forEach((resolve) => resolve());
+    }
+    throw new Error("終わらない");
+  }
+  return { sources, rounds };
+}
+
+describe("loadListPage: 合併の待ち時間", () => {
+  // 3000 件 = TMDb 150 ページ。同じ TMDb ページの中の探索は使い回すので、
+  // 往復が要るのは「別のページを見る探索段」だけで、その数は log2(150 + 1) 段まで
+  const N = 3000;
+  const bigA = datedDesc(1, N, 2);
+  const bigB = datedDesc(100001, N, 3, 1);
+  const searchRounds = Math.ceil(Math.log2(N / 20 + 1));
+
+  it.each([5, 13, 40])(
+    "%i ページ目: 比較する 2 件を同時に取り、先頭と末尾の境目も同時に探す（往復は 1 ページ目 + 探索 + 本体まで）",
+    async (page) => {
+      const { sources, rounds } = gatedSources([bigA, bigB]);
+      const run = loadListPage(sources, page, { compare: newestFirst });
+
+      const n = await rounds(run);
+
+      // 直列に待つと 2 件 × 先頭・末尾で最大 4 倍に伸びる（直列の実装では 25 往復）
+      expect(n).toBeLessThanOrEqual(1 + searchRounds + 1);
+      expect((await run).results.map((m) => m.id)).toEqual(
+        [...bigA, ...bigB]
+          .sort(newestFirst)
+          .slice((page - 1) * 70, page * 70)
+          .map((m) => m.id),
+      );
+    },
+  );
+});

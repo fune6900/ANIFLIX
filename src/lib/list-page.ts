@@ -76,7 +76,8 @@ function pageCache<T>(sources: readonly ListSource<T>[]) {
 /**
  * 2 本の並び A・B を 1 本に合わせた時、先頭 k 件のうち A から何件取るか。
  * 同順位は A を先にする。二分探索なので、深いページでも前のページを全部は読まない
- * （1 回の探索で各一覧 log2(総件数) 件ほどを見る）
+ * （1 回の探索で各一覧 log2(総件数) 件ほどを見る）。
+ * 比べる 2 件は同時に取るので、TMDb への往復は探索 1 段につき 1 回
  */
 async function splitAt<T>(
   k: number,
@@ -91,7 +92,8 @@ async function splitAt<T>(
     // a = A から取る件数の候補。A[a] が B[k-a-1] より先に来るなら a は小さすぎる
     const a = Math.floor((lo + hi) / 2);
     const b = k - a;
-    if (compare(await itemAt(0, a), await itemAt(1, b - 1)) <= 0) {
+    const [itemA, itemB] = await Promise.all([itemAt(0, a), itemAt(1, b - 1)]);
+    if (compare(itemA, itemB) <= 0) {
       lo = a + 1;
     } else {
       hi = a;
@@ -158,8 +160,11 @@ export async function loadListPage<T extends { id: number }>(
       if (!item) throw new Error("TMDb の一覧が総件数より短い");
       return item;
     };
-    const aStart = await splitAt(start, pair, itemAt, compare);
-    const aEnd = await splitAt(end, pair, itemAt, compare);
+    // 先頭と末尾の境目は互いに独立なので同時に探す（同じ TMDb ページは pageCache で共有）
+    const [aStart, aEnd] = await Promise.all([
+      splitAt(start, pair, itemAt, compare),
+      splitAt(end, pair, itemAt, compare),
+    ]);
     ranges = [
       [aStart, aEnd],
       [start - aStart, end - aEnd],
@@ -170,7 +175,10 @@ export async function loadListPage<T extends { id: number }>(
 
   const perSource = await Promise.all(
     ranges.map(async ([from, to], i) => {
-      if (to <= from) return { requested: 0, failed: 0, items: [] as T[] };
+      if (to <= from) {
+        const none: T[] = [];
+        return { requested: 0, failed: 0, items: none };
+      }
       const pages = range(
         Math.floor(from / TMDB_PAGE_SIZE) + 1,
         Math.min(Math.ceil(to / TMDB_PAGE_SIZE), TMDB_MAX_PAGE),

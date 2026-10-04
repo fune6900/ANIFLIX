@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { genreListHref } from "@/lib/genre-list";
+import { withFilter } from "@/lib/browse-filter";
+import type { BrowseFilter } from "@/lib/browse-filter";
 import type { ListMediaType, ListSort } from "@/lib/list-sort";
 
 interface MediaTypeTabsProps {
@@ -8,6 +10,8 @@ interface MediaTypeTabsProps {
   current: ListMediaType;
   /** 切り替え先にも引き継ぐ並び替え */
   sort: ListSort;
+  /** 切り替え先にも引き継ぐ配信サービスの絞り込み（選択肢はアニメ・映画で共通） */
+  filter: BrowseFilter;
 }
 
 const TABS: ReadonlyArray<{ media: ListMediaType; label: string }> = [
@@ -17,13 +21,14 @@ const TABS: ReadonlyArray<{ media: ListMediaType; label: string }> = [
 
 /**
  * ジャンルの一覧のアニメ ⇄ アニメ映画の切り替え（#99）。
- * 同じジャンル ID の一覧へのリンクで、並び替えだけを引き継ぐ
- * （ページ番号は件数が違うので引き継がない。配信の絞り込みはページ内の作品にしか効かない）
+ * 同じジャンル ID の一覧へのリンクで、並び替えと配信サービスの絞り込みを引き継ぐ
+ * （並び替えのリンクと揃える）。ページ番号は件数が違うので引き継がない
  */
 export default function MediaTypeTabs({
   genreId,
   current,
   sort,
+  filter,
 }: MediaTypeTabsProps) {
   return (
     <nav
@@ -35,7 +40,7 @@ export default function MediaTypeTabs({
         return (
           <Link
             key={media}
-            href={genreListHref(media, genreId, sort)}
+            href={withFilter(genreListHref(media, genreId, sort), filter)}
             aria-current={active ? "page" : undefined}
             className={`px-4 py-2.5 text-sm font-semibold -mb-px border-b-2 transition ${
               active

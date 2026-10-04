@@ -219,8 +219,12 @@ describe.each(MEDIA)("ジャンルの一覧（$label）", (m) => {
     );
   });
 
-  it("アニメ ⇄ アニメ映画の切り替え: 同じジャンル ID の一覧へ、並び替えを引き継いでリンクする", async () => {
-    await renderPage(m, "9002", { sort: "year_asc", page: "4" });
+  it("アニメ ⇄ アニメ映画の切り替え: 同じジャンル ID の一覧へ、並び替えと配信サービスを引き継いでリンクする", async () => {
+    await renderPage(m, "9002", {
+      sort: "year_asc",
+      page: "4",
+      service: "netflix",
+    });
 
     const tabs = screen.getByRole("navigation", { name: "作品の種類" });
     const current = tabs.querySelector('[aria-current="page"]');
@@ -230,7 +234,7 @@ describe.each(MEDIA)("ジャンルの一覧（$label）", (m) => {
     );
     // ページ番号は引き継がない（件数が違うので同じページは別物）
     expect(otherLink?.getAttribute("href")).toBe(
-      `${m.other}/9002?sort=year_asc`,
+      `${m.other}/9002?sort=year_asc&service=netflix`,
     );
   });
 

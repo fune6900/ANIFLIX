@@ -12,7 +12,14 @@ afterEach(cleanup);
 
 describe("MediaTypeTabs（アニメ ⇄ アニメ映画）", () => {
   it("同じジャンル ID のアニメ / アニメ映画の一覧へリンクし、表示中の側を示す", () => {
-    render(<MediaTypeTabs genreId={9002} current="anime" sort="year_desc" />);
+    render(
+      <MediaTypeTabs
+        genreId={9002}
+        current="anime"
+        sort="year_desc"
+        filter={{ genreId: null, service: null }}
+      />,
+    );
 
     const nav = screen.getByRole("navigation", { name: "作品の種類" });
     const anime = within(nav).getByRole("link", { name: "アニメ" });
@@ -23,13 +30,20 @@ describe("MediaTypeTabs（アニメ ⇄ アニメ映画）", () => {
     expect(movie.hasAttribute("aria-current")).toBe(false);
   });
 
-  it("並び替えを引き継ぐ", () => {
-    render(<MediaTypeTabs genreId={35} current="movie" sort="year_asc" />);
+  it("並び替えと配信サービスの絞り込みを引き継ぐ（配信サービスの選択肢はアニメ・映画で共通）", () => {
+    render(
+      <MediaTypeTabs
+        genreId={35}
+        current="movie"
+        sort="year_asc"
+        filter={{ genreId: null, service: "netflix" }}
+      />,
+    );
 
     const nav = screen.getByRole("navigation", { name: "作品の種類" });
     expect(
       within(nav).getByRole("link", { name: "アニメ" }).getAttribute("href"),
-    ).toBe("/browse/genre/35?sort=year_asc");
+    ).toBe("/browse/genre/35?sort=year_asc&service=netflix");
     expect(
       within(nav)
         .getByRole("link", { name: "アニメ映画" })

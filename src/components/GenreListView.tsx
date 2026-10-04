@@ -99,7 +99,12 @@ export default function GenreListView({
 
       <div className="site-container pb-20">
         <div className="mt-6">
-          <MediaTypeTabs genreId={genre.id} current={media} sort={sort} />
+          <MediaTypeTabs
+            genreId={genre.id}
+            current={media}
+            sort={sort}
+            filter={filter}
+          />
         </div>
 
         {/* 他のジャンルへ（同じ種類・同じ並びのまま） */}
