@@ -244,6 +244,28 @@ describe("/search/voice-actors", () => {
   });
 });
 
+describe("/search/voice-actors の page 検証", () => {
+  it.each([
+    ["abc", 1],
+    ["0", 1],
+    ["-3", 1],
+    ["99999", 500],
+  ])(
+    "page=%s は %i として渡す（1〜TMDB_MAX_PAGE に収める）",
+    async (raw, expected) => {
+      await renderPage(VoiceActorSearchPage, { q: "花江", page: raw });
+
+      expect(searchPerson).toHaveBeenLastCalledWith("花江", expected);
+    },
+  );
+
+  it("page が無ければ 1", async () => {
+    await renderPage(VoiceActorSearchPage, { q: "花江" });
+
+    expect(searchPerson).toHaveBeenLastCalledWith("花江", 1);
+  });
+});
+
 describe("/search/characters", () => {
   it("キャラを検索し、キャラの詳細へ飛ぶ（ページ内の入力欄は無い）", async () => {
     const dom = await renderPage(CharacterSearchPage, { q: "炭治郎" });

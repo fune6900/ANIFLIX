@@ -254,6 +254,18 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
     [mode, router, onClose],
   );
 
+  /**
+   * 部門別の検索結果画面へ（#101）。Enter と 2 つの「すべての結果を見る」で共有する
+   * （同じ処理を 3 箇所に書くと、どれか 1 つだけ旧 URL に残っても気付けない）
+   */
+  const openAllResults = () => {
+    const q = query.trim();
+    if (!q) return;
+    addRecentSearch(q, mode);
+    router.push(headerSearchResultsHref(mode, q));
+    onClose();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim();
@@ -264,9 +276,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
       return;
     }
 
-    addRecentSearch(q, mode);
-    router.push(headerSearchResultsHref(mode, q));
-    onClose();
+    openAllResults();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -730,12 +740,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
 
               {query.trim() && (
                 <button
-                  onClick={() => {
-                    const q = query.trim();
-                    addRecentSearch(q, mode);
-                    router.push(headerSearchResultsHref(mode, q));
-                    onClose();
-                  }}
+                  onClick={openAllResults}
                   className="w-full px-4 py-3 text-center text-[#54b9c5] text-sm hover:bg-[#2a2a2a] transition border-t border-gray-700"
                 >
                   「{query}」のすべての結果を見る →
@@ -747,12 +752,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
           {/* 検索したが結果ゼロのとき: それでも「すべての結果を見る」を案内 */}
           {!hasResults && !showRecent && !error && query.trim() && !loading && (
             <button
-              onClick={() => {
-                const q = query.trim();
-                addRecentSearch(q, mode);
-                router.push(headerSearchResultsHref(mode, q));
-                onClose();
-              }}
+              onClick={openAllResults}
               className="w-full px-4 py-6 text-center text-[#54b9c5] text-sm hover:bg-[#2a2a2a] transition"
             >
               「{query}」のすべての結果を見る →
