@@ -64,11 +64,7 @@ export default async function AiringPage({ searchParams }: AiringPageProps) {
         {entries.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
             {entries.map((entry) => (
-              <SeasonAnimeCard
-                key={entryKey(entry)}
-                entry={entry}
-                airingBadge
-              />
+              <SeasonAnimeCard key={entryKey(entry)} entry={entry} />
             ))}
           </div>
         ) : isFilterActive(filter) && fetched.length > 0 ? (
