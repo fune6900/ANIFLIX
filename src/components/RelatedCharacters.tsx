@@ -9,7 +9,11 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAniListMediaCharacters, searchAniListMedia } from "@/lib/anilist";
+import {
+  getAniListMediaCharacterCount,
+  getAniListMediaCharacters,
+  searchAniListMedia,
+} from "@/lib/anilist";
 import { stripSeasonSuffix } from "@/lib/title-strip";
 import Pagination from "@/components/Pagination";
 import type {
@@ -107,22 +111,30 @@ export default async function RelatedCharacters({
   const mediaId = await resolveAniListMediaId(title, originalTitle, mediaType);
   if (mediaId == null) return null;
 
-  let result: {
-    edges: AniListRelatedCharacterEdge[];
-    pageInfo: { lastPage: number; total: number };
-  };
-  try {
-    result = await getAniListMediaCharacters(mediaId, currentPage, perPage);
-  } catch {
-    return null;
-  }
+  // AniList の pageInfo（total / lastPage）は実態と食い違うので使わない。
+  // 実在するページ数は別に数える（失敗してもページ自体は出す）
+  const [pageResult, countResult] = await Promise.allSettled([
+    getAniListMediaCharacters(mediaId, currentPage, perPage),
+    getAniListMediaCharacterCount(mediaId, perPage),
+  ]);
+  if (pageResult.status === "rejected") return null;
+  const edges: AniListRelatedCharacterEdge[] = pageResult.value.edges;
 
-  const { edges, pageInfo } = result;
-  if (pageInfo.total === 0) return null;
+  // 数えられなかったら、今のページが満杯なら次がある、とだけ判断する（件数は出さない）
+  const lastPage =
+    countResult.status === "fulfilled"
+      ? countResult.value.lastPage
+      : edges.length >= perPage
+        ? currentPage + 1
+        : currentPage;
+  const total =
+    countResult.status === "fulfilled" ? countResult.value.total : null;
+
+  if (total === 0 || (edges.length === 0 && currentPage === 1)) return null;
 
   // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
-  if (pageInfo.lastPage >= 1 && currentPage > pageInfo.lastPage) {
-    redirect(pageUrl(pageInfo.lastPage));
+  if (lastPage >= 1 && currentPage > lastPage) {
+    redirect(pageUrl(lastPage));
   }
 
   return (
@@ -131,10 +143,12 @@ export default async function RelatedCharacters({
         <h2 className="text-white font-bold text-lg xl:text-xl 3xl:text-2xl">
           関連キャラクター
         </h2>
-        <span className="text-gray-500 text-sm">{pageInfo.total}件</span>
-        {pageInfo.lastPage > 1 && (
+        {total !== null && (
+          <span className="text-gray-500 text-sm">{total}件</span>
+        )}
+        {total !== null && lastPage > 1 && (
           <span className="text-gray-500 text-sm">
-            · {currentPage} / {pageInfo.lastPage} ページ
+            · {currentPage} / {lastPage} ページ
           </span>
         )}
       </div>
@@ -179,7 +193,7 @@ export default async function RelatedCharacters({
       )}
       <Pagination
         currentPage={currentPage}
-        totalPages={pageInfo.lastPage}
+        totalPages={lastPage}
         pageUrl={pageUrl}
       />
     </section>

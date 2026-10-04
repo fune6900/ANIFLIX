@@ -3,6 +3,8 @@
 // および TMDb に存在しないキャラクター名検索 (/search/characters) の補完に使用する。
 // API キー不要・読み取り専用クエリのみ使用する。
 
+import { probeLastPage } from "@/lib/page-probe";
+import type { ProbedPages } from "@/lib/page-probe";
 import type {
   AniListCharacter,
   AniListCharacterDetail,
@@ -521,6 +523,80 @@ export async function getAniListMediaCharacters(
     edges: connection?.edges ?? [],
     pageInfo: connection?.pageInfo ?? EMPTY_PAGE_INFO,
   };
+}
+
+/** 件数を数えるだけの軽い問い合わせ（キャラの id と申告の最終ページだけ取る） */
+const MEDIA_CHARACTER_IDS_QUERY = `
+  query ($id: Int!, $page: Int!, $perPage: Int!) {
+    Media(id: $id) {
+      characters(sort: FAVOURITES_DESC, page: $page, perPage: $perPage) {
+        pageInfo { lastPage }
+        edges { node { id } }
+      }
+    }
+  }
+`;
+
+interface AniListCharacterIdsResponse {
+  data?: {
+    Media?: {
+      characters?: {
+        pageInfo: { lastPage: number };
+        edges: Array<{ node: { id: number } }>;
+      } | null;
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+async function fetchCharacterIdsPage(
+  mediaId: number,
+  page: number,
+  perPage: number,
+): Promise<{ count: number; reportedLastPage: number }> {
+  const response = await fetch(ANILIST_ENDPOINT, {
+    method: "POST",
+    headers: ANILIST_HEADERS,
+    body: JSON.stringify({
+      query: MEDIA_CHARACTER_IDS_QUERY,
+      variables: { id: mediaId, page, perPage },
+    }),
+    signal: AbortSignal.timeout(8000),
+    next: { revalidate: 3600 },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `AniList API error: ${response.status} ${response.statusText}`,
+    );
+  }
+  const data = (await response.json()) as AniListCharacterIdsResponse;
+  if (data.errors && data.errors.length > 0) {
+    throw new Error("AniList API returned errors");
+  }
+  const connection = data.data?.Media?.characters;
+  return {
+    count: connection?.edges.length ?? 0,
+    reportedLastPage: connection?.pageInfo.lastPage ?? 0,
+  };
+}
+
+/**
+ * 作品のキャラの、実在するページ数と件数。
+ *
+ * `Media.characters` の pageInfo（total / lastPage）は実態と食い違う
+ * （葬送のフリーレン: 申告 500 件・20 ページ / 実際 100 件・4 ページ）。
+ * 申告の最終ページを上限に二分探索で数える（`src/lib/page-probe.ts`）。失敗したら throw する
+ */
+export async function getAniListMediaCharacterCount(
+  mediaId: number,
+  perPage: number,
+): Promise<ProbedPages> {
+  const first = await fetchCharacterIdsPage(mediaId, 1, perPage);
+  return probeLastPage(first.reportedLastPage, perPage, async (page) =>
+    page === 1
+      ? first.count
+      : (await fetchCharacterIdsPage(mediaId, page, perPage)).count,
+  );
 }
 
 // --- Media タイトル検索（TMDb 名 → AniList ID 解決、TMDb 検索のフォールバック） ---
