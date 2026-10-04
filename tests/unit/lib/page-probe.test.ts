@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { probeLastPage } from "@/lib/page-probe";
+import { probeLastPage, resolvePaging } from "@/lib/page-probe";
 
 /**
  * 実在する最終ページを二分探索で求める（#86）。
@@ -72,5 +72,61 @@ describe("probeLastPage", () => {
     });
 
     await expect(probeLastPage(20, 30, count)).rejects.toThrow();
+  });
+});
+
+/**
+ * 数えた結果（または数えられなかったこと）から、最終ページと寄せ先を決める（#105）。
+ * 範囲外のページ番号は最終ページへ寄せる。数えられなかったときは今のページの件数だけで推し量る。
+ */
+describe("resolvePaging", () => {
+  it("数えられたら、その最終ページと件数を使う", () => {
+    expect(resolvePaging(2, 30, 30, { lastPage: 4, total: 100 })).toEqual({
+      lastPage: 4,
+      total: 100,
+      redirectTo: null,
+    });
+  });
+
+  it("範囲外のページ番号は最終ページへ寄せる", () => {
+    expect(resolvePaging(9, 30, 0, { lastPage: 4, total: 100 })).toEqual({
+      lastPage: 4,
+      total: 100,
+      redirectTo: 4,
+    });
+  });
+
+  it("1 件も無いのに 2 ページ目以降を開いたら 1 ページ目へ寄せる", () => {
+    expect(resolvePaging(3, 30, 0, { lastPage: 0, total: 0 }).redirectTo).toBe(
+      1,
+    );
+  });
+
+  it("1 件も無くても 1 ページ目なら寄せない（ループさせない）", () => {
+    expect(resolvePaging(1, 30, 0, { lastPage: 0, total: 0 })).toEqual({
+      lastPage: 0,
+      total: 0,
+      redirectTo: null,
+    });
+  });
+
+  it("数えられず、今のページが満杯なら 1 つ先まで出す（件数は不明）", () => {
+    expect(resolvePaging(2, 30, 30, null)).toEqual({
+      lastPage: 3,
+      total: null,
+      redirectTo: null,
+    });
+  });
+
+  it("数えられず、今のページが満杯でなければ今のページが最終ページ", () => {
+    expect(resolvePaging(2, 30, 12, null)).toEqual({
+      lastPage: 2,
+      total: null,
+      redirectTo: null,
+    });
+  });
+
+  it("数えられず、2 ページ目以降が空なら 1 ページ目へ戻す", () => {
+    expect(resolvePaging(5, 30, 0, null).redirectTo).toBe(1);
   });
 });

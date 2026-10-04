@@ -8,6 +8,8 @@ import type { ProbedPages } from "@/lib/page-probe";
 import type {
   AniListCharacter,
   AniListCharacterDetail,
+  AniListCharacterDetailMediaEdge,
+  AniListCharacterMediaResponse,
   AniListCharacterDetailResponse,
   AniListMediaCharactersResponse,
   AniListMediaSearchNode,
@@ -382,6 +384,28 @@ function toCharacterSearchResult(
   };
 }
 
+/** Character.media の 1 件ぶんのフィールド（詳細と出演作品のページ送りで共有する） */
+const CHARACTER_MEDIA_EDGE_FIELDS = `
+  characterRole
+  node {
+    id
+    idMal
+    title { native romaji english }
+    coverImage { large extraLarge }
+    seasonYear
+    countryOfOrigin
+  }
+  voiceActors(language: JAPANESE) {
+    id
+    name { full native }
+    image { large medium }
+  }
+`;
+
+/**
+ * キャラ詳細。出演作品は代表作（人気順の先頭: 声優表示と関連キャラの起点）の 1 件だけ取る。
+ * 出演作品の一覧は `getAniListCharacterMedia` でページ単位に引く
+ */
 const CHARACTER_DETAIL_QUERY = `
   query ($id: Int!) {
     Character(id: $id) {
@@ -395,23 +419,8 @@ const CHARACTER_DETAIL_QUERY = `
       dateOfBirth { year month day }
       siteUrl
       favourites
-      media(sort: POPULARITY_DESC, perPage: 25, type: ANIME) {
-        edges {
-          characterRole
-          node {
-            id
-            idMal
-            title { native romaji english }
-            coverImage { large extraLarge }
-            seasonYear
-            countryOfOrigin
-          }
-          voiceActors(language: JAPANESE) {
-            id
-            name { full native }
-            image { large medium }
-          }
-        }
+      media(sort: POPULARITY_DESC, perPage: 1, type: ANIME) {
+        edges { ${CHARACTER_MEDIA_EDGE_FIELDS} }
       }
     }
   }
@@ -614,6 +623,112 @@ export async function getAniListMediaCharacterCount(
     page === 1
       ? first.count
       : (await fetchCharacterIdsPage(mediaId, page, perPage)).count,
+  );
+}
+
+// --- 出演作品（Character.media をページ単位で引く） ---
+
+const CHARACTER_MEDIA_QUERY = `
+  query ($id: Int!, $page: Int!, $perPage: Int!) {
+    Character(id: $id) {
+      media(sort: POPULARITY_DESC, type: ANIME, page: $page, perPage: $perPage) {
+        pageInfo { total currentPage lastPage hasNextPage perPage }
+        edges { ${CHARACTER_MEDIA_EDGE_FIELDS} }
+      }
+    }
+  }
+`;
+
+/**
+ * キャラの出演作品（アニメ）を 1 ページぶん取得する。人気順。
+ * pageInfo は申告値のまま返す（件数・最終ページには `getAniListCharacterMediaCount` を使う）
+ */
+export async function getAniListCharacterMedia(
+  characterId: number,
+  page = 1,
+  perPage = 30,
+): Promise<{
+  edges: AniListCharacterDetailMediaEdge[];
+  pageInfo: AniListPageInfo;
+}> {
+  const data = await postAniListQuery<AniListCharacterMediaResponse>(
+    CHARACTER_MEDIA_QUERY,
+    { id: characterId, page, perPage },
+    3600,
+  );
+  if (data.errors && data.errors.length > 0) {
+    return { edges: [], pageInfo: EMPTY_PAGE_INFO };
+  }
+  const connection = data.data?.Character?.media;
+  return {
+    edges: connection?.edges ?? [],
+    pageInfo: connection?.pageInfo ?? EMPTY_PAGE_INFO,
+  };
+}
+
+/** 件数を数えるだけの軽い問い合わせ（作品の id と申告の最終ページだけ取る） */
+const CHARACTER_MEDIA_IDS_QUERY = `
+  query ($id: Int!, $page: Int!, $perPage: Int!) {
+    Character(id: $id) {
+      media(sort: POPULARITY_DESC, type: ANIME, page: $page, perPage: $perPage) {
+        pageInfo { lastPage }
+        edges { node { id } }
+      }
+    }
+  }
+`;
+
+interface AniListCharacterMediaIdsResponse {
+  data?: {
+    Character?: {
+      media?: {
+        pageInfo: { lastPage: number };
+        edges: Array<{ node: { id: number } }>;
+      } | null;
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+async function fetchCharacterMediaIdsPage(
+  characterId: number,
+  page: number,
+  perPage: number,
+): Promise<{ count: number; reportedLastPage: number }> {
+  const data = await postAniListQuery<AniListCharacterMediaIdsResponse>(
+    CHARACTER_MEDIA_IDS_QUERY,
+    { id: characterId, page, perPage },
+    CHARACTER_COUNT_CACHE_TIME,
+  );
+  if (data.errors && data.errors.length > 0) {
+    throw new Error("AniList API returned errors");
+  }
+  const connection = data.data?.Character?.media;
+  return {
+    count: connection?.edges.length ?? 0,
+    reportedLastPage: connection?.pageInfo.lastPage ?? 0,
+  };
+}
+
+/**
+ * キャラの出演作品の、実在するページ数と件数。
+ *
+ * ネストした connection の pageInfo は実態と食い違うことがある（`Media.characters` で実測済み。
+ * `Character.media` も同じ作りなので信用しない）。申告の最終ページを上限に二分探索で数える
+ * （`src/lib/page-probe.ts`）。失敗したら throw する。`hint` を渡すと 1 ページ目の問い合わせを省く
+ */
+export async function getAniListCharacterMediaCount(
+  characterId: number,
+  perPage: number,
+  hint?: CharacterCountHint,
+): Promise<ProbedPages> {
+  const first = hint
+    ? { count: hint.firstPageCount, reportedLastPage: hint.reportedLastPage }
+    : await fetchCharacterMediaIdsPage(characterId, 1, perPage);
+  return probeLastPage(first.reportedLastPage, perPage, async (page) =>
+    page === 1
+      ? first.count
+      : (await fetchCharacterMediaIdsPage(characterId, page, perPage)).count,
   );
 }
 

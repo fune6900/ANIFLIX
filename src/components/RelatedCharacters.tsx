@@ -15,6 +15,7 @@ import {
   searchAniListMedia,
 } from "@/lib/anilist";
 import { stripSeasonSuffix } from "@/lib/title-strip";
+import { resolvePaging } from "@/lib/page-probe";
 import Pagination from "@/components/Pagination";
 import type {
   AniListMediaType,
@@ -158,31 +159,21 @@ export default async function RelatedCharacters({
   }
   const edges: AniListRelatedCharacterEdge[] = pageResult.edges;
 
-  // 数えられなかったとき（fallback）:
-  //   - 今のページが満杯なら次のページがあるかもしれないので 1 つ先まで出す。
-  //     ちょうど 30 の倍数だと次は空ページになるが、件数を数えられない以上これ以上は分からない。
-  //     空ページを開いたら下の分岐が 1 ページ目へ戻すので、行き止まりにはならない
-  //   - 満杯でなければ今のページが最終ページ
-  const lastPage = countResult
-    ? countResult.lastPage
-    : edges.length >= perPage
-      ? currentPage + 1
-      : currentPage;
-  const total = countResult ? countResult.total : null;
+  // 数えられなかったときの推し量り方と、範囲外のページ番号の寄せ先は resolvePaging が決める
+  const { lastPage, total, redirectTo } = resolvePaging(
+    currentPage,
+    perPage,
+    edges.length,
+    countResult,
+  );
 
   if (total === 0 || (edges.length === 0 && currentPage === 1)) return null;
 
   // 注意: Suspense の内側（ストリーミング開始後）では redirect() は 307 にならず、
   // HTTP 200 + meta refresh / クライアントの RedirectBoundary で届く。
-  // fallback で空ページ: 実在ページ数が分からないので 1 ページ目へ戻す。
-  // 1 ページ目は上の分岐で null になりここへ来ないため、リダイレクトはループしない
-  if (!countResult && edges.length === 0 && currentPage > 1) {
-    redirect(pageUrl(1));
-  }
-
-  // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
-  if (lastPage >= 1 && currentPage > lastPage) {
-    redirect(pageUrl(lastPage));
+  // 1 ページ目からは寄せないので、リダイレクトはループしない
+  if (redirectTo !== null) {
+    redirect(pageUrl(redirectTo));
   }
 
   return (

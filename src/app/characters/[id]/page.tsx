@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getAniListCharacter, getAniListMediaCharacters } from "@/lib/anilist";
+import {
+  getAniListCharacter,
+  getAniListCharacterMedia,
+  getAniListCharacterMediaCount,
+  getAniListMediaCharacterCount,
+  getAniListMediaCharacters,
+} from "@/lib/anilist";
+import { resolvePaging } from "@/lib/page-probe";
+import type { ProbedPages, ResolvedPaging } from "@/lib/page-probe";
+import { parsePageParam } from "@/lib/tmdb";
 import { searchAnnictCharacterByName } from "@/lib/annict";
 import { translateManyToJa } from "@/lib/translate";
 import {
@@ -18,11 +27,39 @@ import type {
 } from "@/types/anilist";
 import type { AnnictCharacterProfile } from "@/types/annict";
 
-const RELATED_PER_PAGE = 24;
+/** 出演作品の 1 ページあたりの件数（列数 2 / 3 / 5 / 6 で割り切れる） */
+const WORKS_PER_PAGE = 30;
+/** 関連キャラクターの 1 ページあたりの件数（列数 5 / 10 で割り切れる） */
+const RELATED_PER_PAGE = 50;
+
+const WORKS_SECTION_ID = "works";
+const RELATED_SECTION_ID = "related-characters";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ cpage?: string | string[] }>;
+  searchParams: Promise<{
+    wpage?: string | string[];
+    cpage?: string | string[];
+  }>;
+}
+
+/** 出演作品（wpage）と関連キャラクター（cpage）のページ位置。URL の中で共存する */
+interface PagePositions {
+  wpage: number;
+  cpage: number;
+}
+
+/** 1 ページ目のパラメータは落とす。アンカーで送った側のセクションへ飛ばす */
+function characterPageUrl(
+  id: number,
+  { wpage, cpage }: PagePositions,
+  anchor: string,
+): string {
+  const query = new URLSearchParams();
+  if (wpage > 1) query.set("wpage", String(wpage));
+  if (cpage > 1) query.set("cpage", String(cpage));
+  const qs = query.toString();
+  return `/characters/${id}${qs ? `?${qs}` : ""}#${anchor}`;
 }
 
 const GENDER_MAP: Record<string, string> = {
@@ -168,21 +205,95 @@ function RelatedCharacterCard({ edge }: { edge: AniListRelatedCharacterEdge }) {
   );
 }
 
+interface PagedSection<E> {
+  edges: E[];
+  /** 取得に失敗したら true（「出演作はない」と区別する） */
+  failed: boolean;
+  paging: ResolvedPaging;
+}
+
+interface FetchedPage<E> {
+  edges: E[];
+  pageInfo: AniListPageInfo;
+}
+
+interface CountHint {
+  reportedLastPage: number;
+  firstPageCount: number;
+}
+
+/**
+ * 1 ページぶんを取り、実在するページ数を数えて、寄せ先まで決める。
+ *
+ * AniList の pageInfo（total / lastPage）は実態と食い違うので件数には使わない
+ * （`src/lib/page-probe.ts`）。数えるのに失敗しても今のページの件数で推し量って出す。
+ * 1 ページ目: 取得結果を数え始めのヒントに使い回すため、直列で待つ。
+ * 2 ページ目以降: ヒントを渡さないので待つ理由がなく、並列で取る。
+ */
+async function loadPagedSection<E>(
+  page: number,
+  perPage: number,
+  fetchPage: () => Promise<FetchedPage<E>>,
+  count: (hint?: CountHint) => Promise<ProbedPages>,
+): Promise<PagedSection<E>> {
+  const safeCount = (hint?: CountHint): Promise<ProbedPages | null> =>
+    count(hint).then(
+      (value) => value,
+      () => null,
+    );
+
+  let fetched: FetchedPage<E>;
+  let counted: ProbedPages | null;
+  try {
+    if (page === 1) {
+      fetched = await fetchPage();
+      const reportedLastPage = fetched.pageInfo.lastPage;
+      counted = await safeCount(
+        reportedLastPage > 0
+          ? { reportedLastPage, firstPageCount: fetched.edges.length }
+          : undefined,
+      );
+    } else {
+      const counting = safeCount();
+      try {
+        fetched = await fetchPage();
+      } catch (error) {
+        await counting; // 未処理にしない（safeCount は reject しない）
+        throw error;
+      }
+      counted = await counting;
+    }
+  } catch {
+    return {
+      edges: [],
+      failed: true,
+      paging: { lastPage: 0, total: null, redirectTo: null },
+    };
+  }
+
+  return {
+    edges: fetched.edges,
+    failed: false,
+    paging: resolvePaging(page, perPage, fetched.edges.length, counted),
+  };
+}
+
 interface CharacterPageData {
   detail: AniListCharacterDetail;
   annict: AnnictCharacterProfile | null;
-  related: AniListRelatedCharacterEdge[];
-  relatedPageInfo: AniListPageInfo | null;
+  works: PagedSection<AniListCharacterDetailMediaEdge>;
+  related: PagedSection<AniListRelatedCharacterEdge>;
 }
 
-const EMPTY_RELATED = {
-  edges: [] as AniListRelatedCharacterEdge[],
-  pageInfo: null as AniListPageInfo | null,
+const EMPTY_RELATED: PagedSection<AniListRelatedCharacterEdge> = {
+  edges: [],
+  failed: false,
+  paging: { lastPage: 0, total: 0, redirectTo: null },
 };
 
 async function loadCharacterPageData(
   id: number,
-  relatedPage: number,
+  { wpage, cpage }: PagePositions,
 ): Promise<CharacterPageData | null> {
   const detail = await getAniListCharacter(id);
   if (!detail) return null;
@@ -190,23 +301,34 @@ async function loadCharacterPageData(
   const name = pickName(detail);
   const topMediaId = detail.media.edges[0]?.node.id;
 
-  const [annict, relatedRaw] = await Promise.all([
+  const [annict, works, related] = await Promise.all([
     searchAnnictCharacterByName(name),
+    loadPagedSection(
+      wpage,
+      WORKS_PER_PAGE,
+      () => getAniListCharacterMedia(id, wpage, WORKS_PER_PAGE),
+      (hint) => getAniListCharacterMediaCount(id, WORKS_PER_PAGE, hint),
+    ),
     topMediaId
-      ? getAniListMediaCharacters(topMediaId, relatedPage, RELATED_PER_PAGE)
-          .then((r) => ({ edges: r.edges, pageInfo: r.pageInfo }))
-          .catch(() => EMPTY_RELATED)
+      ? loadPagedSection(
+          cpage,
+          RELATED_PER_PAGE,
+          () => getAniListMediaCharacters(topMediaId, cpage, RELATED_PER_PAGE),
+          (hint) =>
+            getAniListMediaCharacterCount(topMediaId, RELATED_PER_PAGE, hint),
+        )
       : Promise.resolve(EMPTY_RELATED),
   ]);
-
-  // 自分自身は関連から除外
-  const related = relatedRaw.edges.filter((e) => e.node.id !== id);
 
   return {
     detail,
     annict,
-    related,
-    relatedPageInfo: relatedRaw.pageInfo,
+    works,
+    // 自分自身は関連から除外（ページ数は取得した件数のまま数える）
+    related: {
+      ...related,
+      edges: related.edges.filter((e) => e.node.id !== id),
+    },
   };
 }
 
@@ -215,25 +337,33 @@ export default async function CharacterDetailPage({
   searchParams,
 }: PageProps) {
   const { id: rawId } = await params;
-  const { cpage } = await searchParams;
-  const cpageStr = Array.isArray(cpage) ? cpage[0] : cpage;
+  const { wpage: rawWpage, cpage: rawCpage } = await searchParams;
   const id = parseInt(rawId, 10);
   if (!Number.isFinite(id) || id <= 0) notFound();
-  const charactersPage = Math.max(1, parseInt(cpageStr ?? "1", 10) || 1);
+  const positions: PagePositions = {
+    wpage: parsePageParam(Array.isArray(rawWpage) ? rawWpage[0] : rawWpage),
+    cpage: parsePageParam(Array.isArray(rawCpage) ? rawCpage[0] : rawCpage),
+  };
 
-  const data = await loadCharacterPageData(id, charactersPage);
+  const data = await loadCharacterPageData(id, positions);
   if (!data) notFound();
 
-  const { detail, annict, related, relatedPageInfo } = data;
+  const { detail, annict, works, related } = data;
 
-  // URL の cpage が実在ページ数を超えていたら最終ページにリダイレクト（空表示防止）
-  if (
-    relatedPageInfo &&
-    relatedPageInfo.lastPage >= 1 &&
-    charactersPage > relatedPageInfo.lastPage
-  ) {
+  // 範囲外のページ番号は最終ページへ寄せる（空表示防止）。もう片方の位置は保つ。
+  // 両方ずれていたら 1 回でまとめて直し、出演作品のセクションへ飛ばす
+  const wpageTo = works.paging.redirectTo;
+  const cpageTo = related.paging.redirectTo;
+  if (wpageTo !== null || cpageTo !== null) {
     redirect(
-      `/characters/${id}?cpage=${relatedPageInfo.lastPage}#related-characters`,
+      characterPageUrl(
+        id,
+        {
+          wpage: wpageTo ?? positions.wpage,
+          cpage: cpageTo ?? positions.cpage,
+        },
+        wpageTo !== null ? WORKS_SECTION_ID : RELATED_SECTION_ID,
+      ),
     );
   }
   const display = pickName(detail);
@@ -293,8 +423,8 @@ export default async function CharacterDetailPage({
   };
 
   const aliases = tAliases;
-  const edges = detail.media.edges;
-  const cvFromTopWork = edges[0]?.voiceActors[0] ?? null;
+  const topWork = detail.media.edges[0] ?? null;
+  const cvFromTopWork = topWork?.voiceActors[0] ?? null;
 
   return (
     <div className="min-h-screen bg-[#141414] pt-24 pb-24">
@@ -417,58 +547,88 @@ export default async function CharacterDetailPage({
         </section>
 
         {/* 出演作品 */}
-        <section className="mb-12">
-          <h2 className="text-white text-xl xl:text-2xl 3xl:text-3xl font-bold mb-4">
-            出演作品
-            <span className="text-gray-500 text-sm xl:text-base font-normal ml-2">
-              {edges.length}件
-            </span>
-          </h2>
-          {edges.length === 0 ? (
-            <p className="text-gray-500 text-sm">登録されている出演作はない</p>
+        <section id={WORKS_SECTION_ID} className="mb-12 scroll-mt-24">
+          <div className="flex items-baseline gap-3 mb-4 flex-wrap">
+            <h2 className="text-white text-xl xl:text-2xl 3xl:text-3xl font-bold">
+              出演作品
+              {works.paging.total !== null && (
+                <span className="text-gray-500 text-sm xl:text-base font-normal ml-2">
+                  {works.paging.total}件
+                </span>
+              )}
+            </h2>
+            {works.paging.total !== null && works.paging.lastPage > 1 && (
+              <span className="text-gray-500 text-sm">
+                · {positions.wpage} / {works.paging.lastPage} ページ
+              </span>
+            )}
+          </div>
+          {works.edges.length === 0 ? (
+            <p className="text-gray-500 text-sm">
+              {works.failed
+                ? "出演作品を取得できなかった"
+                : "登録されている出演作はない"}
+            </p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4">
-              {edges.map((edge) => (
+            // 列数は 1 ページ 30 件を割り切る値（2 / 3 / 5 / 6）。最終行を欠けさせない
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4">
+              {works.edges.map((edge) => (
                 <MediaEdgeCard key={edge.node.id} edge={edge} />
               ))}
             </div>
           )}
+          <Pagination
+            currentPage={positions.wpage}
+            totalPages={works.paging.lastPage}
+            pageUrl={(p) =>
+              characterPageUrl(id, { ...positions, wpage: p }, WORKS_SECTION_ID)
+            }
+          />
         </section>
 
         {/* 関連キャラクター */}
-        {relatedPageInfo && relatedPageInfo.total > 0 && (
-          <section id="related-characters" className="scroll-mt-24">
+        {related.paging.lastPage > 0 && related.paging.total !== 0 && (
+          <section id={RELATED_SECTION_ID} className="scroll-mt-24">
             <div className="flex items-baseline gap-3 mb-4 flex-wrap">
               <h2 className="text-white text-xl xl:text-2xl 3xl:text-3xl font-bold">
                 関連キャラクター
                 <span className="text-gray-500 text-sm xl:text-base font-normal ml-2">
-                  {edges[0] ? workTitle(edges[0]) : ""} より
+                  {topWork ? workTitle(topWork) : ""} より
                 </span>
               </h2>
-              <span className="text-gray-500 text-sm">
-                {relatedPageInfo.total}件
-              </span>
-              {relatedPageInfo.lastPage > 1 && (
+              {related.paging.total !== null && (
                 <span className="text-gray-500 text-sm">
-                  · {charactersPage} / {relatedPageInfo.lastPage} ページ
+                  {related.paging.total}件
+                </span>
+              )}
+              {related.paging.total !== null && related.paging.lastPage > 1 && (
+                <span className="text-gray-500 text-sm">
+                  · {positions.cpage} / {related.paging.lastPage} ページ
                 </span>
               )}
             </div>
-            {related.length === 0 ? (
+            {related.edges.length === 0 ? (
               <p className="text-gray-500 text-sm">
                 このページに表示するキャラはない
               </p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
-                {related.map((edge) => (
+              // 列数は 1 ページ 50 件を割り切る値（5 / 10）
+              <div className="grid grid-cols-5 lg:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+                {related.edges.map((edge) => (
                   <RelatedCharacterCard key={edge.node.id} edge={edge} />
                 ))}
               </div>
             )}
             <Pagination
-              currentPage={charactersPage}
-              totalPages={relatedPageInfo.lastPage}
-              pageUrl={(p) => `/characters/${id}?cpage=${p}#related-characters`}
+              currentPage={positions.cpage}
+              totalPages={related.paging.lastPage}
+              pageUrl={(p) =>
+                characterPageUrl(
+                  id,
+                  { ...positions, cpage: p },
+                  RELATED_SECTION_ID,
+                )
+              }
             />
           </section>
         )}
