@@ -1,4 +1,4 @@
-// シーズンアニメのキャストを横断集約するヘルパ
+// アニメ作品のキャストを横断集約するヘルパ
 //
 // TMDb の /person/popular はワールドワイドで Hollywood 偏重のため、日本の声優の
 // ランキングを得る目的では使えない。代わりに「今期人気アニメ N 本に出ているキャスト」を
@@ -6,9 +6,9 @@
 //
 // 使用箇所:
 //   - / （ホーム）の「🎤 人気声優」
-//   - /voice-actors のデフォルト表示
+//   - /voice-actors の「今期放送中アニメの声優」「最新アニメ映画の声優」
 
-import { getAnimeCredits } from "@/lib/tmdb";
+import { getAnimeCredits, getMovieCredits } from "@/lib/tmdb";
 import type { TMDbCastMember } from "@/types/tmdb";
 
 export interface AggregatedCast {
@@ -28,24 +28,46 @@ export interface AggregateSeasonalCastOptions {
   maxOrder?: number;
 }
 
+const DEFAULT_MAX_ORDER = 15;
+
 /**
- * 与えられたアニメ ID 群の credits を並列取得して主役級キャストを横断集約する。
+ * 与えられたアニメ（TV）ID 群の credits を並列取得して主役級キャストを横断集約する。
  *
  * 並び順: 出演本数 desc → bestOrder asc → 日本語名 asc。
  */
-export async function aggregateSeasonalCast(
+export function aggregateSeasonalCast(
   animeIds: number[],
   options: AggregateSeasonalCastOptions = {},
 ): Promise<AggregatedCast[]> {
-  const maxOrder = options.maxOrder ?? 15;
-  const responses = await Promise.allSettled(
+  return aggregateCredits(
     animeIds.map((id) => getAnimeCredits(id)),
+    options,
   );
+}
+
+/** 映画版。与えられた映画 ID 群の credits を集約する（並び順は TV と同じ） */
+export function aggregateMovieCast(
+  movieIds: number[],
+  options: AggregateSeasonalCastOptions = {},
+): Promise<AggregatedCast[]> {
+  return aggregateCredits(
+    movieIds.map((id) => getMovieCredits(id)),
+    options,
+  );
+}
+
+/** credits の取得結果を集約する。失敗した作品は飛ばす */
+async function aggregateCredits(
+  requests: Promise<{ cast: TMDbCastMember[] }>[],
+  options: AggregateSeasonalCastOptions,
+): Promise<AggregatedCast[]> {
+  const maxOrder = options.maxOrder ?? DEFAULT_MAX_ORDER;
+  const responses = await Promise.allSettled(requests);
 
   const map = new Map<number, AggregatedCast>();
   for (const r of responses) {
     if (r.status !== "fulfilled") continue;
-    for (const m of r.value.cast as TMDbCastMember[]) {
+    for (const m of r.value.cast) {
       if (m.order >= maxOrder) continue;
       const prev = map.get(m.id);
       if (prev) {

@@ -242,3 +242,83 @@ export interface AniListStaffSearchResponse {
   };
   errors?: Array<{ message: string }>;
 }
+
+// --- 声優ページ（#102）: Staff とキャスト付きの作品 ---
+// `/characters`（#104）でも同じ形を使う（キャラの画像も取ってある）
+
+/** Staff（声優）。お気に入り数順・誕生日・作品のキャストで共通のフィールド */
+export interface AniListStaff {
+  id: number;
+  name: {
+    full: string | null;
+    native: string | null;
+  };
+  image: {
+    large: string | null;
+  };
+  /** 主な言語（"Japanese" / "English" …）。声優以外の Staff も混ざるので絞り込みに使う */
+  languageV2: string | null;
+  /** "Voice Actor" / "Mangaka" / "Director" … */
+  primaryOccupations: string[];
+  /** [活動開始年, 活動終了年?]。未登録なら空配列 */
+  yearsActive: number[];
+  favourites: number | null;
+  dateOfBirth: AniListFuzzyDate;
+}
+
+/** キャラの役どころ */
+export type AniListCharacterRole = "MAIN" | "SUPPORTING" | "BACKGROUND";
+
+/** 作品のキャラ 1 件と、その日本語の声優 */
+export interface AniListCastEdge {
+  role: AniListCharacterRole | null;
+  node: {
+    id: number;
+    name: {
+      full: string | null;
+      native: string | null;
+    };
+    image: {
+      large: string | null;
+    };
+  };
+  voiceActors: AniListStaff[];
+}
+
+/** キャスト付きの作品（シーズン・シリーズ単位で引く） */
+export interface AniListCastMedia {
+  id: number;
+  title: {
+    native: string | null;
+    romaji: string | null;
+    english: string | null;
+  };
+  coverImage: {
+    extraLarge: string | null;
+    large: string | null;
+  };
+  bannerImage: string | null;
+  popularity: number;
+  startDate: AniListFuzzyDate;
+  characters: {
+    edges: AniListCastEdge[];
+  } | null;
+}
+
+export interface AniListCastMediaPageResponse {
+  data?: {
+    Page?: {
+      media: AniListCastMedia[];
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+export interface AniListStaffPageResponse {
+  data?: {
+    Page?: {
+      staff: AniListStaff[];
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}

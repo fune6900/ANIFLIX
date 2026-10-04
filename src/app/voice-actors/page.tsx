@@ -1,70 +1,52 @@
-import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getImageUrl } from "@/lib/tmdb";
-import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
-import { getRecentSeasons } from "@/lib/seasons";
+import HeroSection from "@/components/HeroSection";
+import type { HeroItem } from "@/components/HeroSection";
+import ContentRow from "@/components/ContentRow";
+import type { ContentRowItem } from "@/components/ContentRow";
+import { getAnimeVideos } from "@/lib/tmdb";
 import {
-  aggregateSeasonalCast,
-  type AggregatedCast,
-} from "@/lib/seasonal-cast";
+  loadVoiceActorHome,
+  voiceActorCollectionHref,
+  type VoiceActorHeroItem,
+} from "@/lib/voice-actor-home";
 import { sanitizeSearchQuery, searchResultsHref } from "@/lib/search-results";
+import type { VoiceActorCard } from "@/types/voice-actor-home";
 
 interface VoiceActorsPageProps {
   searchParams: Promise<{ q?: string | string[] }>;
 }
 
-interface CastGridCardProps {
-  cast: AggregatedCast;
+/** 声優カード → 横スクロールの縦長カード（名前は写真の中に出る） */
+function toRowItem(card: VoiceActorCard): ContentRowItem {
+  return {
+    id: card.id,
+    title: card.name,
+    year: card.note,
+    rating: "CV",
+    gradient: "linear-gradient(135deg, #1a1a2e 0%, #243b55 100%)",
+    posterPath: null,
+    backdropPath: null,
+    imageUrl: card.imageUrl,
+    isPortrait: true,
+    href: card.href,
+  };
 }
 
-function CastGridCard({ cast }: CastGridCardProps) {
-  return (
-    <Link href={`/voice-actors/${cast.id}`} className="group block">
-      <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">
-        {cast.profilePath ? (
-          <Image
-            src={getImageUrl(cast.profilePath, "w342")}
-            alt={cast.name}
-            fill
-            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
-            className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
-            <svg
-              className="w-16 h-16 text-gray-600"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-            </svg>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
-        <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
-          <span className="text-[#54b9c5] text-xs font-bold">
-            {cast.appearances}本
-          </span>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 p-2">
-          <p className="text-white text-xs font-semibold truncate leading-tight">
-            {cast.name}
-          </p>
-          {cast.topCharacter && (
-            <p className="text-gray-400 text-[11px] mt-0.5 truncate">
-              役: {cast.topCharacter}
-            </p>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
+/** Hero のあらすじの頭に主演声優を添える */
+function heroOverview(item: VoiceActorHeroItem): string {
+  if (item.leadVoiceActors.length === 0) return item.anime.overview;
+  return `🎤 出演: ${item.leadVoiceActors.join("・")}　${item.anime.overview}`;
 }
 
 /**
- * 声優一覧。今期人気アニメに出演している声優を出演本数順に並べる。
+ * 声優ページは毎リクエストでレンダリングする（トップ画面と同じ理由）。
+ * 個々の fetch はキャッシュするが、静的プリレンダに倒れると誕生日の行が
+ * ビルドした日のまま凍結する
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * 声優ページ。トップ画面・アニメ映画画面と同じ Hero + 特集の行（#102）。
  * 検索はヘッダーに一本化した（#101）。旧 `?q=` は声優の検索結果へ送る
  */
 export default async function VoiceActorsPage({
@@ -73,43 +55,51 @@ export default async function VoiceActorsPage({
   const query = sanitizeSearchQuery((await searchParams).q);
   if (query) redirect(searchResultsHref("voice-actors", query));
 
-  // 「今期人気アニメに出演している声優」を集約して表示する。
-  // /person/popular はワールドワイドで Hollywood 俳優ばかり拾ってしまうため
-  // (日本の声優は 100 位までに 0 名級) 信頼できない。
-  // 今期トップ 30 作品のキャスト (order < 15) を出演本数順に並べる。
-  let casts: AggregatedCast[] = [];
-  try {
-    const currentSeason = getRecentSeasons(1)[0];
-    const seasonResult = await fetchSeasonalAnime(
-      currentSeason.year,
-      currentSeason.season,
-      { limit: 30 },
-    );
-    casts = await aggregateSeasonalCast(
-      seasonResult.items.slice(0, 30).map((a) => a.id),
-    );
-  } catch {
-    // 一覧の取得に失敗してもエラーは出さない
-  }
+  const home = await loadVoiceActorHome();
+
+  const trailerKeys = await Promise.all(
+    home.hero.map(({ anime }) =>
+      getAnimeVideos(anime.id)
+        .then((vids) => vids[0]?.key ?? null)
+        .catch(() => null),
+    ),
+  );
+
+  const heroItems: HeroItem[] = home.hero.map((item, i) => ({
+    id: item.anime.id,
+    title: item.anime.name,
+    overview: heroOverview(item),
+    backdropPath: item.anime.backdrop_path,
+    year: item.anime.first_air_date?.split("-")[0] || undefined,
+    match:
+      item.anime.vote_average > 0
+        ? Math.round(item.anime.vote_average * 10)
+        : undefined,
+    href: `/anime/${item.anime.id}`,
+    trailerKey: trailerKeys[i] ?? undefined,
+  }));
+
+  // 取得に失敗した行（空）は出さない
+  const rows = home.rows.filter((row) => row.cards.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="site-container">
-        <div className="mb-8">
-          <h1 className="text-white text-2xl font-bold">声優</h1>
-          {casts.length > 0 && (
-            <p className="text-gray-400 text-sm mt-1">
-              🇯🇵 今期アニメに出演中の声優 ({casts.length}名)
-            </p>
-          )}
-        </div>
-
-        {casts.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 md:gap-4 xl:gap-5">
-            {casts.map((cast) => (
-              <CastGridCard key={cast.id} cast={cast} />
-            ))}
-          </div>
+    <div className="bg-[#141414] min-h-screen">
+      <HeroSection items={heroItems} />
+      <div
+        className={`relative z-10 pb-20 ${heroItems.length > 0 ? "-mt-16 md:-mt-24" : "pt-24"}`}
+      >
+        {rows.map((row) => (
+          <ContentRow
+            key={row.slug}
+            title={row.title}
+            items={row.cards.map(toRowItem)}
+            allHref={voiceActorCollectionHref(row.slug)}
+          />
+        ))}
+        {rows.length === 0 && (
+          <p className="site-container text-gray-400 text-sm">
+            声優の情報を取得できませんでした。時間をおいて再度お試しください。
+          </p>
         )}
       </div>
     </div>

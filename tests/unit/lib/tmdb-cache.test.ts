@@ -62,6 +62,13 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getMovieVideos(129))).toBe(
       "revalidate:3600",
     );
+    // 声優ページの「最新アニメ映画の声優」（#102）
+    expect(await policyFor((m) => m.getAnimeCredits(1429))).toBe(
+      "revalidate:3600",
+    );
+    expect(await policyFor((m) => m.getMovieCredits(129))).toBe(
+      "revalidate:3600",
+    );
   });
 
   it("アニメ映画画面の一覧はキャッシュする", async () => {
