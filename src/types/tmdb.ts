@@ -204,6 +204,8 @@ export interface TMDbMovie {
   original_language?: string;
   /** TMDb の一部エンドポイントでは origin_country が返るため任意で保持 */
   origin_country?: string[];
+  /** 一覧系レスポンスに付く人気度。上映中の映画を人気順に並べ直すのに使う */
+  popularity?: number;
 }
 
 export interface TMDbMovieDetail extends TMDbMovie {

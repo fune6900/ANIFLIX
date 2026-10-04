@@ -59,6 +59,36 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getAnimeVideos(1429))).toBe(
       "revalidate:3600",
     );
+    expect(await policyFor((m) => m.getMovieVideos(129))).toBe(
+      "revalidate:3600",
+    );
+  });
+
+  it("アニメ映画画面の一覧はキャッシュする", async () => {
+    expect(await policyFor((m) => m.getTopRatedAnimeMovies(1))).toBe(
+      "revalidate:1800",
+    );
+    expect(await policyFor((m) => m.getAnimeMoviesByGenre(28, 1))).toBe(
+      "revalidate:1800",
+    );
+    expect(await policyFor((m) => m.getAnimeMoviesByStudio(10342, 1))).toBe(
+      "revalidate:1800",
+    );
+    expect(await policyFor((m) => m.getNowPlayingMovies(1))).toBe(
+      "revalidate:1800",
+    );
+    expect(await policyFor((m) => m.getUpcomingMovies(1))).toBe(
+      "revalidate:1800",
+    );
+    expect(await policyFor((m) => m.getTrendingMovies(1))).toBe(
+      "revalidate:1800",
+    );
+  });
+
+  it("最新作の映画は日付がキーに入るので 24 時間キャッシュする", async () => {
+    expect(await policyFor((m) => m.getLatestAnimeMovies(1))).toBe(
+      "revalidate:86400",
+    );
   });
 
   it("一覧 discover はキャッシュする", async () => {
@@ -72,9 +102,7 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getAnimeByStudio(1, 1))).toBe(
       "revalidate:1800",
     );
-    expect(await policyFor((m) => m.getAiringAnime(1))).toBe(
-      "revalidate:1800",
-    );
+    expect(await policyFor((m) => m.getAiringAnime(1))).toBe("revalidate:1800");
   });
 
   it("新着（直近 7 日の放送）は日替わりなので 24 時間キャッシュする", async () => {

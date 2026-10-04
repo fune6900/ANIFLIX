@@ -16,6 +16,7 @@ import type {
   TMDbTVKeywordsResponse,
   TMDbMovieKeywordsResponse,
 } from "@/types/tmdb";
+import { movieGenreIdsFor } from "@/lib/movie-genres";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -276,7 +277,10 @@ export async function discoverAnimeMovie(
   };
 
   if (params.genreId) {
-    query.with_genres = `${ANIMATION_GENRE_ID},${params.genreId}`;
+    // TV 専用のジャンル（10759 等）は映画に無く、そのままだと 0 件になる。
+    // 読み替え先が複数あっても with_genres では OR にできないため先頭（主たる側）で絞る
+    const [movieGenreId] = movieGenreIdsFor(params.genreId);
+    query.with_genres = `${ANIMATION_GENRE_ID},${movieGenreId}`;
   }
   if (params.dateFrom) {
     query["primary_release_date.gte"] = params.dateFrom;
@@ -636,6 +640,114 @@ export async function getAnimeMovies(
   );
 }
 
+/** 最新作（公開日が新しい順）。公開予定日の作品で先頭が埋まらないよう今日（日本時間）までに絞る */
+export async function getLatestAnimeMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "primary_release_date.desc",
+      "primary_release_date.lte": jstDateString(new Date()),
+      page: String(page),
+    },
+    // 今日の日付が URL に入るため日付が変われば別エントリになる（新着アニメと同じ）
+    NEW_ANIME_CACHE_TIME,
+  );
+}
+
+/** 「高評価の名作」に入れる最低票数。少数票の満点作品が先頭を占めないようにする */
+const TOP_RATED_MIN_VOTES = 200;
+
+/** 評価点が高く票数も十分な日本のアニメ映画 */
+export async function getTopRatedAnimeMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    {
+      with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
+      sort_by: "vote_average.desc",
+      "vote_count.gte": String(TOP_RATED_MIN_VOTES),
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/**
+ * 映画ジャンル別の日本のアニメ映画。
+ * `movieGenreId` は映画のジャンル ID（TV 専用 ID は `movieGenreIdsFor()` で読み替えてから渡す）
+ */
+export async function getAnimeMoviesByGenre(
+  movieGenreId: number,
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    {
+      with_genres: `${ANIMATION_GENRE_ID},${movieGenreId}`,
+      with_origin_country: "JP",
+      sort_by: "popularity.desc",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/** 指定スタジオ（制作会社ID）のアニメ映画 */
+export async function getAnimeMoviesByStudio(
+  companyId: number,
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/discover/movie",
+    {
+      with_companies: String(companyId),
+      with_genres: String(ANIMATION_GENRE_ID),
+      sort_by: "popularity.desc",
+      page: String(page),
+    },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/** 日本の劇場で上映中の映画（全ジャンル。アニメかどうかは呼び出し側で絞る） */
+export async function getNowPlayingMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/movie/now_playing",
+    { region: "JP", page: String(page) },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/** 日本で公開予定の映画（全ジャンル。アニメかどうかは呼び出し側で絞る） */
+export async function getUpcomingMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/movie/upcoming",
+    { region: "JP", page: String(page) },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
+/** 全世界の週間トレンド映画（全ジャンル・全地域） */
+export async function getTrendingMovies(
+  page = 1,
+): Promise<TMDbSearchResponse<TMDbMovie>> {
+  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>(
+    "/trending/movie/week",
+    { page: String(page) },
+    DISCOVER_CACHE_TIME,
+  );
+}
+
 // ──────────────────────────────────────────
 // シーズン別アニメ
 // ──────────────────────────────────────────
@@ -809,7 +921,21 @@ export async function getAnimeVideos(animeId: number): Promise<TMDbVideo[]> {
     {},
     DETAIL_CACHE_TIME,
   );
-  const yt = data.results.filter((v) => v.site === "YouTube");
+  return sortYouTubeVideos(data.results);
+}
+
+/** 映画の YouTube 動画一覧（優先度順）。TV と ID 空間が別なので映画のエンドポイントから取る */
+export async function getMovieVideos(movieId: number): Promise<TMDbVideo[]> {
+  const data = await fetchTMDb<TMDbVideosResponse>(
+    `/movie/${movieId}/videos`,
+    {},
+    DETAIL_CACHE_TIME,
+  );
+  return sortYouTubeVideos(data.results);
+}
+
+function sortYouTubeVideos(videos: TMDbVideo[]): TMDbVideo[] {
+  const yt = videos.filter((v) => v.site === "YouTube");
   // 優先度: 公式Trailer > 公式Teaser > Trailer > Opening Credits > その他
   const order = ["Trailer", "Teaser", "Opening Credits", "Clip", "Featurette"];
   return yt.sort((a, b) => {

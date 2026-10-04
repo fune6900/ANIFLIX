@@ -1,387 +1,194 @@
 import Link from "next/link";
-import {
-  discoverAnimeMovie,
-  getAnimeMovieByKeywords,
-  getAnimeMovies,
-  parsePageParam,
-} from "@/lib/tmdb";
-import { searchMovieKeyword } from "@/lib/anime-search";
+import HeroSection from "@/components/HeroSection";
+import type { HeroItem } from "@/components/HeroSection";
+import ContentRow from "@/components/ContentRow";
+import type { ContentRowItem } from "@/components/ContentRow";
+import AnimeMovieSearch, {
+  isAnimeMovieSearchRequest,
+} from "@/components/AnimeMovieSearch";
+import type { AnimeMovieSearchParams } from "@/components/AnimeMovieSearch";
+import { getMovieVideos } from "@/lib/tmdb";
+import { loadAnimeMovieHome } from "@/lib/movie-home-rows";
 import type { TMDbMovie } from "@/types/tmdb";
-import { ANIME_GENRES, findGenre } from "@/lib/genres";
-import MovieCard from "@/components/MovieCard";
-import MovieSearchModeTabs from "@/components/MovieSearchModeTabs";
-import SearchPageInput from "@/components/SearchPageInput";
-
-function sanitize(raw: string): string {
-  return raw
-    .replace(/<[^>]*>/g, "")
-    .replace(/[<>"'`]/g, "")
-    .trim()
-    .slice(0, 100);
-}
 
 interface MoviesPageProps {
-  searchParams: Promise<{
-    q?: string;
-    mode?: string;
-    genre?: string;
-    sort?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<AnimeMovieSearchParams>;
 }
 
-const DEFAULT_SORT = "popularity.desc";
+/**
+ * 「すべて見る」の遷移先。専用ページとフィルターは #91 で作るため、それまでは
+ * 既存の検索画面（詳細フィルター）の該当条件へ飛ばす
+ */
+const LATEST_ALL_HREF =
+  "/browse/movies?mode=filter&sort=primary_release_date.desc";
 
-const SORT_OPTIONS = [
-  { value: DEFAULT_SORT, label: "人気順（高い）" },
-  { value: "vote_average.desc", label: "評価順（高い）" },
-  { value: "primary_release_date.desc", label: "放送日（新しい）" },
-  { value: "primary_release_date.asc", label: "放送日（古い）" },
-];
+function genreAllHref(genreId: number): string {
+  return `/browse/movies?mode=filter&genre=${genreId}`;
+}
 
-function Pagination({
-  currentPage,
-  totalPages,
-  baseParams,
-}: {
-  currentPage: number;
-  totalPages: number;
-  baseParams: Record<string, string>;
-}) {
-  if (totalPages <= 1) return null;
+/** 検索画面（キーワード未入力）への入口 */
+const SEARCH_HREF = "/browse/movies?mode=keyword";
 
-  function pageUrl(p: number) {
-    const params = new URLSearchParams({ ...baseParams, page: String(p) });
-    return `/browse/movies?${params.toString()}`;
-  }
+function toMovieCardItem(movie: TMDbMovie): ContentRowItem {
+  return {
+    id: movie.id,
+    title: movie.title,
+    year: movie.release_date?.split("-")[0] || undefined,
+    match:
+      movie.vote_average > 0 ? Math.round(movie.vote_average * 10) : undefined,
+    posterPath: movie.poster_path,
+    backdropPath: movie.backdrop_path,
+    overview: movie.overview,
+    href: `/movie/${movie.id}`,
+    mediaType: "movie",
+  };
+}
 
-  const range = 2;
-  const pages: number[] = [];
-  for (
-    let i = Math.max(1, currentPage - range);
-    i <= Math.min(totalPages, currentPage + range);
-    i++
-  ) {
-    pages.push(i);
-  }
+/** 近日公開は年ではなく公開日を出す（「2026」だけでは近日の意味が無い） */
+function toUpcomingCardItem(movie: TMDbMovie): ContentRowItem {
+  const [, month, day] = movie.release_date?.split("-") ?? [];
+  return {
+    ...toMovieCardItem(movie),
+    year: month && day ? `${Number(month)}/${Number(day)} 公開` : undefined,
+  };
+}
 
+interface SectionTitleProps {
+  title: string;
+}
+
+/** 「スタジオ別」「ジャンル別」の区切り見出し */
+function SectionTitle({ title }: SectionTitleProps) {
   return (
-    <div className="flex items-center justify-center gap-1 mt-10 flex-wrap">
-      {currentPage > 1 && (
-        <Link
-          href={pageUrl(currentPage - 1)}
-          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
-        >
-          ← 前へ
-        </Link>
-      )}
-      {pages[0] > 1 && (
-        <>
-          <Link
-            href={pageUrl(1)}
-            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
-          >
-            1
-          </Link>
-          {pages[0] > 2 && <span className="text-gray-500 px-1">…</span>}
-        </>
-      )}
-      {pages.map((p) => (
-        <Link
-          key={p}
-          href={pageUrl(p)}
-          className={`px-3 py-2 rounded text-sm transition ${
-            p === currentPage
-              ? "bg-[#E50914] text-white font-bold"
-              : "bg-gray-800 hover:bg-gray-700 text-white"
-          }`}
-        >
-          {p}
-        </Link>
-      ))}
-      {pages[pages.length - 1] < totalPages && (
-        <>
-          {pages[pages.length - 1] < totalPages - 1 && (
-            <span className="text-gray-500 px-1">…</span>
-          )}
-          <Link
-            href={pageUrl(totalPages)}
-            className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
-          >
-            {totalPages}
-          </Link>
-        </>
-      )}
-      {currentPage < totalPages && (
-        <Link
-          href={pageUrl(currentPage + 1)}
-          className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-sm transition"
-        >
-          次へ →
-        </Link>
-      )}
+    <div className="site-container mt-6 mb-4 flex items-center gap-3">
+      <p className="text-white font-black text-lg md:text-xl xl:text-2xl">
+        {title}
+      </p>
+      <div className="flex-1 h-px bg-gray-800" />
     </div>
   );
 }
 
+/**
+ * アニメ映画画面は毎リクエストでレンダリングする（トップ画面と同じ理由）。
+ * 個々の fetch はキャッシュするが、静的プリレンダに倒れると shuffle() /
+ * randomPage() がビルド時に凍結して全員が同じ並びを見る
+ */
+export const dynamic = "force-dynamic";
+
 export default async function MoviesPage({ searchParams }: MoviesPageProps) {
   const params = await searchParams;
-  const rawQuery = params.q ?? "";
-  const query = sanitize(rawQuery);
-  const mode = params.mode === "filter" ? "filter" : "keyword";
-  const currentPage = parsePageParam(params.page);
 
-  const genreIdParsed = params.genre ? parseInt(params.genre, 10) : NaN;
-  const genreId = Number.isFinite(genreIdParsed) ? genreIdParsed : undefined;
-  const selectedGenre = genreId ? findGenre(genreId) : undefined;
-  // sort は TMDb の sort_by にそのまま乗り、discover のキャッシュキーの一部になる。
-  // 未検証の値を通すとキャッシュエントリが無制限に増えるためホワイトリスト照合する
-  const sortParam = params.sort ?? DEFAULT_SORT;
-  const sort = SORT_OPTIONS.some((o) => o.value === sortParam)
-    ? sortParam
-    : DEFAULT_SORT;
-
-  const hasFilters = !!selectedGenre || sort !== DEFAULT_SORT;
-  const isFilterMode = mode === "filter";
-
-  let results: TMDbMovie[] = [];
-  let totalResults = 0;
-  let totalPages = 1;
-  let error: string | null = null;
-  // 何も入力が無い場合は人気アニメ映画一覧をデフォルト表示する
-  let isDefaultBrowse = false;
-
-  if (isFilterMode || hasFilters) {
-    try {
-      if (selectedGenre?.filterType === "keyword" && selectedGenre.keyword) {
-        const allKeywords = [
-          selectedGenre.keyword,
-          ...(selectedGenre.extraKeywords ?? []),
-        ];
-        const data = await getAnimeMovieByKeywords(allKeywords, currentPage, {
-          sortBy: sort,
-        });
-        results = data.results;
-        totalResults = data.total_results;
-        totalPages = Math.min(data.total_pages, 500);
-      } else {
-        const data = await discoverAnimeMovie({
-          genreId: selectedGenre?.id,
-          sortBy: sort,
-          page: currentPage,
-        });
-        results = data.results;
-        totalResults = data.total_results;
-        totalPages = Math.min(data.total_pages, 500);
-      }
-    } catch {
-      error = "検索中にエラーが発生しました";
-    }
-  } else if (query) {
-    // キーワード検索: 揺らぎ吸収 + AniList フォールバック
-    try {
-      const data = await searchMovieKeyword(query);
-      results = data.results;
-      totalResults = data.totalResults;
-      totalPages = Math.min(data.totalPages, 500);
-    } catch {
-      error = "検索中にエラーが発生しました";
-    }
-  } else {
-    // 入力なし: 人気アニメ映画をデフォルト表示
-    isDefaultBrowse = true;
-    try {
-      const data = await getAnimeMovies(currentPage);
-      results = data.results;
-      totalResults = data.total_results;
-      totalPages = Math.min(data.total_pages, 500);
-    } catch {
-      error = "データの取得に失敗しました";
-    }
+  // 検索系クエリがあれば従来の検索画面（キーワード / 詳細フィルター）
+  if (isAnimeMovieSearchRequest(params)) {
+    // フックを持たない async の Server Component なので関数として呼んで待つ
+    // （ページの描画結果をそのまま返し、テストからも同じ形で描ける）
+    return AnimeMovieSearch({ params });
   }
 
-  const baseParams: Record<string, string> = {};
-  if (isFilterMode) baseParams.mode = "filter";
-  if (query) baseParams.q = query;
-  if (selectedGenre) baseParams.genre = String(selectedGenre.id);
-  if (sort !== DEFAULT_SORT) baseParams.sort = sort;
+  const home = await loadAnimeMovieHome();
 
-  // キーワードモード用の hidden fields（フィルター値の引き継ぎ）
-  const keywordHiddenFields = [
-    ...(selectedGenre
-      ? [{ name: "genre", value: String(selectedGenre.id) }]
-      : []),
-    ...(sort !== DEFAULT_SORT ? [{ name: "sort", value: sort }] : []),
-  ];
+  const trailerKeys = await Promise.all(
+    home.hero.map((m) =>
+      getMovieVideos(m.id)
+        .then((vids) => vids[0]?.key ?? null)
+        .catch(() => null),
+    ),
+  );
+
+  const heroItems: HeroItem[] = home.hero.map((m, i) => ({
+    id: m.id,
+    title: m.title,
+    overview: m.overview,
+    backdropPath: m.backdrop_path,
+    year: m.release_date?.split("-")[0] || undefined,
+    match: m.vote_average > 0 ? Math.round(m.vote_average * 10) : undefined,
+    href: `/movie/${m.id}`,
+    trailerKey: trailerKeys[i] ?? undefined,
+  }));
 
   return (
-    <div className="min-h-screen bg-[#141414] pt-24 pb-24">
-      <div className="site-container">
-        <div className="mb-8">
-          <h1 className="text-white text-2xl font-bold mb-1">
-            アニメ映画を検索
-          </h1>
-          {results.length > 0 && !isDefaultBrowse && (
-            <p className="text-gray-400 text-sm">
-              {totalResults.toLocaleString()}件
-              {totalPages > 1 && ` · ${currentPage} / ${totalPages} ページ`}
-            </p>
-          )}
-          {isDefaultBrowse && totalResults > 0 && (
-            <p className="text-gray-400 text-sm">
-              人気のアニメ映画 {totalResults.toLocaleString()}件
-              {totalPages > 1 && ` · ${currentPage} / ${totalPages} ページ`}
-            </p>
-          )}
+    <div className="bg-[#141414] min-h-screen">
+      <HeroSection items={heroItems} />
+      <div
+        className={`relative z-10 pb-20 ${heroItems.length > 0 ? "-mt-16 md:-mt-24" : "pt-24"}`}
+      >
+        <div className="site-container flex justify-end mb-2">
+          <Link
+            href={SEARCH_HREF}
+            className="text-[#54b9c5] text-xs md:text-sm font-semibold hover:text-white transition"
+          >
+            🔍 アニメ映画を検索
+          </Link>
         </div>
 
-        {/* モード切り替えタブ（切替時にキーワード・フィルター値を保持） */}
-        <MovieSearchModeTabs
-          currentMode={isFilterMode ? "filter" : "keyword"}
-          query={query}
-          genreId={selectedGenre ? String(selectedGenre.id) : ""}
-          sort={sort}
-        />
-
-        {/* キーワード検索フォーム（サジェスト付き） */}
-        {!isFilterMode && (
-          <SearchPageInput
-            mode="movie"
-            defaultValue={query}
-            formAction="/browse/movies"
-            hiddenFields={keywordHiddenFields}
+        {home.latest.length > 0 && (
+          <ContentRow
+            title="🆕 最新作"
+            items={home.latest.map(toMovieCardItem)}
+            allHref={LATEST_ALL_HREF}
+          />
+        )}
+        {home.japanTop10.length > 0 && (
+          <ContentRow
+            title="🇯🇵 アニメ映画TOP10（日本）"
+            items={home.japanTop10.map(toMovieCardItem)}
+          />
+        )}
+        {home.worldTop10.length > 0 && (
+          <ContentRow
+            title="🌏 アニメ映画TOP10（全世界）"
+            items={home.worldTop10.map(toMovieCardItem)}
+          />
+        )}
+        {home.upcoming.length > 0 && (
+          <ContentRow
+            title="📅 近日公開"
+            items={home.upcoming.map(toUpcomingCardItem)}
+          />
+        )}
+        {home.topRated.length > 0 && (
+          <ContentRow
+            title="🏆 高評価の名作"
+            items={home.topRated.map(toMovieCardItem)}
           />
         )}
 
-        {/* 詳細フィルターフォーム（キーワード q を hidden で保持） */}
-        {isFilterMode && (
-          <form id="movie-search-filter-form" method="GET" className="mb-10">
-            <input type="hidden" name="mode" value="filter" />
-            {query && <input type="hidden" name="q" value={query} />}
-            <div className="bg-[#1a1a1a] border border-gray-700 rounded-lg p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 3xl:grid-cols-[repeat(auto-fill,minmax(700px,1fr))] gap-4 xl:gap-5">
-                {/* ジャンル */}
-                <div>
-                  <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">
-                    ジャンル
-                  </label>
-                  <select
-                    name="genre"
-                    defaultValue={genreId ?? ""}
-                    className="w-full bg-[#2a2a2a] border border-gray-600 text-white text-sm rounded px-3 py-2 outline-none focus:border-gray-400 transition"
-                  >
-                    <option value="">すべて</option>
-                    {ANIME_GENRES.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.emoji} {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 並び順 */}
-                <div>
-                  <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">
-                    並び順
-                  </label>
-                  <select
-                    name="sort"
-                    defaultValue={sort}
-                    className="w-full bg-[#2a2a2a] border border-gray-600 text-white text-sm rounded px-3 py-2 outline-none focus:border-gray-400 transition"
-                  >
-                    {SORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 mt-5">
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 bg-[#E50914] text-white px-6 py-2.5 rounded font-semibold text-sm hover:bg-red-700 transition"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  検索する
-                </button>
-                <Link
-                  href={`/browse/movies?mode=filter${query ? `&q=${encodeURIComponent(query)}` : ""}`}
-                  className="text-gray-400 hover:text-white text-sm transition"
-                >
-                  フィルターをリセット
-                </Link>
-              </div>
-            </div>
-
-            {hasFilters && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {selectedGenre && (
-                  <span className="flex items-center gap-1.5 bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
-                    {selectedGenre.emoji} {selectedGenre.name}
-                  </span>
-                )}
-                {sort !== DEFAULT_SORT && (
-                  <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">
-                    {SORT_OPTIONS.find((o) => o.value === sort)?.label}
-                  </span>
-                )}
-              </div>
-            )}
-          </form>
+        {/* スタジオ別 */}
+        {home.studios.some((row) => row.movies.length > 0) && (
+          <SectionTitle title="スタジオ別" />
+        )}
+        {home.studios.map(({ studio, movies }) =>
+          movies.length > 0 ? (
+            <ContentRow
+              key={studio.id}
+              title={`${studio.emoji} ${studio.name}`}
+              items={movies.map(toMovieCardItem)}
+            />
+          ) : null,
         )}
 
-        {error && (
-          <div className="bg-red-900/30 border border-red-700 text-red-300 px-4 py-3 rounded mb-8">
-            {error}
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
-            {results.map((movie) => (
-              <MovieCard key={movie.id} movie={movie} />
-            ))}
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            baseParams={baseParams}
+        {home.theatrical.length > 0 && (
+          <ContentRow
+            title="🎬 TVシリーズの劇場版"
+            items={home.theatrical.map(toMovieCardItem)}
           />
         )}
 
-        {/* 検索/フィルター実行後の結果ゼロ */}
-        {!isDefaultBrowse &&
-          (query || isFilterMode || hasFilters) &&
-          results.length === 0 &&
-          !error && (
-            <div className="text-center py-20">
-              <p className="text-gray-400 text-lg mb-2">
-                条件に一致するアニメ映画は見つかりませんでした
-              </p>
-              <p className="text-gray-600 text-sm">
-                {isFilterMode
-                  ? "フィルター条件を変えてみてください"
-                  : "別のキーワードで試してみてください"}
-              </p>
-            </div>
-          )}
+        {/* ジャンル別 */}
+        {home.genres.some((row) => row.movies.length > 0) && (
+          <SectionTitle title="ジャンル別" />
+        )}
+        {home.genres.map(({ genre, movies }) =>
+          movies.length > 0 ? (
+            <ContentRow
+              key={genre.id}
+              title={`${genre.emoji} ${genre.name}`}
+              items={movies.map(toMovieCardItem)}
+              allHref={genreAllHref(genre.id)}
+            />
+          ) : null,
+        )}
       </div>
     </div>
   );

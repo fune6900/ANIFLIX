@@ -27,7 +27,7 @@ const Navbar = (await import("@/components/Navbar")).default;
 /** ヘッダーに必ず並ぶナビゲーション項目 */
 const NAV_ITEMS = [
   "ホーム",
-  "映画",
+  "アニメ映画",
   "放送中",
   "シーズン",
   "ジャンル",
@@ -134,6 +134,19 @@ describe("Navbar", () => {
     openMobileMenu();
 
     expect(screen.queryAllByRole("link", { name: "アニメ" })).toHaveLength(0);
+  });
+
+  it("映画の項目は「アニメ映画」と呼ぶ（PC・モバイルとも）", () => {
+    // アニメ映画専用の画面（#90）。「映画」だと実写も扱うように読める
+    render(<Navbar />);
+    openMobileMenu();
+
+    const links = screen.getAllByRole("link", { name: "アニメ映画" });
+    expect(links).toHaveLength(2);
+    for (const a of links) {
+      expect(a).toHaveAttribute("href", "/browse/movies");
+    }
+    expect(screen.queryByText("映画")).not.toBeInTheDocument();
   });
 
   it("認証画面ではヘッダーごと表示しない", () => {
