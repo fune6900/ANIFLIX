@@ -163,12 +163,7 @@ describe("SeasonAnimeCard", () => {
     });
   });
 
-  it("ON AIR バッジを出せる", () => {
-    render(<SeasonAnimeCard entry={tvEntry()} airingBadge />);
-    expect(screen.getAllByText("ON AIR").length).toBeGreaterThan(0);
-  });
-
-  it("バッジは既定では出ない", () => {
+  it("ON AIR バッジを出さない（#89）", () => {
     render(<SeasonAnimeCard entry={tvEntry()} />);
     expect(screen.queryByText("ON AIR")).not.toBeInTheDocument();
   });

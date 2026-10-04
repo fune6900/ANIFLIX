@@ -210,6 +210,18 @@ describe("放送中ページ", () => {
     expect(screen.getByRole("search")).toBeInTheDocument();
     expect(shownAnimeIds()).toEqual([2, 4, 6]);
   });
+
+  it("作品カードのキービジュアルに「ON AIR」を出さない（#89）", async () => {
+    render(await AiringPage({ searchParams: Promise.resolve({}) }));
+
+    const cards = [
+      ...document.querySelectorAll<HTMLAnchorElement>('a[href^="/anime/"]'),
+    ];
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.some((card) => card.textContent?.includes("ON AIR"))).toBe(
+      false,
+    );
+  });
 });
 
 describe("年代ページ", () => {

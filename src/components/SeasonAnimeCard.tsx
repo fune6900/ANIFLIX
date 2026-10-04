@@ -5,8 +5,6 @@ import { pickDisplayTitle, type SeasonalEntry } from "@/lib/seasonal-anime";
 
 interface SeasonAnimeCardProps {
   entry: SeasonalEntry;
-  /** ON AIR バッジを表示する（放送中ページ用） */
-  airingBadge?: boolean;
 }
 
 /** カードを描くのに必要な最小限。3 種類の入力をここへ揃える */
@@ -91,10 +89,7 @@ function toCardData(entry: SeasonalEntry): CardData {
 }
 
 /** PC は横長 backdrop、SP は縦長 poster の二系統で表示するシーズン作品カード */
-export default function SeasonAnimeCard({
-  entry,
-  airingBadge = false,
-}: SeasonAnimeCardProps) {
+export default function SeasonAnimeCard({ entry }: SeasonAnimeCardProps) {
   const card = toCardData(entry);
   const score = card.score !== null ? card.score.toFixed(1) : null;
   const hasScore = score !== null && Number(score) > 0;
@@ -119,13 +114,6 @@ export default function SeasonAnimeCard({
           </div>
         )}
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/90 to-transparent" />
-        {airingBadge && (
-          <div className="absolute top-1.5 left-1.5 bg-red-600 rounded-full px-2 py-0.5">
-            <span className="text-white text-[9px] font-bold tracking-wider">
-              ON AIR
-            </span>
-          </div>
-        )}
         {hasScore && (
           <div className="absolute top-1.5 right-1.5 bg-black/70 rounded px-1.5 py-0.5">
             <span className="text-green-400 text-[11px] font-bold">
@@ -162,14 +150,6 @@ export default function SeasonAnimeCard({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
-        {airingBadge && (
-          <div className="absolute top-2 left-2 bg-red-600 rounded-full px-2.5 py-0.5 flex items-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-white text-[10px] font-bold tracking-wider">
-              ON AIR
-            </span>
-          </div>
-        )}
         {hasScore && (
           <div className="absolute top-2 right-2 bg-black/70 rounded px-1.5 py-0.5">
             <span className="text-green-400 text-[11px] font-bold">
