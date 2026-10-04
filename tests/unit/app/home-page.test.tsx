@@ -53,7 +53,7 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
     getTrendingAnime: (p: number) => Promise.resolve(page(3000 + p * 100)),
     getAnimeVideos: () => Promise.resolve([]),
     getAnimeByGenre: (_id: number, p: number) => Promise.resolve(page(p * 100)),
-    getAnimeByKeywords: (_k: string[], p: number) =>
+    getAnimeByKeyword: (_ids: number[], p: number) =>
       Promise.resolve(page(p * 100)),
     getAnimeByEra: (_d: number, p: number) => Promise.resolve(page(p * 100)),
   };

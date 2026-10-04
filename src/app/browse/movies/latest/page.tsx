@@ -4,7 +4,7 @@ import { MOVIE_LATEST_LIST_HREF, loadLatestMovieList } from "@/lib/movie-list";
 import { toMovieEntry } from "@/lib/movie-card-item";
 import { filterEntries, parseBrowseFilter } from "@/lib/browse-filter";
 import type { SeasonalEntry } from "@/lib/seasonal-anime";
-import MovieListBody from "@/components/MovieListBody";
+import BrowseListBody from "@/components/BrowseListBody";
 
 interface LatestMoviesPageProps {
   searchParams: Promise<{
@@ -75,7 +75,7 @@ export default async function LatestMoviesPage({
           )}
         </div>
 
-        <MovieListBody
+        <BrowseListBody
           basePath={MOVIE_LATEST_LIST_HREF}
           filter={filter}
           showGenre
