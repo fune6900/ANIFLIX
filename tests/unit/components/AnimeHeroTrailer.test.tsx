@@ -70,6 +70,56 @@ describe("AnimeHeroTrailer", () => {
     expect(visual.className).not.toContain("object-cover");
   });
 
+  it("前景のキービジュアルは四辺をフェードさせる（#98）", () => {
+    // 縦横 2 本の linear-gradient を重ね（intersect）、四辺だけを透明へ落とす
+    render(<AnimeHeroTrailer {...PROPS} />);
+
+    const layer = screen.getByAltText("作品A").parentElement;
+    expect(layer).not.toBeNull();
+    const style = layer?.style;
+
+    for (const image of [
+      style?.maskImage ?? "",
+      style?.getPropertyValue("-webkit-mask-image") ?? "",
+    ]) {
+      expect(image).toContain("linear-gradient(to right");
+      expect(image).toContain("linear-gradient(to bottom");
+      expect(image).toContain("transparent");
+    }
+    expect(style?.maskComposite).toBe("intersect");
+    expect(style?.getPropertyValue("-webkit-mask-composite")).toBe(
+      "source-in",
+    );
+  });
+
+  it("マスクは画像の実寸（16:9）に掛け、箱の縁には掛けない（#98）", () => {
+    // object-contain の img 要素は箱いっぱいに広がる。要素に直接マスクを掛けると、
+    // 70vh の上限で横長になった箱では「画像の無い左右の縁」がフェードするだけになる
+    render(<AnimeHeroTrailer {...PROPS} />);
+
+    const layer = screen.getByAltText("作品A").parentElement;
+    const classes = (layer?.className ?? "").split(/\s+/);
+    expect(classes).toContain("h-full");
+    expect(classes).toContain("aspect-video");
+    expect(classes).toContain("max-w-full");
+  });
+
+  it("ブラーの塗りと動画にはマスクを掛けない（#98）", () => {
+    const { container } = render(<AnimeHeroTrailer {...PROPS} />);
+
+    const fill = container.querySelector<HTMLImageElement>(
+      'img[aria-hidden="true"]',
+    );
+    const iframe = screen.getByTitle("作品A トレーラー");
+    for (const el of [fill, iframe]) {
+      let node: HTMLElement | null = el;
+      while (node) {
+        expect(node.style.maskImage).toBe("");
+        node = node.parentElement;
+      }
+    }
+  });
+
   it("下端のグラデーションは下側だけで、最下段も透けて見える", () => {
     // 全面にかけると動画の下半分が沈み、終端を不透明にすると最下段（PV のテロップ等）が消える
     const { container } = render(<AnimeHeroTrailer {...PROPS} />);
