@@ -47,3 +47,40 @@ export async function probeLastPage(
 
   return { lastPage: lo, total: (lo - 1) * perPage + (await count(lo)) };
 }
+
+export interface ResolvedPaging {
+  /** 送れる最後のページ。数えられたら実在の最終ページ（1 件も無ければ 0） */
+  lastPage: number;
+  /** 実在する件数。数えられなかったら null（表示しない） */
+  total: number | null;
+  /** URL のページ番号を寄せる先。寄せる必要が無ければ null */
+  redirectTo: number | null;
+}
+
+/**
+ * 今のページの件数と、数えた結果（数えられなかったら null）から、最終ページと寄せ先を決める。
+ *
+ * - 数えられた: 範囲外のページ番号は最終ページへ寄せる。1 件も無ければ 1 ページ目へ
+ * - 数えられなかった: 今のページが満杯なら次のページがあるかもしれないので 1 つ先まで出す。
+ *   ちょうど perPage の倍数だと次は空ページになるが、空ページを開いたら 1 ページ目へ戻すので
+ *   行き止まりにはならない。満杯でなければ今のページが最終ページ
+ *
+ * 1 ページ目からはどこへも寄せない（寄せ先がまた寄せる、のループを作らない）。
+ */
+export function resolvePaging(
+  currentPage: number,
+  perPage: number,
+  shownCount: number,
+  counted: ProbedPages | null,
+): ResolvedPaging {
+  if (counted) {
+    const { lastPage, total } = counted;
+    const redirectTo =
+      currentPage > 1 && currentPage > lastPage ? Math.max(1, lastPage) : null;
+    return { lastPage, total, redirectTo };
+  }
+
+  const lastPage = shownCount >= perPage ? currentPage + 1 : currentPage;
+  const redirectTo = currentPage > 1 && shownCount === 0 ? 1 : null;
+  return { lastPage, total: null, redirectTo };
+}

@@ -122,6 +122,19 @@ export interface AniListRelatedCharacterEdge {
   node: AniListRelatedCharacterNode;
 }
 
+/** Character.media をページ単位で引いたレスポンス（出演作品のページ送り） */
+export interface AniListCharacterMediaResponse {
+  data?: {
+    Character?: {
+      media?: {
+        pageInfo: AniListPageInfo;
+        edges: AniListCharacterDetailMediaEdge[];
+      } | null;
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
 export interface AniListMediaCharactersResponse {
   data?: {
     Media?: {
