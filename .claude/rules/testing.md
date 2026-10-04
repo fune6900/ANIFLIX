@@ -159,7 +159,7 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
 
 ### 例外
 
-以下の 8 つに限り、上記より低いレイヤーのモックを許可する。
+以下の 9 つに限り、上記より低いレイヤーのモックを許可する。
 いずれも「モック対象そのものが検証対象」であるためで、他へ広げないこと。
 
 1. **`src/lib/tmdb.ts` 自身のテストでグローバル `fetch` をスタブする**
@@ -211,6 +211,14 @@ vi.spyOn(Math, "random").mockReturnValue(0.5);
    対象は `@/components/ContentRow` と `@/components/SeasonAnimeCard` に限る。
    呼び出し記録はテストごとに消えるため、`beforeAll` で描画したら直後に控えること。
    例: `tests/unit/app/movies-home-page.test.tsx` / `tests/unit/app/movie-list-pages.test.tsx`
+
+9. **`ContentRow` のテストで `@/lib/video-preview` の `previewVideoUrl` をスパイする**
+   ホバープレビューが TV と映画のどちらの動画を引くかは、`previewVideoUrl(id, mediaType)` の
+   呼ばれ方にしか現れない。コンポーネントのテストで `fetch` を素でモックするのは禁止なので、
+   代わりにこの URL 組み立て（純関数）だけを差し替え、中身入りの `data:` URL を返して
+   通信を起こさずに配線を見る。`previewCacheKey` など他の関数は実物のまま残すこと。
+   対象は `tests/unit/components/ContentRow.test.tsx` に限る。URL の組み立て自体は
+   `tests/unit/lib/video-preview.test.ts` が受け持つ。
 
 > `src/lib/turnstile.ts` / `src/lib/translate.ts` は `import "server-only"` を持つ。
 > `server-only` は node_modules に実体が無く Next のバンドラが内部 alias で解決して

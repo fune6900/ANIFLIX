@@ -9,7 +9,7 @@ import { ANIME_GENRES } from "@/lib/genres";
  *
  * 取得の組み立ては `tests/unit/lib/movie-list.test.ts` が受け持つ。ここでは
  * フィルター・ページ送り・カードが映画として描かれることを見る。
- * `@/lib/movie-list` / `@/lib/tmdb` / `@/lib/request-device` は自前の lib なのでモックする。
+ * `@/lib/movie-list` / `@/lib/tmdb` は自前の lib なのでモックする。
  * カードは例外 8（testing.md）に従い、実物を包んだスパイで props を捕まえる。
  */
 
@@ -53,10 +53,15 @@ const WORKS = [1, 2, 3, 4, 5, 6].map((id) =>
 );
 
 let listFails = false;
+/** 指定すると、取得結果をこれに差し替える（空のページの確認用） */
+let listOverride: Omit<MovieListPage, "page"> | null = null;
 const listPage = vi.fn(async (page: number): Promise<MovieListPage> =>
   listFails
     ? Promise.reject(new Error("TMDb down"))
-    : { page, results: WORKS, totalPages: 5, totalResults: 330 },
+    : {
+        page,
+        ...(listOverride ?? { results: WORKS, totalPages: 5, totalResults: 330 }),
+      },
 );
 
 const loadLatestMovieList = vi.fn((page: number) => listPage(page));
@@ -78,10 +83,6 @@ const getMovieWatchProviders = vi.fn(async (id: number) =>
 vi.mock("@/lib/tmdb", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tmdb")>()),
   getMovieWatchProviders: (id: number) => getMovieWatchProviders(id),
-}));
-
-vi.mock("@/lib/request-device", () => ({
-  requestItemsPerPage: async () => 20,
 }));
 
 // 例外 8: 実物を描いたまま、渡った entry を捕まえる
@@ -106,6 +107,7 @@ afterEach(() => {
   loadGenreMovieList.mockClear();
   getMovieWatchProviders.mockClear();
   listFails = false;
+  listOverride = null;
 });
 
 /** href が prefix で始まるリンク（フィルターを外すのが役目の「絞り込みを解除」は除く） */
@@ -215,6 +217,23 @@ describe("最新作の専用ページ（/browse/movies/latest）", () => {
     }
   });
 
+  it("ポスターの無い作品を落としてページが空になったら、前後のページへ案内する（「見つからない」と言わない）", async () => {
+    listOverride = { results: [], totalPages: 5, totalResults: 330 };
+    await renderLatest({ page: "3" });
+
+    expect(document.body.textContent).not.toContain("作品が見つかりませんでした");
+    expect(document.body.textContent).toContain("このページに表示できる作品はありません");
+    expect(linksStartingWith("/browse/movies/latest?page=").length).toBeGreaterThan(0);
+  });
+
+  it("一覧そのものが空なら「見つからない」と出し、ページ送りを出さない", async () => {
+    listOverride = { results: [], totalPages: 1, totalResults: 0 };
+    await renderLatest({});
+
+    expect(document.body.textContent).toContain("作品が見つかりませんでした");
+    expect(linksStartingWith("/browse/movies/latest?page=")).toEqual([]);
+  });
+
   it("取得に失敗したらエラーを出す（ページは落とさない）", async () => {
     listFails = true;
     await renderLatest({});
@@ -243,13 +262,23 @@ describe("ジャンルの専用ページ（/browse/movies/genre/[genreId]）", (
   });
 
   it("ジャンル選択を出さず、URL の genre= も読まない（#87 と同じ）", async () => {
-    await renderGenre("35", { genre: "28" });
+    // 35（コメディ）はホワイトリストにある値。読んでしまうと 1〜3 だけに絞られる
+    await renderGenre("10759", { genre: "35" });
 
     expect(document.querySelector('select[name="genre"]')).toBeNull();
     expect(document.querySelector('select[name="service"]')).not.toBeNull();
     expect(shownMovieIds()).toEqual([1, 2, 3, 4, 5, 6]);
-    for (const href of linksStartingWith("/browse/movies/genre/35?")) {
-      expect(href).not.toContain("genre=");
+    expect(document.body.textContent).not.toContain("件を表示中");
+  });
+
+  it("ページ送りのリンクに genre= を引き継がない", async () => {
+    await renderGenre("10759", { genre: "35", service: "netflix", page: "2" });
+
+    const pageLinks = linksStartingWith("/browse/movies/genre/10759?page=");
+    expect(pageLinks.length).toBeGreaterThan(0);
+    for (const href of pageLinks) {
+      expect(href).not.toContain("genre=35");
+      expect(href).toContain("service=netflix");
     }
   });
 

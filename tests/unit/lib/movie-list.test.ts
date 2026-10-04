@@ -237,6 +237,36 @@ describe("loadMovieListPage: 一覧 1 つ", () => {
     expect(page.results.map((m) => m.id)).toEqual([1, 3, 5]);
   });
 
+  it("2 ページ目以降の 1 ページが落ちても、その 20 件が欠けるだけで throw しない", async () => {
+    const items = popularList(1, 100);
+    const src = fakeSource(items);
+    const flaky = async (page: number) => {
+      if (page === 3) throw new Error("TMDb down");
+      return src.fetchPage(page);
+    };
+
+    const page = await loadMovieListPage([flaky], 1);
+
+    // 41〜60 件目（TMDb の 3 ページ目）だけが欠け、後ろが前へ詰まらない
+    expect(page.results.map((m) => m.id)).toEqual([
+      ...items.slice(0, 40).map((m) => m.id),
+      ...items.slice(60, 70).map((m) => m.id),
+    ]);
+    expect(page.totalPages).toBe(2);
+  });
+
+  it("TMDb のページ境界で同じ作品が 2 回来ても 1 回だけ出す", async () => {
+    // 人気順のページングは境界で順位が入れ替わる。21 件目に 20 件目と同じ作品が来た状態
+    const items = popularList(1, 40);
+    items[20] = items[19];
+
+    const page = await loadMovieListPage([fakeSource(items).fetchPage], 1);
+    const ids = page.results.map((m) => m.id);
+
+    expect(ids).toHaveLength(39);
+    expect(new Set(ids).size).toBe(39);
+  });
+
   it("全部のページが落ちたら throw する", async () => {
     const fail = async (): Promise<TMDbSearchResponse<TMDbMovie>> => {
       throw new Error("TMDb down");
@@ -278,6 +308,21 @@ describe("loadMovieListPage: 重ならない一覧 2 つの合併（アクショ
     expect(page.results.filter((m) => m.id > 1000)).toHaveLength(30);
     const pops = page.results.map((m) => m.popularity ?? 0);
     expect([...pops].sort((x, y) => y - x)).toEqual(pops);
+  });
+
+  it("両方の一覧に同じ作品が来ても 1 回だけ出す", async () => {
+    // without_genres で割っても、取得の間にジャンルが付け替わると両方に現れうる
+    const a = popularList(1, 10, 10);
+    const b = [a[3], ...popularList(1001, 9, 7)];
+
+    const page = await loadMovieListPage(
+      [fakeSource(a).fetchPage, fakeSource(b).fetchPage],
+      1,
+    );
+    const ids = page.results.map((m) => m.id);
+
+    expect(ids.filter((id) => id === a[3].id)).toHaveLength(1);
+    expect(ids).toHaveLength(19);
   });
 
   it("片方の一覧が落ちても、もう片方の作品は出す", async () => {

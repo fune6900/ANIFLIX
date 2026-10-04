@@ -55,6 +55,8 @@ src/
     voice-actors/[id]/page.tsx  声優詳細
     search/page.tsx             検索
     browse/                     カテゴリ別ブラウズ
+      movies/latest/            アニメ映画の最新作（「すべて見る」の専用ページ）
+      movies/genre/[genreId]/   アニメ映画のジャンル別（「すべて見る」の専用ページ）
     login/                      ログイン画面・認証エラー画面
     actions/                    Server Actions（認証操作のみ）
     api/                        Route Handlers

@@ -58,9 +58,17 @@ export default function MovieListBody({
         isFilterActive(filter) &&
         fetchedCount > 0 && <BrowseFilterEmpty />}
 
-      {!error && fetchedCount === 0 && (
+      {/* 一覧そのものが空 */}
+      {!error && fetchedCount === 0 && totalPages <= 1 && (
         <p className="text-gray-500 text-lg text-center py-24">
           作品が見つかりませんでした
+        </p>
+      )}
+
+      {/* 一覧には作品があるが、このページは空（最新作がポスターの無い作品を落とした時など） */}
+      {!error && fetchedCount === 0 && totalPages > 1 && (
+        <p className="text-gray-500 text-center py-20">
+          このページに表示できる作品はありません。前後のページを確かめてください
         </p>
       )}
 

@@ -2,6 +2,8 @@
 
 import {
   TMDB_MAX_PAGE,
+  TMDB_PAGE_SIZE,
+  TMDB_REACHABLE_RESULTS,
   getAnimeMovieByKeywords,
   getAnimeMoviesByGenre,
   getLatestAnimeMovies,
@@ -13,12 +15,6 @@ import type { TMDbMovie, TMDbSearchResponse } from "@/types/tmdb";
 
 /** 1 ページの件数。TV の新着・トレンド一覧（`/browse/new` など）の 70 件に揃える */
 export const MOVIE_LIST_PAGE_SIZE = WIDE_PAGE_SIZE;
-
-/** TMDb の 1 ページあたりの件数 */
-const TMDB_PAGE_SIZE = 20;
-
-/** TMDb が返す最後の件（500 ページ × 20 件） */
-const TMDB_REACHABLE = TMDB_MAX_PAGE * TMDB_PAGE_SIZE;
 
 /** 最新作の専用ページ */
 export const MOVIE_LATEST_LIST_HREF = "/browse/movies/latest";
@@ -132,7 +128,7 @@ export async function loadMovieListPage(
   // 1 ページ目が落ちた一覧は件数が分からないので 0 件として扱う（他の一覧は出す）
   const totals = firsts.map((r) =>
     r.status === "fulfilled"
-      ? Math.min(Math.max(0, r.value.total_results), TMDB_REACHABLE)
+      ? Math.min(Math.max(0, r.value.total_results), TMDB_REACHABLE_RESULTS)
       : 0,
   );
   const totalResults = totals.reduce((a, b) => a + b, 0);

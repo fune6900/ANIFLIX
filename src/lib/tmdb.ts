@@ -45,6 +45,12 @@ const DETAIL_CACHE_TIME = 3600;
 /** TMDb の discover / search が受け付けるページ番号の上限 */
 export const TMDB_MAX_PAGE = 500;
 
+/** TMDb の discover / search / trending の 1 ページあたりの件数 */
+export const TMDB_PAGE_SIZE = 20;
+
+/** TMDb が返す最後の件（500 ページ × 20 件）。total_results がこれを超えても先は取れない */
+export const TMDB_REACHABLE_RESULTS = TMDB_MAX_PAGE * TMDB_PAGE_SIZE;
+
 /**
  * クエリ文字列のページ番号を 1〜TMDB_MAX_PAGE に正規化する。
  *
