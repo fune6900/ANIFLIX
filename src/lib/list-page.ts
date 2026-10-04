@@ -36,6 +36,14 @@ export interface ListPageOptions<T> {
 }
 
 /**
+ * 一覧に出す作品か（`keep` に渡す）。票数の下限を外した代わりに、ポスターの無い作品を落とす。
+ * ジャンルの一覧（#99）と年代の一覧（#100）で共用する
+ */
+export function hasPoster(item: { poster_path: string | null }): boolean {
+  return Boolean(item.poster_path);
+}
+
+/**
  * 日付で並べる比較関数。日付の無い作品はどちらの向きでも最後に回す
  * （TMDb は日付で絞った一覧に日付の無い作品を返さないため、保険）
  */

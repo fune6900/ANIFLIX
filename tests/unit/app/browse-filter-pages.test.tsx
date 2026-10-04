@@ -5,8 +5,9 @@ import type { TMDbAnime, TMDbWatchProvidersResponse } from "@/types/tmdb";
 /**
  * 一覧ページへのフィルターの組み込み（#77）。
  *
- * 5 ファイル（popular / trending / new は [category] の 1 ファイル）を描画し、
- * （ジャンルの一覧は #99 で作り直し、`genre-list-pages.test.tsx` が受け持つ）
+ * 4 ファイル（popular / trending / new は [category] の 1 ファイル）を描画し、
+ * （ジャンルの一覧は #99、年代の一覧は #100 で作り直し、`genre-list-pages.test.tsx` /
+ * `era-list-pages.test.tsx` が受け持つ）
  * 絞り込みとリンクへの引き継ぎを確かめる。
  * `@/lib/tmdb` / `@/lib/seasonal-anime` / `@/lib/request-device` は自前の lib なのでモックしてよい
  * （request-device は next/headers を読むだけの薄い層）。
@@ -79,9 +80,7 @@ vi.mock("@/lib/tmdb", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tmdb")>()),
   getAnimeByStudio: () => getAnimeByStudio(),
   getAnimeWatchProviders: (id: number) => getAnimeWatchProviders(id),
-  getAnimeByEra: () => failableList(),
   getPopularAnime: () => failableList(),
-  searchTVByPage: () => listPage(),
 }));
 
 vi.mock("@/lib/request-device", () => ({
@@ -97,7 +96,6 @@ vi.mock("@/lib/seasonal-anime", () => ({
 
 const { default: StudioPage } = await import("@/app/browse/studio/[id]/page");
 const { default: AiringPage } = await import("@/app/browse/airing/page");
-const { default: EraPage } = await import("@/app/browse/era/[decade]/page");
 const { default: SeasonPage } = await import(
   "@/app/browse/season/[year]/[season]/page"
 );
@@ -218,57 +216,6 @@ describe("放送中ページ", () => {
     expect(cards.some((card) => card.textContent?.includes("ON AIR"))).toBe(
       false,
     );
-  });
-});
-
-describe("年代ページ", () => {
-  async function renderEra(sp: Record<string, string>) {
-    render(
-      await EraPage({
-        params: Promise.resolve({ decade: "2020" }),
-        searchParams: Promise.resolve(sp),
-      }),
-    );
-  }
-
-  it("絞り込み、ページ送り・並び替えのリンクにフィルターを引き継ぐ", async () => {
-    await renderEra({ ...FILTER, sort: "date", page: "2" });
-
-    expect(shownAnimeIds()).toEqual([2]);
-    const pageLinks = linksStartingWith("/browse/era/2020?sort=date&page=");
-    expect(pageLinks.length).toBeGreaterThan(0);
-    expect(pageLinks.every(keepsFilter)).toBe(true);
-    const sortLinks = linksStartingWith("/browse/era/2020?sort=popular");
-    expect(sortLinks.length).toBeGreaterThan(0);
-    expect(sortLinks.every(keepsFilter)).toBe(true);
-  });
-
-  it("フィルターのフォームは並び順を hidden で引き継ぐ", async () => {
-    await renderEra({ ...FILTER, sort: "date" });
-
-    const form = screen.getByRole("search");
-    const sort = form.querySelector<HTMLInputElement>('input[name="sort"]');
-    expect(sort?.value).toBe("date");
-  });
-
-  it("タイトル検索の「クリア」でジャンル・配信の絞り込みを外さない", async () => {
-    await renderEra({ ...FILTER, q: "作品" });
-
-    const clear = screen.getByRole("link", { name: "クリア" });
-    expect(keepsFilter(clear.getAttribute("href") ?? "")).toBe(true);
-  });
-
-  it("タイトル検索フォームもジャンル・配信を hidden で送る", async () => {
-    await renderEra({ ...FILTER, q: "作品" });
-
-    const q = document.querySelector<HTMLInputElement>('input[name="q"]');
-    const form = q?.closest("form");
-    expect(form?.querySelector<HTMLInputElement>('input[name="genre"]')?.value).toBe(
-      "35",
-    );
-    expect(
-      form?.querySelector<HTMLInputElement>('input[name="service"]')?.value,
-    ).toBe("netflix");
   });
 });
 

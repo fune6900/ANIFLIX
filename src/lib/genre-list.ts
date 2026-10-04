@@ -6,7 +6,7 @@ import {
   getAnimeMovieByKeyword,
   getAnimeMoviesByGenre,
 } from "@/lib/tmdb";
-import { byDate, loadListPage } from "@/lib/list-page";
+import { byDate, hasPoster, loadListPage } from "@/lib/list-page";
 import type { ListPage, ListSource } from "@/lib/list-page";
 import { genreKeywordIds } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
@@ -26,11 +26,6 @@ export function genreListHref(
       ? `/browse/movies/genre/${genreId}`
       : `/browse/genre/${genreId}`;
   return sort ? withSort(path, sort) : path;
-}
-
-/** 一覧に出す作品か。票数の下限を外した代わりに、ポスターの無い作品を落とす */
-function hasPoster(item: { poster_path: string | null }): boolean {
-  return Boolean(item.poster_path);
 }
 
 /**

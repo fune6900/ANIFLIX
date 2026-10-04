@@ -24,11 +24,17 @@ interface BrowseListBodyProps {
   error: string | null;
   currentPage: number;
   totalPages: number;
+  /** グリッドの列の段（省略時は一覧共通の段）。年代の一覧は従来の段を保つ */
+  gridClassName?: string;
 }
+
+/** 一覧共通のグリッド。1920px 超は auto-fill（ポスター一覧 300px） */
+const DEFAULT_GRID_CLASS =
+  "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5";
 
 /**
  * 70 件ページングの「すべて見る」一覧の本体（フィルター・グリッド・ページ送り）。
- * アニメ映画の一覧（#91）とジャンルの一覧（#99）で共用する。見出しは各ページが持つ
+ * アニメ映画の一覧（#91）・ジャンルの一覧（#99）・年代の一覧（#100）で共用する。見出しは各ページが持つ
  */
 export default function BrowseListBody({
   basePath,
@@ -40,6 +46,7 @@ export default function BrowseListBody({
   error,
   currentPage,
   totalPages,
+  gridClassName = DEFAULT_GRID_CLASS,
 }: BrowseListBodyProps) {
   // 初期値はクエリに載せない（withSort と同じ）
   const preserve: Record<string, string> =
@@ -83,7 +90,7 @@ export default function BrowseListBody({
       )}
 
       {entries.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3 md:gap-4 xl:gap-5">
+        <div className={gridClassName}>
           {entries.map((entry) => (
             <SeasonAnimeCard key={entryKey(entry)} entry={entry} />
           ))}
