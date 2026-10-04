@@ -27,9 +27,9 @@ import type {
 } from "@/types/anilist";
 import type { AnnictCharacterProfile } from "@/types/annict";
 
-/** 出演作品の 1 ページあたりの件数（列数 2 / 3 / 5 / 6 で割り切れる） */
+/** 出演作品の 1 ページあたりの件数 */
 const WORKS_PER_PAGE = 30;
-/** 関連キャラクターの 1 ページあたりの件数（列数 5 / 10 で割り切れる） */
+/** 関連キャラクターの 1 ページあたりの件数 */
 const RELATED_PER_PAGE = 50;
 
 const WORKS_SECTION_ID = "works";
@@ -570,8 +570,7 @@ export default async function CharacterDetailPage({
                 : "登録されている出演作はない"}
             </p>
           ) : (
-            // 列数は 1 ページ 30 件を割り切る値（2 / 3 / 5 / 6）。最終行を欠けさせない
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 md:gap-4">
               {works.edges.map((edge) => (
                 <MediaEdgeCard key={edge.node.id} edge={edge} />
               ))}
@@ -612,8 +611,7 @@ export default async function CharacterDetailPage({
                 このページに表示するキャラはない
               </p>
             ) : (
-              // 列数は 1 ページ 50 件を割り切る値（5 / 10）
-              <div className="grid grid-cols-5 lg:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
                 {related.edges.map((edge) => (
                   <RelatedCharacterCard key={edge.node.id} edge={edge} />
                 ))}
