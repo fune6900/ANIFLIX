@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAnimeMovies,
   getAnimeByGenre,
-  getAnimeByKeywords,
+  getAnimeByKeyword,
   parsePageParam,
   TMDB_MAX_PAGE,
 } from "@/lib/tmdb";
-import { findGenre } from "@/lib/genres";
+import { findGenre, genreKeywordIds } from "@/lib/genres";
 import type { TMDbAnime, TMDbMovie } from "@/types/tmdb";
 
 const SECURITY_HEADERS = {
@@ -90,9 +90,8 @@ export async function GET(req: NextRequest) {
         );
       }
       let data;
-      if (genre.filterType === "keyword" && genre.keyword) {
-        const allKeywords = [genre.keyword, ...(genre.extraKeywords ?? [])];
-        data = await getAnimeByKeywords(allKeywords, page);
+      if (genre.filterType === "keyword") {
+        data = await getAnimeByKeyword(genreKeywordIds(genre), page);
       } else {
         data = await getAnimeByGenre(genreId, page);
       }

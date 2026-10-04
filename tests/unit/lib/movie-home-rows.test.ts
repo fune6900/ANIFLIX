@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { TMDbMovie, TMDbSearchResponse } from "@/types/tmdb";
-import { ANIME_GENRES } from "@/lib/genres";
+import { ANIME_GENRES, genreKeywordIds } from "@/lib/genres";
 import { ANIME_STUDIOS } from "@/lib/studios";
 
 /**
@@ -65,6 +65,9 @@ const tmdb = {
   ),
   getAnimeMovieByKeywords: vi.fn(async (_k: string[], p: number) =>
     response(pageOf(p * 3000)),
+  ),
+  getAnimeMovieByKeyword: vi.fn(async (_ids: readonly number[], p: number) =>
+    response(pageOf(p * 4000)),
   ),
 };
 
@@ -206,14 +209,17 @@ describe("ジャンル別", () => {
     expect(asked).toEqual(new Set([28, 12]));
   });
 
-  it("キーワード由来のジャンルはキーワードで探す", async () => {
+  it("キーワード由来のジャンルは固定のキーワード ID で探す（#99）", async () => {
     const isekai = ANIME_GENRES.find((g) => g.id === 9001);
     if (!isekai) throw new Error("異世界転生が定義に無い");
 
     const row = await rows.fetchMovieGenreRow(isekai);
 
-    expect(tmdb.getAnimeMovieByKeywords).toHaveBeenCalled();
-    expect(tmdb.getAnimeMovieByKeywords.mock.calls[0][0]).toContain("isekai");
+    expect(tmdb.getAnimeMovieByKeyword).toHaveBeenCalled();
+    expect(tmdb.getAnimeMovieByKeyword.mock.calls[0][0]).toEqual(
+      genreKeywordIds(isekai),
+    );
+    expect(tmdb.getAnimeMovieByKeywords).not.toHaveBeenCalled();
     expect(row.length).toBeGreaterThan(0);
   });
 });

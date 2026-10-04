@@ -5,7 +5,8 @@ import type { TMDbAnime, TMDbWatchProvidersResponse } from "@/types/tmdb";
 /**
  * 一覧ページへのフィルターの組み込み（#77）。
  *
- * 6 ファイル（popular / trending / new は [category] の 1 ファイル）を描画し、
+ * 5 ファイル（popular / trending / new は [category] の 1 ファイル）を描画し、
+ * （ジャンルの一覧は #99 で作り直し、`genre-list-pages.test.tsx` が受け持つ）
  * 絞り込みとリンクへの引き継ぎを確かめる。
  * `@/lib/tmdb` / `@/lib/seasonal-anime` / `@/lib/request-device` は自前の lib なのでモックしてよい
  * （request-device は next/headers を読むだけの薄い層）。
@@ -79,7 +80,6 @@ vi.mock("@/lib/tmdb", async (importOriginal) => ({
   getAnimeByStudio: () => getAnimeByStudio(),
   getAnimeWatchProviders: (id: number) => getAnimeWatchProviders(id),
   getAnimeByEra: () => failableList(),
-  getAnimeByGenre: () => failableList(),
   getPopularAnime: () => failableList(),
   searchTVByPage: () => listPage(),
 }));
@@ -100,9 +100,6 @@ const { default: AiringPage } = await import("@/app/browse/airing/page");
 const { default: EraPage } = await import("@/app/browse/era/[decade]/page");
 const { default: SeasonPage } = await import(
   "@/app/browse/season/[year]/[season]/page"
-);
-const { default: GenrePage } = await import(
-  "@/app/browse/genre/[genreId]/page"
 );
 const { default: CategoryPage } = await import(
   "@/app/browse/[category]/page"
@@ -291,53 +288,6 @@ describe("シーズンページ", () => {
     const nav = linksStartingWith("/browse/season/");
     expect(nav.length).toBeGreaterThan(0);
     expect(nav.every(keepsFilter)).toBe(true);
-  });
-});
-
-describe("ジャンルページ", () => {
-  async function renderGenre(sp: Record<string, string>) {
-    render(
-      await GenrePage({
-        params: Promise.resolve({ genreId: "10759" }),
-        searchParams: Promise.resolve(sp),
-      }),
-    );
-  }
-
-  it("ジャンル選択は出さず、配信サービスの選択は残す（#87）", async () => {
-    await renderGenre({});
-
-    const form = screen.getByRole("search");
-    expect(form.querySelector('[name="genre"]')).toBeNull();
-    expect(
-      screen.getByRole("combobox", { name: "配信サービス" }),
-    ).toBeInTheDocument();
-  });
-
-  it("URL の genre= は無視し、配信サービスだけで絞る（#87）", async () => {
-    await renderGenre({ ...FILTER, page: "2" });
-
-    // genre=35（コメディ）は効かない。Netflix（偶数）= 2, 4, 6
-    expect(shownAnimeIds()).toEqual([2, 4, 6]);
-  });
-
-  it("ページ送りのリンクは配信サービスを引き継ぎ、genre= は付けない（#87）", async () => {
-    await renderGenre({ ...FILTER, page: "2" });
-
-    const pageLinks = linksStartingWith("/browse/genre/10759?page=");
-    expect(pageLinks.length).toBeGreaterThan(0);
-    expect(pageLinks.every((h) => h.includes("service=netflix"))).toBe(true);
-    expect(pageLinks.some((h) => h.includes("genre="))).toBe(false);
-  });
-
-  it("genre= だけが付いていても絞り込み中として扱わない（#87）", async () => {
-    await renderGenre({ genre: "35" });
-
-    expect(shownAnimeIds()).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(
-      screen.queryByRole("link", { name: "絞り込みを解除" }),
-    ).not.toBeInTheDocument();
-    expect(getAnimeWatchProviders).not.toHaveBeenCalled();
   });
 });
 

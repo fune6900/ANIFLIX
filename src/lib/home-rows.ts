@@ -1,9 +1,10 @@
 // ホームの「シーズン / 年代 / ジャンルで探す」の行を組み立てる
 
-import { getAnimeByEra, getAnimeByGenre, getAnimeByKeywords } from "@/lib/tmdb";
+import { getAnimeByEra, getAnimeByGenre, getAnimeByKeyword } from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { ANIME_ERAS } from "@/lib/eras";
 import type { AnimeEra } from "@/lib/eras";
+import { genreKeywordIds } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import type { SeasonSlug } from "@/lib/seasons";
 import type { TMDbAnime, TMDbSearchResponse } from "@/types/tmdb";
@@ -83,9 +84,10 @@ async function fetchTwoPages(
 
 /** ジャンル 1 件分の行（TMDb ジャンル / キーワードの両方に対応） */
 export function fetchGenreRow(genre: AnimeGenre): Promise<TMDbAnime[]> {
-  if (genre.filterType === "keyword" && genre.keyword) {
-    const keywords = [genre.keyword, ...(genre.extraKeywords ?? [])];
-    return fetchTwoPages((page) => getAnimeByKeywords(keywords, page));
+  if (genre.filterType === "keyword") {
+    // 固定のキーワード ID（同義語込み）で引く。名前の先頭ヒットは別物に当たりうる（#99）
+    const ids = genreKeywordIds(genre);
+    return fetchTwoPages((page) => getAnimeByKeyword(ids, page));
   }
   return fetchTwoPages((page) => getAnimeByGenre(genre.id, page));
 }
