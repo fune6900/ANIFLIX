@@ -243,8 +243,7 @@ export interface AniListStaffSearchResponse {
   errors?: Array<{ message: string }>;
 }
 
-// --- 声優ページ（#102）: Staff とキャスト付きの作品 ---
-// `/characters`（#104）でも同じ形を使う（キャラの画像も取ってある）
+// --- 声優ページ（#102）・キャラクターページ（#104）: Staff とキャスト付きの作品 ---
 
 /** Staff（声優）。お気に入り数順・誕生日・作品のキャストで共通のフィールド */
 export interface AniListStaff {
@@ -281,6 +280,8 @@ export interface AniListCastEdge {
     image: {
       large: string | null;
     };
+    /** お気に入り数（キャラの人気順に使う。#104） */
+    favourites: number | null;
   };
   voiceActors: AniListStaff[];
 }
@@ -318,6 +319,55 @@ export interface AniListStaffPageResponse {
   data?: {
     Page?: {
       staff: AniListStaff[];
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+/**
+ * 年代別のキャスト付き作品（#104）。1 回の問い合わせで年代ごとに別名（`d1990` など）の
+ * Page を引く（`decadeCastQuery`）。別名は年代から組み立てるので、キーは任意の文字列
+ */
+export interface AniListDecadeCastResponse {
+  data?: Record<string, { media: AniListCastMedia[] } | null> | null;
+  errors?: Array<{ message: string }>;
+}
+
+// --- キャラクターページ（#104）: お気に入り数順・誕生日のキャラ ---
+
+/** キャラの代表作（人気順の先頭 1 件） */
+export interface AniListFeaturedCharacterMedia {
+  id: number;
+  title: {
+    native: string | null;
+    romaji: string | null;
+    english: string | null;
+  };
+  countryOfOrigin: string | null;
+}
+
+/** お気に入り数順・誕生日で引くキャラ */
+export interface AniListFeaturedCharacter {
+  id: number;
+  name: {
+    full: string | null;
+    native: string | null;
+  };
+  image: {
+    large: string | null;
+  };
+  favourites: number | null;
+  dateOfBirth: AniListFuzzyDate;
+  /** アニメの出演作（人気順の先頭 1 件）。漫画だけのキャラは空 */
+  media: {
+    nodes: AniListFeaturedCharacterMedia[];
+  } | null;
+}
+
+export interface AniListCharacterPageResponse {
+  data?: {
+    Page?: {
+      characters: AniListFeaturedCharacter[];
     } | null;
   };
   errors?: Array<{ message: string }>;

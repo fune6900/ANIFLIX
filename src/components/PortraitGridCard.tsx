@@ -1,16 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { VoiceActorCard } from "@/types/voice-actor-home";
+import type { PortraitCard } from "@/types/portrait-card";
 
-interface VoiceActorGridCardProps {
-  card: VoiceActorCard;
+interface PortraitGridCardProps {
+  card: PortraitCard;
 }
 
 /**
- * 声優の一覧グリッドの 1 枚（`/voice-actors/collections/[slug]`）。
- * 名前と一言（役名など）は写真の中に常に出す（ホバーの無いタッチ端末でも誰か分かる）
+ * 声優・キャラの一覧グリッドの 1 枚（`/voice-actors/collections/[slug]` /
+ * `/characters/collections/[slug]`）。
+ * 名前と一言（役名・作品名など）は画像の中に常に出す（ホバーの無いタッチ端末でも誰か分かる）
  */
-export default function VoiceActorGridCard({ card }: VoiceActorGridCardProps) {
+export default function PortraitGridCard({ card }: PortraitGridCardProps) {
   return (
     <Link href={card.href} className="group block">
       <div className="relative aspect-[2/3] rounded-sm overflow-hidden bg-gray-900">

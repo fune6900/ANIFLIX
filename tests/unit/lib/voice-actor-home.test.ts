@@ -63,6 +63,7 @@ function edge(
       id: voiceActors[0]?.id ?? 0,
       name: { full: character, native: character },
       image: { large: null },
+      favourites: null,
     },
     voiceActors,
   };

@@ -24,6 +24,9 @@ import type {
   AniListCastMediaPageResponse,
   AniListStaff,
   AniListStaffPageResponse,
+  AniListCharacterPageResponse,
+  AniListDecadeCastResponse,
+  AniListFeaturedCharacter,
   CharacterSearchResult,
 } from "@/types/anilist";
 
@@ -930,8 +933,8 @@ export async function getAniListStaffCharactersByName(
   };
 }
 
-// --- 声優ページ（#102）: Staff とキャスト付きの作品 ---
-// キャラクターページ（#104）でも使う想定。キャラの画像も取っておく
+// --- 声優ページ（#102）・キャラクターページ（#104）: Staff とキャスト付きの作品 ---
+// 今期・前クール・シリーズのキャストは両ページで同じ関数・同じ引数で引き、Data Cache を共有する
 
 /** AniListStaff を満たすフィールド集合 */
 const STAFF_FIELDS = `
@@ -959,7 +962,7 @@ const CAST_MEDIA_FIELDS = `
   characters(sort: [ROLE, RELEVANCE, ID], perPage: $castPerPage) {
     edges {
       role
-      node { id name { full native } image { large } }
+      node { id name { full native } image { large } favourites }
       voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) { ${STAFF_FIELDS} }
     }
   }
@@ -1109,10 +1112,20 @@ const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
  * 2026-10-04 に実測確認）。日付以外の文字列はクエリに入れない
  */
 export function birthdayStaffQuery(dateKey: string): string {
+  return withDateComment(STAFF_PAGE_QUERY, dateKey);
+}
+
+/** 日付（`YYYY-MM-DD`）を検証して返す。日付以外の文字列をクエリ・キャッシュキーへ入れない */
+function assertDateKey(dateKey: string): string {
   if (!DATE_KEY_PATTERN.test(dateKey)) {
     throw new Error(`invalid date key: ${JSON.stringify(dateKey)}`);
   }
-  return `${STAFF_PAGE_QUERY}\n# ${dateKey}\n`;
+  return dateKey;
+}
+
+/** クエリの末尾に日付のコメントを付け、Data Cache のエントリを日ごとに分ける */
+function withDateComment(query: string, dateKey: string): string {
+  return `${query}\n# ${assertDateKey(dateKey)}\n`;
 }
 
 /**
@@ -1132,4 +1145,221 @@ export async function getAniListBirthdayStaff(
   );
   throwOnGraphQLErrors(data.errors);
   return data.data?.Page?.staff ?? [];
+}
+
+// --- キャラクターページ（#104）---
+
+/**
+ * キャラの一覧。お気に入り数順。代表作（アニメの人気順の先頭）も 1 件だけ取る。
+ * `isBirthday` を省くと null になり、AniList は絞り込みを掛けない
+ */
+const CHARACTER_PAGE_QUERY = `
+  query ($page: Int, $perPage: Int, $isBirthday: Boolean) {
+    Page(page: $page, perPage: $perPage) {
+      characters(sort: FAVOURITES_DESC, isBirthday: $isBirthday) {
+        id
+        name { full native }
+        image { large }
+        favourites
+        dateOfBirth { year month day }
+        media(sort: POPULARITY_DESC, type: ANIME, perPage: 1) {
+          nodes { id title { native romaji english } countryOfOrigin }
+        }
+      }
+    }
+  }
+`;
+
+const TRENDING_CAST_QUERY = `
+  query ($perPage: Int, $castPerPage: Int) {
+    Page(page: 1, perPage: $perPage) {
+      media(
+        type: ANIME
+        sort: TRENDING_DESC
+        countryOfOrigin: "JP"
+        isAdult: false
+      ) {
+        ${CAST_MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+/** 公開日の新しいアニメ映画。`$before`（FuzzyDateInt）より前に公開されたもの */
+const LATEST_MOVIE_CAST_QUERY = `
+  query ($before: FuzzyDateInt, $perPage: Int, $castPerPage: Int) {
+    Page(page: 1, perPage: $perPage) {
+      media(
+        type: ANIME
+        format: MOVIE
+        countryOfOrigin: "JP"
+        isAdult: false
+        startDate_lesser: $before
+        sort: START_DATE_DESC
+      ) {
+        ${CAST_MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+/**
+ * トレンドのキャッシュ秒数（1 日）。
+ * AniList の TRENDING は直近の活動量の順で日単位でしか動かず、分間制限を節約する方を取る
+ */
+const TRENDING_CAST_CACHE_TIME = 86400;
+
+/** 年代別の名作はほぼ動かないので 1 週間持つ */
+const DECADE_CAST_CACHE_TIME = 604800;
+
+/** 年代として受け付ける範囲（10 年刻み） */
+const MIN_DECADE = 1900;
+const MAX_DECADE = 2090;
+
+/**
+ * お気に入り数の多いキャラを 1 ページ分（代表作つき）。
+ * 漫画だけのキャラ・海外作品のキャラも混ざる。絞り込みは呼び出し側で行う
+ */
+export async function getAniListPopularCharacters(
+  page = 1,
+  perPage = ANILIST_MAX_PER_PAGE,
+): Promise<AniListFeaturedCharacter[]> {
+  const data = await postAniListQuery<AniListCharacterPageResponse>(
+    CHARACTER_PAGE_QUERY,
+    { page, perPage },
+    STABLE_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.characters ?? [];
+}
+
+/** 誕生日のキャラのクエリ。末尾に日付のコメントを付ける（`birthdayStaffQuery` と同じ手法） */
+export function birthdayCharacterQuery(dateKey: string): string {
+  return withDateComment(CHARACTER_PAGE_QUERY, dateKey);
+}
+
+/**
+ * 今日が誕生日のキャラ（お気に入り数順に 1 ページ）。
+ * 「今日」は AniList のサーバー側の日付で決まる。`dateKey` はキャッシュキーを日ごとに
+ * 変えるためだけに使う（`getAniListBirthdayStaff` と同じ）
+ */
+export async function getAniListBirthdayCharacters(
+  dateKey: string,
+): Promise<AniListFeaturedCharacter[]> {
+  const data = await postAniListQuery<AniListCharacterPageResponse>(
+    birthdayCharacterQuery(dateKey),
+    { page: 1, perPage: ANILIST_MAX_PER_PAGE, isBirthday: true },
+    BIRTHDAY_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.characters ?? [];
+}
+
+/**
+ * 今週トレンドの作品（AniList の TRENDING_DESC）を、キャスト付きで取得する。
+ * 引数は固定値だけを渡す（任意の値がキャッシュキーになるため）
+ */
+export async function getAniListTrendingCast(
+  perPage = 10,
+  castPerPage = 25,
+): Promise<AniListCastMedia[]> {
+  const data = await postAniListQuery<AniListCastMediaPageResponse>(
+    TRENDING_CAST_QUERY,
+    { perPage, castPerPage },
+    TRENDING_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.media ?? [];
+}
+
+/** 日付（`YYYY-MM-DD`）を AniList の FuzzyDateInt（`YYYYMMDD`）にする */
+export function latestMovieBeforeDate(dateKey: string): number {
+  return Number(assertDateKey(dateKey).replace(/-/g, ""));
+}
+
+/**
+ * 公開日の新しいアニメ映画を、キャスト付きで取得する。
+ * `dateKey`（日本時間の今日 `YYYY-MM-DD`）より前に公開された作品。日付がキャッシュキーに入るので
+ * 日が変われば別エントリになる（新着アニメと同じ日替わり）。キャラ未登録の作品も混ざる
+ */
+export async function getAniListLatestMovieCast(
+  dateKey: string,
+  perPage = 30,
+  castPerPage = 25,
+): Promise<AniListCastMedia[]> {
+  const data = await postAniListQuery<AniListCastMediaPageResponse>(
+    LATEST_MOVIE_CAST_QUERY,
+    { before: latestMovieBeforeDate(dateKey), perPage, castPerPage },
+    STABLE_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.media ?? [];
+}
+
+function assertDecade(decade: number): number {
+  if (
+    !Number.isInteger(decade) ||
+    decade % 10 !== 0 ||
+    decade < MIN_DECADE ||
+    decade > MAX_DECADE
+  ) {
+    throw new Error(`invalid decade: ${decade}`);
+  }
+  return decade;
+}
+
+function decadeAlias(decade: number): string {
+  return `d${decade}`;
+}
+
+/**
+ * 年代ごとの人気作品（TV・映画）を、年代ごとの別名（`d1990` など）で 1 回の問い合わせにまとめる。
+ *
+ * AniList の `startDate_greater` / `startDate_lesser` は排他的な比較なので、下限は前年の
+ * 12/31 にする（年だけ登録の作品は `YYYY0000` になり、年代の初年の作品が落ちないように）。
+ * 年代は 10 年刻みの整数だけを受け付ける（クエリへ直接書くため）
+ */
+export function decadeCastQuery(decades: readonly number[]): string {
+  if (decades.length === 0) throw new Error("no decades");
+  const pages = decades.map((decade) => {
+    const d = assertDecade(decade);
+    return `
+    ${decadeAlias(d)}: Page(page: 1, perPage: $perPage) {
+      media(
+        type: ANIME
+        format_in: [TV, MOVIE]
+        countryOfOrigin: "JP"
+        isAdult: false
+        startDate_greater: ${(d - 1) * 10000 + 1231}
+        startDate_lesser: ${(d + 10) * 10000}
+        sort: POPULARITY_DESC
+      ) {
+        ${CAST_MEDIA_FIELDS}
+      }
+    }`;
+  });
+  return `
+  query ($perPage: Int, $castPerPage: Int) {${pages.join("")}
+  }
+`;
+}
+
+/**
+ * 年代別の名作（人気順）をキャスト付きで取得する。キャラは MAIN が先頭に来るので
+ * `castPerPage` は小さくてよい。年代は呼び出し側の固定値だけを渡す
+ */
+export async function getAniListDecadeCast(
+  decades: readonly number[],
+  perPage = 20,
+  castPerPage = 10,
+): Promise<Map<number, AniListCastMedia[]>> {
+  const data = await postAniListQuery<AniListDecadeCastResponse>(
+    decadeCastQuery(decades),
+    { perPage, castPerPage },
+    DECADE_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return new Map(
+    decades.map((d) => [d, data.data?.[decadeAlias(d)]?.media ?? []]),
+  );
 }
