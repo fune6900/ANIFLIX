@@ -144,11 +144,14 @@ export default function HeroSection({ items }: HeroSectionProps) {
             </span>
           </div>
 
-          {/* あらすじ */}
+          {/* あらすじ: 表示切り替えはラッパーが持つ。<p> に sm:block を載せると
+              line-clamp の display: -webkit-box が上書きされ、3 行で切れなくなる（#114） */}
           {item.overview && (
-            <p className="hidden sm:block text-gray-200 text-sm md:text-base xl:text-lg 2xl:text-xl 4xl:text-2xl leading-relaxed line-clamp-3 mb-5 drop-shadow">
-              {item.overview}
-            </p>
+            <div className="hidden sm:block mb-5">
+              <p className="text-gray-200 text-sm md:text-base xl:text-lg 2xl:text-xl 4xl:text-2xl leading-relaxed line-clamp-3 drop-shadow">
+                {item.overview}
+              </p>
+            </div>
           )}
 
           {/* ボタン */}

@@ -38,6 +38,10 @@ const ITEMS: HeroItem[] = [
 
 const AUTOPLAY_MS = 6000;
 
+/** display を決める Tailwind ユーティリティ（バリアント付きも含む） */
+const DISPLAY_UTILITY =
+  /^(?:[\w-]+:)*(?:hidden|block|inline|inline-block|flex|inline-flex|grid|inline-grid|table|contents|flow-root)$/;
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -275,6 +279,25 @@ describe("HeroSection", () => {
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(document.querySelector("iframe")).toBeNull();
+  });
+
+  it("あらすじの line-clamp を表示切り替えのクラスで潰さない（#114）", () => {
+    // `sm:block` 等は line-clamp の `display: -webkit-box` を上書きし、
+    // sm 以上で 3 行に切れなくなる（長い映画のあらすじがヘッダーの下まで伸びる）。
+    // 表示切り替えは line-clamp を持つ要素ではなく、それを包むラッパーが担う
+    render(<HeroSection items={ITEMS} />);
+
+    const synopsis = screen.getByText("あらすじA");
+    const classes = synopsis.className.split(/\s+/);
+
+    expect(classes).toContain("line-clamp-3");
+    expect(classes.filter((c) => DISPLAY_UTILITY.test(c))).toEqual([]);
+
+    // モバイルで隠す挙動は維持する（ラッパー側に移しただけ）
+    const wrapperClasses = synopsis.parentElement?.className.split(/\s+/) ?? [];
+    expect(wrapperClasses).toEqual(
+      expect.arrayContaining(["hidden", "sm:block"]),
+    );
   });
 
   it("スライドが 1 件なら切り替え UI を出さない", () => {
