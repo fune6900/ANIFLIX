@@ -227,6 +227,13 @@ describe("アニメ映画画面: 検索画面は残す", () => {
     expect(dom.textContent).not.toContain("アニメ映画TOP10");
   });
 
+  it("ページ番号だけの URL（旧デフォルト一覧のページ送り）も検索画面", async () => {
+    const dom = await renderPage({ page: "2" });
+
+    expect(dom.textContent).toContain("アニメ映画を検索");
+    expect(dom.textContent).not.toContain("アニメ映画TOP10");
+  });
+
   it("フィルターモードは検索画面", async () => {
     render(
       await MoviesPage({ searchParams: Promise.resolve({ mode: "filter" }) }),

@@ -2,14 +2,16 @@ import Link from "next/link";
 import HeroSection from "@/components/HeroSection";
 import type { HeroItem } from "@/components/HeroSection";
 import ContentRow from "@/components/ContentRow";
-import type { ContentRowItem } from "@/components/ContentRow";
 import AnimeMovieSearch, {
   isAnimeMovieSearchRequest,
 } from "@/components/AnimeMovieSearch";
 import type { AnimeMovieSearchParams } from "@/components/AnimeMovieSearch";
 import { getMovieVideos } from "@/lib/tmdb";
 import { loadAnimeMovieHome } from "@/lib/movie-home-rows";
-import type { TMDbMovie } from "@/types/tmdb";
+import {
+  toMovieCardItem,
+  toUpcomingMovieCardItem,
+} from "@/lib/movie-card-item";
 
 interface MoviesPageProps {
   searchParams: Promise<AnimeMovieSearchParams>;
@@ -28,30 +30,6 @@ function genreAllHref(genreId: number): string {
 
 /** 検索画面（キーワード未入力）への入口 */
 const SEARCH_HREF = "/browse/movies?mode=keyword";
-
-function toMovieCardItem(movie: TMDbMovie): ContentRowItem {
-  return {
-    id: movie.id,
-    title: movie.title,
-    year: movie.release_date?.split("-")[0] || undefined,
-    match:
-      movie.vote_average > 0 ? Math.round(movie.vote_average * 10) : undefined,
-    posterPath: movie.poster_path,
-    backdropPath: movie.backdrop_path,
-    overview: movie.overview,
-    href: `/movie/${movie.id}`,
-    mediaType: "movie",
-  };
-}
-
-/** 近日公開は年ではなく公開日を出す（「2026」だけでは近日の意味が無い） */
-function toUpcomingCardItem(movie: TMDbMovie): ContentRowItem {
-  const [, month, day] = movie.release_date?.split("-") ?? [];
-  return {
-    ...toMovieCardItem(movie),
-    year: month && day ? `${Number(month)}/${Number(day)} 公開` : undefined,
-  };
-}
 
 interface SectionTitleProps {
   title: string;
@@ -144,7 +122,7 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
         {home.upcoming.length > 0 && (
           <ContentRow
             title="📅 近日公開"
-            items={home.upcoming.map(toUpcomingCardItem)}
+            items={home.upcoming.map(toUpcomingMovieCardItem)}
           />
         )}
         {home.topRated.length > 0 && (

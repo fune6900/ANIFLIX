@@ -16,7 +16,7 @@ import type {
 } from "@/types/tmdb";
 import AnimeHeroTrailer from "@/components/AnimeHeroTrailer";
 import ContentRow from "@/components/ContentRow";
-import type { ContentRowItem } from "@/components/ContentRow";
+import { toRelatedMovieCardItem } from "@/lib/movie-card-item";
 import RelatedCharacters from "@/components/RelatedCharacters";
 import WatchProviders, {
   pickProviderCountry,
@@ -480,20 +480,7 @@ export default async function MovieDetailPage({
             <section className="mt-14 -mx-4 md:-mx-12">
               <ContentRow
                 title="関連作品"
-                items={relatedMovies.map(
-                  (m): ContentRowItem => ({
-                    id: m.id,
-                    title: m.title,
-                    year: m.release_date?.split("-")[0],
-                    rating: m.vote_average
-                      ? `★ ${m.vote_average.toFixed(1)}`
-                      : undefined,
-                    posterPath: m.poster_path ?? null,
-                    backdropPath: m.backdrop_path ?? null,
-                    overview: m.overview ?? undefined,
-                    href: `/movie/${m.id}`,
-                  }),
-                )}
+                items={relatedMovies.map(toRelatedMovieCardItem)}
               />
             </section>
           )}

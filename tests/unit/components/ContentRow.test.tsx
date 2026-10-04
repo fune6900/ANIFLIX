@@ -1,7 +1,34 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
-import ContentRow from "@/components/ContentRow";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import type { ContentRowItem } from "@/components/ContentRow";
+
+/**
+ * ホバープレビューの URL 組み立て（`@/lib/video-preview`）は自前の lib なのでスパイする。
+ * fetch 自体はモックしない（testing.md: コンポーネントのテストで fetch を素でモックしない）。
+ * 返す URL を中身だけの data: URL にして、通信を発生させずに配線だけを見る
+ */
+const previewVideoUrl = vi.fn(
+  (_id: number, _mediaType?: "tv" | "movie") =>
+    'data:application/json,{"key":null}',
+);
+
+vi.mock("@/lib/video-preview", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/video-preview")>();
+  return {
+    ...actual,
+    previewVideoUrl: (id: number, mediaType?: "tv" | "movie") =>
+      previewVideoUrl(id, mediaType),
+  };
+});
+
+const { default: ContentRow } = await import("@/components/ContentRow");
 
 /**
  * ホームの横スクロール行。
@@ -23,6 +50,55 @@ const VOICE_ACTOR: ContentRowItem = {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+  previewVideoUrl.mockClear();
+});
+
+describe("ContentRow のホバープレビュー", () => {
+  function hoverCard(href: string) {
+    const link = document.querySelector(`a[href="${href}"]`);
+    const card = link?.firstElementChild;
+    if (!card) throw new Error(`${href} のカードが無い`);
+    fireEvent.mouseEnter(card);
+    // 800ms ホバーでプレビューを開き、動画を取りに行く
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+  }
+
+  it("映画のカードは映画の動画を引く（TV と ID が衝突するため）", () => {
+    vi.useFakeTimers();
+    const movie: ContentRowItem = {
+      id: 129,
+      title: "千と千尋の神隠し",
+      posterPath: "/p.jpg",
+      backdropPath: "/b.jpg",
+      href: "/movie/129",
+      mediaType: "movie",
+    };
+    render(<ContentRow title="🆕 最新作" items={[movie]} />);
+
+    hoverCard("/movie/129");
+
+    expect(previewVideoUrl).toHaveBeenCalledWith(129, "movie");
+  });
+
+  it("mediaType の無いカードは TV の動画を引く（既存の挙動）", () => {
+    vi.useFakeTimers();
+    const anime: ContentRowItem = {
+      id: 1429,
+      title: "進撃の巨人",
+      posterPath: "/p.jpg",
+      backdropPath: "/b.jpg",
+      href: "/anime/1429",
+    };
+    render(<ContentRow title="📈 今週のトレンド" items={[anime]} />);
+
+    hoverCard("/anime/1429");
+
+    expect(previewVideoUrl).toHaveBeenCalledTimes(1);
+    expect(previewVideoUrl.mock.calls[0][1] ?? "tv").toBe("tv");
+  });
 });
 
 describe("ContentRow の声優カード", () => {
@@ -36,7 +112,11 @@ describe("ContentRow の声優カード", () => {
     expect(name).toBeVisible();
 
     // jsdom は Tailwind を評価しない。スマホで隠すクラスが祖先に無いことを見る
-    for (let el: HTMLElement | null = name; el && el !== photo; el = el.parentElement) {
+    for (
+      let el: HTMLElement | null = name;
+      el && el !== photo;
+      el = el.parentElement
+    ) {
       expect(el.className.split(/\s+/)).not.toContain("hidden");
     }
   });
