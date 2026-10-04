@@ -74,6 +74,22 @@ describe("アニメ映画の取得", () => {
     expect(q.get("page")).toBe("3");
   });
 
+  it("ジャンル: 既定では除外ジャンルを付けない", async () => {
+    const q = (await requested((m) => m.getAnimeMoviesByGenre(28, 1)))
+      .searchParams;
+
+    expect(q.has("without_genres")).toBe(false);
+  });
+
+  it("ジャンル: 読み替え先の合併を重ならない区分に割るため、先行ジャンルを除外できる（#91）", async () => {
+    const q = (await requested((m) => m.getAnimeMoviesByGenre(12, 2, [28])))
+      .searchParams;
+
+    expect(q.get("with_genres")).toBe("16,12");
+    expect(q.get("without_genres")).toBe("28");
+    expect(q.get("page")).toBe("2");
+  });
+
   it("スタジオ: 制作会社で絞ったアニメ映画", async () => {
     const url = await requested((m) => m.getAnimeMoviesByStudio(10342, 1));
 

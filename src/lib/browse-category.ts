@@ -2,6 +2,8 @@
 
 import {
   TMDB_MAX_PAGE,
+  TMDB_PAGE_SIZE,
+  TMDB_REACHABLE_RESULTS,
   getNewAnime,
   getPopularAnime,
   getTrendingAnime,
@@ -12,12 +14,10 @@ import type { TMDbAnime, TMDbSearchResponse } from "@/types/tmdb";
 /** トレンド・新着の 1 ページあたりの件数（デバイス別件数より優先する） */
 export const WIDE_PAGE_SIZE = 70;
 
-/** TMDb の 1 ページあたりの件数 */
-const TMDB_PAGE_SIZE = 20;
 
 /** TMDb が返す最後の件（500 ページ × 20 件）まで届く wide ページ数 */
 const MAX_WIDE_PAGE = Math.ceil(
-  (TMDB_MAX_PAGE * TMDB_PAGE_SIZE) / WIDE_PAGE_SIZE,
+  TMDB_REACHABLE_RESULTS / WIDE_PAGE_SIZE,
 );
 
 /**
@@ -179,7 +179,7 @@ async function loadWindowPage(
   }
 
   // TMDb は 500 ページ（= 10000 件）より先を返さない
-  const reachable = Math.min(totalResults, TMDB_MAX_PAGE * TMDB_PAGE_SIZE);
+  const reachable = Math.min(totalResults, TMDB_REACHABLE_RESULTS);
   return {
     page,
     results,

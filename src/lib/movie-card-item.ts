@@ -5,6 +5,7 @@
 // 映画を ContentRow に並べる画面はここを通すこと
 
 import type { ContentRowItem } from "@/components/ContentRow";
+import type { SeasonalEntry } from "@/lib/seasonal-anime";
 import type { TMDbMovie } from "@/types/tmdb";
 
 /** アニメ映画画面（/browse/movies）のカード */
@@ -47,4 +48,12 @@ export function toRelatedMovieCardItem(movie: TMDbMovie): ContentRowItem {
     href: `/movie/${movie.id}`,
     mediaType: "movie",
   };
+}
+
+/**
+ * 一覧グリッド（SeasonAnimeCard）の 1 件。kind "movie" で映画の詳細ページへ飛び、
+ * フィルターも映画の配信情報・キーワードを引く（TV の ID で引かない）
+ */
+export function toMovieEntry(movie: TMDbMovie): SeasonalEntry {
+  return { kind: "movie", movie };
 }

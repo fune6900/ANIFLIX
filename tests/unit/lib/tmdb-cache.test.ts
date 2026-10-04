@@ -71,6 +71,10 @@ describe("TMDb のキャッシュ方針", () => {
     expect(await policyFor((m) => m.getAnimeMoviesByGenre(28, 1))).toBe(
       "revalidate:1800",
     );
+    // 除外ジャンルは ANIME_GENRES の読み替え表からしか来ない（固定の語彙）
+    expect(await policyFor((m) => m.getAnimeMoviesByGenre(12, 1, [28]))).toBe(
+      "revalidate:1800",
+    );
     expect(await policyFor((m) => m.getAnimeMoviesByStudio(10342, 1))).toBe(
       "revalidate:1800",
     );
