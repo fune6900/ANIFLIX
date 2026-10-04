@@ -189,7 +189,7 @@ export default function ContentRow(props: any) { ... }
 
 ### フォームのフィールドは `auto-fill` を使う（`auto-fit` は使わない）
 
-フィルターパネル（`src/app/search/page.tsx` / `src/app/browse/movies/page.tsx`）は
+フィルターパネル（`src/app/search/page.tsx` / `src/components/AnimeMovieSearch.tsx`）は
 フィールド数が 2〜3 で固定。`auto-fill` は空トラックを残すので **フィールドの幅が
 1920px 時点と同じまま**になる。`auto-fit` は空トラックを畳んで残りを引き伸ばすため、
 3440px で `<select>` が 1000px を超える。パネルの背景が余るのは正しい挙動。
