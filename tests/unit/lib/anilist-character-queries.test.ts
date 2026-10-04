@@ -70,3 +70,17 @@ describe("decadeCastQuery", () => {
     expect(() => decadeCastQuery([])).toThrow();
   });
 });
+
+describe("キャストのクエリ（声優ページと共有）", () => {
+  it("キャラのお気に入り数を取る（今期放送中・前クールの人気キャラ・年代の並びに使う）", () => {
+    // キャストの項目（CAST_MEDIA_FIELDS）は今期・前クール・シリーズ・トレンド・映画・年代で共有。
+    // 公開されている組み立て関数（年代）を通して、同じ項目にキャラの favourites があることを確かめる
+    expect(decadeCastQuery([1990]).replace(/\s+/g, " ")).toContain(
+      "node { id name { full native } image { large } favourites }",
+    );
+  });
+
+  it("お気に入り数順・誕生日のキャラもお気に入り数を取る", () => {
+    expect(birthdayCharacterQuery("2026-10-04")).toMatch(/^\s+favourites$/m);
+  });
+});

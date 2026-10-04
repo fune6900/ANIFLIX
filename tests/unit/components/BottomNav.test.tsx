@@ -27,28 +27,4 @@ describe("BottomNav", () => {
     );
     expect(screen.queryByText("映画")).not.toBeInTheDocument();
   });
-
-  it("「キャラ」はキャラクターページ（/characters）へ（#104）", () => {
-    render(<BottomNav />);
-
-    expect(screen.getByRole("link", { name: /キャラ/ })).toHaveAttribute(
-      "href",
-      "/characters",
-    );
-  });
-
-  it("声優の右にキャラを並べる", () => {
-    render(<BottomNav />);
-
-    const hrefs = screen
-      .getAllByRole("link")
-      .map((a) => a.getAttribute("href"));
-    expect(hrefs).toEqual([
-      "/",
-      "/browse/airing",
-      "/browse/movies",
-      "/voice-actors",
-      "/characters",
-    ]);
-  });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Mock } from "vitest";
 import type {
   AniListCastEdge,
   AniListCastMedia,
@@ -120,7 +121,10 @@ const PREVIOUS_SEASON: AniListCastMedia[] = [
 
 function franchiseMedia(base: number, search: string): AniListCastMedia[] {
   return [
+    // 出てきた順に並べるだけでは「出演作品数の多い順」にならないよう、
+    // 1 作品だけのキャラを 2 作品に出るキャラより先に置く
     media(base + 1, `${search} シリーズ${base}`, [
+      edge("MAIN", base + 4, `単発主人公${base}`),
       edge("MAIN", base + 1, `主人公${base}`),
       edge("SUPPORTING", base + 2, `脇役${base}`),
     ]),
@@ -336,12 +340,34 @@ vi.mock("@/lib/seasonal-anime", async (importOriginal) => {
   return { ...actual, fetchSeasonalAnime };
 });
 
+/** 失敗を差し込んだモックを、元の実装へ戻す関数を作る */
+function restorer<T extends (...args: never[]) => unknown>(
+  fn: Mock<T>,
+): () => void {
+  const impl = fn.getMockImplementation();
+  return () => {
+    if (impl) fn.mockImplementation(impl);
+  };
+}
+
+/** 失敗を差し込むテストの後で、各モックを元の実装へ戻す */
+const RESTORE_IMPLEMENTATIONS = [
+  restorer(anilist.getAniListFranchiseCast),
+  restorer(anilist.getAniListPopularCharacters),
+  restorer(anilist.getAniListBirthdayCharacters),
+  restorer(anilist.getAniListLatestMovieCast),
+  restorer(anilist.getAniListTrendingCast),
+  restorer(anilist.getAniListDecadeCast),
+  restorer(fetchSeasonalAnime),
+];
+
 const home = await import("@/lib/character-home");
 
 beforeEach(() => {
   vi.clearAllMocks();
   // 失敗を差し込んだテストが途中で落ちても、次のテストへ持ち越さない
   anilist.getAniListSeasonCast.mockImplementation(seasonCast);
+  for (const restore of RESTORE_IMPLEMENTATIONS) restore();
   // 失敗した行のログ（console.error）でテストの出力を埋めない
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -481,12 +507,18 @@ describe("loadCharacterHome: 各行の中身", () => {
 
     // ONE PIECE（MAIN 以外も含める）: 2 作品に出る主人公が先頭、脇役も入る
     const onePiece = rowOf(rows, "franchise-one-piece");
-    expect(names(onePiece)).toEqual(["主人公3000", "脇役3000", "新主人公3000"]);
+    expect(names(onePiece)).toEqual([
+      "主人公3000",
+      "単発主人公3000",
+      "脇役3000",
+      "新主人公3000",
+    ]);
     expect(onePiece.cards[0].note).toContain("2作品");
 
     // プリキュア（作品が多いので MAIN だけ）: 脇役は入らない
     expect(names(rowOf(rows, "franchise-precure"))).toEqual([
       "主人公5000",
+      "単発主人公5000",
       "新主人公5000",
     ]);
   });
@@ -532,6 +564,21 @@ describe("loadCharacterHome: 各行の中身", () => {
     expect(row.title).toBe("🎂 今日が誕生日のキャラ");
     expect(names(row)).toEqual(["キャラ41", "キャラ43"]);
     expect(row.cards[0].note).toBe("代表作41");
+  });
+
+  it("誕生日: 先頭のキャラと同じ月日のキャラだけを残す（月だけ・日だけ一致は入れない）", async () => {
+    anilist.getAniListBirthdayCharacters.mockResolvedValueOnce([
+      character(45, { birth: { year: null, month: 10, day: 4 } }),
+      character(46, { birth: { year: null, month: 10, day: 3 } }),
+      character(47, { birth: { year: null, month: 11, day: 4 } }),
+      character(48, { birth: { year: null, month: 10, day: 4 } }),
+      character(49, { birth: { year: null, month: 9, day: 30 } }),
+    ]);
+
+    const row = rowOf((await home.loadCharacterHome()).rows, "birthdays");
+
+    expect(row.title).toBe("🎂 今日が誕生日のキャラ");
+    expect(names(row)).toEqual(["キャラ45", "キャラ48"]);
   });
 
   it("誕生日: 返ってきた誕生日が日本の今日でなければ、見出しにその日付を出す", async () => {
@@ -632,6 +679,95 @@ describe("loadCharacterHome: Hero", () => {
     expect(hero[2].mainCharacters).toEqual(["前主人公A"]);
 
   });
+});
+
+/** 取得元ごとに、失敗させた時に空になるべき行 */
+const SOURCE_FAILURES: Array<{
+  source: string;
+  fail: () => void;
+  emptied: (slug: string) => boolean;
+}> = [
+  {
+    source: "今期のキャスト",
+    fail: () =>
+      anilist.getAniListSeasonCast.mockImplementation(async (year, season) => {
+        if (year === 2026 && season === "FALL") throw new Error("boom");
+        return PREVIOUS_SEASON;
+      }),
+    emptied: (slug) => ["airing", "leads"].includes(slug),
+  },
+  {
+    source: "前クールのキャスト",
+    fail: () =>
+      anilist.getAniListSeasonCast.mockImplementation(async (year, season) => {
+        if (season === "SUMMER") throw new Error("boom");
+        return seasonCast(year, season);
+      }),
+    emptied: (slug) => slug === "previous-season",
+  },
+  {
+    source: "シリーズのキャスト",
+    fail: () =>
+      anilist.getAniListFranchiseCast.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug.startsWith("franchise-"),
+  },
+  {
+    source: "お気に入り数順のキャラ",
+    fail: () =>
+      anilist.getAniListPopularCharacters.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug === "ranking",
+  },
+  {
+    source: "誕生日のキャラ",
+    fail: () =>
+      anilist.getAniListBirthdayCharacters.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug === "birthdays",
+  },
+  {
+    source: "最新アニメ映画",
+    fail: () =>
+      anilist.getAniListLatestMovieCast.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug === "latest-movies",
+  },
+  {
+    source: "トレンド",
+    fail: () =>
+      anilist.getAniListTrendingCast.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug === "trending",
+  },
+  {
+    source: "年代",
+    fail: () => anilist.getAniListDecadeCast.mockRejectedValue(new Error("boom")),
+    emptied: (slug) => slug.startsWith("era-"),
+  },
+  {
+    source: "今期の作品一覧（Hero）",
+    fail: () => fetchSeasonalAnime.mockRejectedValue(new Error("boom")),
+    emptied: () => false,
+  },
+];
+
+describe("loadCharacterHome: 取得元ごとの失敗の隔離", () => {
+  for (const { source, fail, emptied } of SOURCE_FAILURES) {
+    it(`${source}が失敗しても、その行だけが空になりページは返る`, async () => {
+      fail();
+
+      const { hero, rows } = await home.loadCharacterHome();
+
+      for (const row of rows) {
+        if (emptied(row.slug)) {
+          expect(row.cards, row.slug).toEqual([]);
+        } else {
+          expect(row.cards.length, row.slug).toBeGreaterThan(0);
+        }
+      }
+      // 今期のキャストが落ちたら特集行は出さない。それ以外では 5 行出る
+      expect(rows.filter((r) => r.slug.startsWith("work-")).length).toBe(
+        source === "今期のキャスト" ? 0 : 5,
+      );
+      expect(hero.length).toBe(source === "今期の作品一覧（Hero）" ? 0 : 6);
+    });
+  }
 });
 
 describe("loadCharacterHome: 失敗の隔離と問い合わせ回数", () => {
