@@ -6,10 +6,8 @@ export interface AnimeGenre {
   /** genre  → TMDb genre ID でフィルタ
    *  keyword → TMDb keyword でフィルタ */
   filterType: "genre" | "keyword";
-  /** filterType === "keyword" のときに検索するキーワード文字列（検索画面の名前検索用） */
+  /** filterType === "keyword" の代表のキーワード名（読む人向けのラベル。取得には keywordIds を使う） */
   keyword?: string;
-  /** 追加キーワード（OR 検索。検索画面の名前検索用）*/
-  extraKeywords?: string[];
   /**
    * filterType === "keyword" のときに使う TMDb のキーワード ID（OR）。
    * 名前で検索して先頭ヒットを使うと、先頭に別物が来た時に静かに 0 件になる
@@ -135,7 +133,6 @@ const KEYWORD_BASED: AnimeGenre[] = [
     id: 9004,
     filterType: "keyword",
     keyword: "sports",
-    extraKeywords: ["sport", "baseball", "basketball", "volleyball", "soccer"],
     keywordIds: [
       6075, // sports
       333328, // sport

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 import type { TMDbMovie } from "@/types/tmdb";
 import { ANIME_GENRES } from "@/lib/genres";
 import { ANIME_STUDIOS } from "@/lib/studios";
@@ -10,8 +10,8 @@ import type { ContentRowItem } from "@/components/ContentRow";
  * アニメ映画画面（`/browse/movies`）をトップ画面と同じ構成にする（#90）。
  *
  * 行の中身の組み立ては `tests/unit/lib/movie-home-rows.test.ts` が受け持つ。
- * ここでは並び順・遷移先・カルーセルと、検索画面を壊していないことを見る。
- * `@/lib/movie-home-rows` / `@/lib/tmdb` / `@/lib/anime-search` は自前の lib なのでモックする。
+ * ここでは並び順・遷移先・カルーセルと、ページ内に検索を持たないこと（#101）を見る。
+ * `@/lib/movie-home-rows` / `@/lib/tmdb` は自前の lib なのでモックする。
  */
 
 function movie(id: number): TMDbMovie {
@@ -56,29 +56,13 @@ vi.mock("@/lib/movie-home-rows", async (importOriginal) => {
   return { ...actual, loadAnimeMovieHome: async () => HOME };
 });
 
-const getAnimeMovies = vi.fn(async () => ({
-  page: 1,
-  total_pages: 1,
-  total_results: 1,
-  results: [movie(9999)],
-}));
-
 vi.mock("@/lib/tmdb", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/tmdb")>();
   return {
     ...actual,
     getMovieVideos: async () => [],
-    getAnimeMovies: () => getAnimeMovies(),
   };
 });
-
-vi.mock("@/lib/anime-search", () => ({
-  searchMovieKeyword: async () => ({
-    results: [movie(8888)],
-    totalResults: 1,
-    totalPages: 1,
-  }),
-}));
 
 // 例外 8: 実物を描いたまま、行に渡った items を捕まえる（#96 のレビューで残った穴）
 vi.mock("@/components/ContentRow", async (importOriginal) => {
@@ -87,7 +71,7 @@ vi.mock("@/components/ContentRow", async (importOriginal) => {
   return { ...actual, default: vi.fn(actual.default) };
 });
 
-// 検索画面のタブ・入力はクライアントコンポーネントで useRouter を使う（例外 3）
+// HeroSection 等のクライアントコンポーネントが useRouter を使う（例外 3）
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/browse/movies",
@@ -224,39 +208,28 @@ describe("アニメ映画画面: トップ画面と同じ構成", () => {
     expect(dom.textContent).toContain(HOME.hero[0].title);
   });
 
-  it("アニメ映画の検索画面へ入れる", () => {
-    expect(hrefs(dom)).toContain("/browse/movies?mode=keyword");
+  it("ページ内に検索への入口を置かない（検索はヘッダーに一本化。#101）", () => {
+    expect(hrefs(dom).some((h) => h.startsWith("/browse/movies?"))).toBe(false);
+    expect(dom.querySelector("input")).toBeNull();
+    expect(dom.textContent).not.toContain("アニメ映画を検索");
   });
 });
 
-describe("アニメ映画画面: 検索画面は残す", () => {
-  it("キーワードがあれば検索結果を出す", async () => {
-    const dom = await renderPage({ q: "君の名は" });
+describe("アニメ映画画面: 検索画面は持たない（#101）", () => {
+  const legacyQueries: Params[] = [
+    { mode: "keyword" },
+    { mode: "filter" },
+    { page: "2" },
+    { genre: "16", sort: "vote_average.desc" },
+  ];
 
-    expect(dom.textContent).toContain("アニメ映画を検索");
-    expect(hrefs(dom)).toContain("/movie/8888");
-  });
+  it.each(legacyQueries)(
+    "旧検索画面のクエリ %o でもホームを出す",
+    async (params) => {
+      const dom = await renderPage(params);
 
-  it("キーワード未入力の検索モードでも検索画面を出す", async () => {
-    const dom = await renderPage({ mode: "keyword" });
-
-    expect(dom.textContent).toContain("アニメ映画を検索");
-    expect(dom.textContent).not.toContain("アニメ映画TOP10");
-  });
-
-  it("ページ番号だけの URL（旧デフォルト一覧のページ送り）も検索画面", async () => {
-    const dom = await renderPage({ page: "2" });
-
-    expect(dom.textContent).toContain("アニメ映画を検索");
-    expect(dom.textContent).not.toContain("アニメ映画TOP10");
-  });
-
-  it("フィルターモードは検索画面", async () => {
-    render(
-      await MoviesPage({ searchParams: Promise.resolve({ mode: "filter" }) }),
-    );
-
-    expect(screen.getByText("アニメ映画を検索")).toBeInTheDocument();
-    cleanup();
-  });
+      expect(dom.textContent).toContain("アニメ映画TOP10");
+      expect(dom.textContent).not.toContain("アニメ映画を検索");
+    },
+  );
 });

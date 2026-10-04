@@ -122,19 +122,3 @@ describe("アニメ映画の取得", () => {
     expect(url.pathname).toBe("/3/movie/129/videos");
   });
 });
-
-describe("discoverAnimeMovie のジャンル", () => {
-  it("TV 専用ジャンルは映画のジャンルに読み替える（そのままだと 0 件）", async () => {
-    const q = (await requested((m) => m.discoverAnimeMovie({ genreId: 10759 })))
-      .searchParams;
-
-    expect(q.get("with_genres")).toBe("16,28");
-  });
-
-  it("映画と共通のジャンルはそのまま", async () => {
-    const q = (await requested((m) => m.discoverAnimeMovie({ genreId: 35 })))
-      .searchParams;
-
-    expect(q.get("with_genres")).toBe("16,35");
-  });
-});

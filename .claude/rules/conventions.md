@@ -53,7 +53,11 @@ src/
     movie/[id]/page.tsx         映画詳細
     voice-actors/page.tsx       声優一覧
     voice-actors/[id]/page.tsx  声優詳細
-    search/page.tsx             検索
+    search/page.tsx             旧検索画面（?q= を search/anime へ redirect）
+    search/anime/page.tsx       ヘッダー検索の結果画面（4 部門で components/SearchResults を共有）
+    search/movies/page.tsx
+    search/voice-actors/page.tsx
+    search/characters/page.tsx
     browse/                     カテゴリ別ブラウズ
       movies/latest/            アニメ映画の最新作（「すべて見る」の専用ページ）
       movies/genre/[genreId]/   アニメ映画のジャンル別（「すべて見る」の専用ページ）
@@ -189,7 +193,7 @@ export default function ContentRow(props: any) { ... }
 
 ### フォームのフィールドは `auto-fill` を使う（`auto-fit` は使わない）
 
-フィルターパネル（`src/app/search/page.tsx` / `src/components/AnimeMovieSearch.tsx`）は
+フィルターパネル（`src/components/BrowseFilterForm.tsx`）は
 フィールド数が 2〜3 で固定。`auto-fill` は空トラックを残すので **フィールドの幅が
 1920px 時点と同じまま**になる。`auto-fit` は空トラックを畳んで残りを引き伸ばすため、
 3440px で `<select>` が 1000px を超える。パネルの背景が余るのは正しい挙動。

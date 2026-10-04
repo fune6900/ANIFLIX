@@ -16,7 +16,6 @@ import type {
   TMDbTVKeywordsResponse,
   TMDbMovieKeywordsResponse,
 } from "@/types/tmdb";
-import { movieGenreIdsFor } from "@/lib/movie-genres";
 import { movieSortBy, tvSortBy } from "@/lib/list-sort";
 import type { ListSort } from "@/lib/list-sort";
 
@@ -261,43 +260,6 @@ export async function discoverAnime(
   }
 
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query, 0);
-}
-
-/** 映画版 discover 用パラメータ */
-export interface DiscoverMovieParams {
-  genreId?: number;
-  /** YYYY-MM-DD */
-  dateFrom?: string;
-  dateTo?: string;
-  sortBy?: string;
-  page?: number;
-}
-
-/** 詳細条件で日本のアニメ映画を検索 */
-export async function discoverAnimeMovie(
-  params: DiscoverMovieParams,
-): Promise<TMDbSearchResponse<TMDbMovie>> {
-  const query: Record<string, string> = {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: params.sortBy ?? "popularity.desc",
-    page: String(params.page ?? 1),
-  };
-
-  if (params.genreId) {
-    // TV 専用のジャンル（10759 等）は映画に無く、そのままだと 0 件になる。
-    // 読み替え先が複数あっても with_genres では OR にできないため先頭（主たる側）で絞る
-    const [movieGenreId] = movieGenreIdsFor(params.genreId);
-    query.with_genres = `${ANIMATION_GENRE_ID},${movieGenreId}`;
-  }
-  if (params.dateFrom) {
-    query["primary_release_date.gte"] = params.dateFrom;
-  }
-  if (params.dateTo) {
-    query["primary_release_date.lte"] = params.dateTo;
-  }
-
-  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query, 0);
 }
 
 // アニメ検索（サーバーサイド用）
@@ -607,22 +569,6 @@ export async function getAnimeByKeyword(
     query,
     DISCOVER_CACHE_TIME,
   );
-}
-
-/** 複数キーワード名から ID を解決し OR 検索で日本アニメを取得 */
-export async function getAnimeByKeywords(
-  keywords: string[],
-  page = 1,
-  options?: KeywordDiscoverOptions,
-): Promise<TMDbSearchResponse<TMDbAnime>> {
-  const ids = (
-    await Promise.all(keywords.map((kw) => resolveKeywordId(kw)))
-  ).filter((id): id is number => id !== null);
-
-  if (ids.length === 0) {
-    return { page: 1, results: [], total_pages: 0, total_results: 0 };
-  }
-  return getAnimeByKeyword(ids, page, options);
 }
 
 /** キーワード ID（複数可・OR 検索）で日本アニメ映画を取得 */

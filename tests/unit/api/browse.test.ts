@@ -35,14 +35,12 @@ const response = () => ({
 
 const getAnimeByKeyword = vi.fn(async (..._a: unknown[]) => response());
 const getAnimeByGenre = vi.fn(async (..._a: unknown[]) => response());
-const getAnimeByKeywords = vi.fn(async (..._a: unknown[]) => response());
 const resolveKeywordId = vi.fn(async (..._a: unknown[]) => 1);
 
 vi.mock("@/lib/tmdb", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tmdb")>()),
   getAnimeByKeyword: (...a: unknown[]) => getAnimeByKeyword(...a),
   getAnimeByGenre: (...a: unknown[]) => getAnimeByGenre(...a),
-  getAnimeByKeywords: (...a: unknown[]) => getAnimeByKeywords(...a),
   resolveKeywordId: (...a: unknown[]) => resolveKeywordId(...a),
 }));
 
@@ -55,7 +53,6 @@ function call(query: string) {
 afterEach(() => {
   getAnimeByKeyword.mockClear();
   getAnimeByGenre.mockClear();
-  getAnimeByKeywords.mockClear();
   resolveKeywordId.mockClear();
 });
 
@@ -68,7 +65,6 @@ describe("/api/browse?type=genre", () => {
 
     expect(res.status).toBe(200);
     expect(getAnimeByKeyword).toHaveBeenCalledWith(genreKeywordIds(mecha), 2);
-    expect(getAnimeByKeywords).not.toHaveBeenCalled();
     expect(resolveKeywordId).not.toHaveBeenCalled();
     const body = await res.json();
     expect(body.items.map((i: { href: string }) => i.href)).toEqual([

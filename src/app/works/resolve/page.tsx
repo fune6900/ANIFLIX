@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { isJapaneseAnimeTV, searchAnime } from "@/lib/tmdb";
 import { getSearchTitleVariants, stripSeasonSuffix } from "@/lib/title-strip";
+import { searchResultsHref } from "@/lib/search-results";
 
 interface PageProps {
   searchParams: Promise<{ title?: string; aniListId?: string }>;
@@ -41,5 +42,5 @@ export default async function WorksResolvePage({ searchParams }: PageProps) {
   if (targetId !== null) {
     redirect(`/anime/${targetId}`);
   }
-  redirect(`/search?q=${encodeURIComponent(stripSeasonSuffix(title))}`);
+  redirect(searchResultsHref("anime", stripSeasonSuffix(title)));
 }
