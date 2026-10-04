@@ -300,7 +300,18 @@ export async function getAnimeCredits(
   return fetchTMDb<{ cast: TMDbCastMember[] }>(
     `/tv/${animeId}/credits`,
     {},
-    3600,
+    DETAIL_CACHE_TIME,
+  );
+}
+
+/** 映画のキャストを取得（声優ページの「最新アニメ映画の声優」用） */
+export async function getMovieCredits(
+  movieId: number,
+): Promise<{ cast: TMDbCastMember[] }> {
+  return fetchTMDb<{ cast: TMDbCastMember[] }>(
+    `/movie/${movieId}/credits`,
+    {},
+    DETAIL_CACHE_TIME,
   );
 }
 

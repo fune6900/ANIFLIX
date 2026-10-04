@@ -131,4 +131,23 @@ describe("ContentRow の声優カード", () => {
 
     expect(screen.getByText("花澤香菜")).toBeInTheDocument();
   });
+
+  it("TMDb 以外の写真（AniList）は imageUrl をそのまま使い、写真の中に名前を出す（#102）", () => {
+    const url = "https://s4.anilist.co/file/anilistcdn/staff/large/n95185.jpg";
+    render(
+      <ContentRow
+        title="🏆 人気声優ランキング"
+        items={[{ ...VOICE_ACTOR, posterPath: null, imageUrl: url }]}
+      />,
+    );
+
+    const img = screen.getByAltText("花澤香菜");
+    // テストでは next.config の unoptimized が効かず /_next/image?url= に包まれる。
+    // TMDb の画像サイズが付かず、元の URL のまま渡っていることを見る
+    expect(decodeURIComponent(img.getAttribute("src") ?? "")).toContain(
+      `url=${url}&`,
+    );
+    const photo = img.parentElement as HTMLElement; // getByAltText は img を返すので親は必ずある
+    expect(within(photo).getByText("花澤香菜")).toBeVisible();
+  });
 });

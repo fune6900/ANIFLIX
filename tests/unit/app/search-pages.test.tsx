@@ -126,6 +126,16 @@ vi.mock("@/lib/seasonal-cast", () => ({
   aggregateSeasonalCast: async () => [],
 }));
 
+// 声優ページの行（#102）。中身は tests/unit/lib/voice-actor-home.test.ts が見る
+vi.mock("@/lib/voice-actor-home", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/voice-actor-home")>();
+  return {
+    ...actual,
+    loadVoiceActorHome: async () => ({ hero: [], rows: [] }),
+  };
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
 });

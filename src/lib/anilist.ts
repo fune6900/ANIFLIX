@@ -20,6 +20,10 @@ import type {
   AniListSearchCharactersResponse,
   AniListStaffCharacterEdge,
   AniListStaffSearchResponse,
+  AniListCastMedia,
+  AniListCastMediaPageResponse,
+  AniListStaff,
+  AniListStaffPageResponse,
   CharacterSearchResult,
 } from "@/types/anilist";
 
@@ -495,7 +499,7 @@ const MEDIA_CHARACTERS_QUERY = `
  */
 async function postAniListQuery<T>(
   query: string,
-  variables: Record<string, number>,
+  variables: Record<string, string | number | boolean>,
   revalidate: number,
 ): Promise<T> {
   let response: Response;
@@ -924,4 +928,190 @@ export async function getAniListStaffCharactersByName(
     edges: best.characters?.edges ?? [],
     pageInfo: best.characters?.pageInfo ?? EMPTY_PAGE_INFO,
   };
+}
+
+// --- 声優ページ（#102）: Staff とキャスト付きの作品 ---
+// キャラクターページ（#104）でも使う想定。キャラの画像も取っておく
+
+/** AniListStaff を満たすフィールド集合 */
+const STAFF_FIELDS = `
+  id
+  name { full native }
+  image { large }
+  languageV2
+  primaryOccupations
+  yearsActive
+  favourites
+  dateOfBirth { year month day }
+`;
+
+/**
+ * AniListCastMedia を満たすフィールド集合。`$castPerPage` を宣言したクエリで使うこと。
+ * キャラは MAIN → SUPPORTING の順（同じ役どころの中は作品内の重要度順）
+ */
+const CAST_MEDIA_FIELDS = `
+  id
+  title { native romaji english }
+  coverImage { extraLarge large }
+  bannerImage
+  popularity
+  startDate { year month day }
+  characters(sort: [ROLE, RELEVANCE, ID], perPage: $castPerPage) {
+    edges {
+      role
+      node { id name { full native } image { large } }
+      voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) { ${STAFF_FIELDS} }
+    }
+  }
+`;
+
+const SEASON_CAST_QUERY = `
+  query ($season: MediaSeason, $year: Int, $perPage: Int, $castPerPage: Int) {
+    Page(page: 1, perPage: $perPage) {
+      media(
+        season: $season
+        seasonYear: $year
+        type: ANIME
+        sort: POPULARITY_DESC
+        countryOfOrigin: "JP"
+        isAdult: false
+      ) {
+        ${CAST_MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+const FRANCHISE_CAST_QUERY = `
+  query ($search: String, $perPage: Int, $castPerPage: Int) {
+    Page(page: 1, perPage: $perPage) {
+      media(
+        search: $search
+        type: ANIME
+        format_in: [TV]
+        sort: POPULARITY_DESC
+        countryOfOrigin: "JP"
+        isAdult: false
+      ) {
+        ${CAST_MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+/**
+ * Staff の一覧。お気に入り数順。
+ * `isBirthday` を省くと null になり、AniList は絞り込みを掛けない
+ */
+const STAFF_PAGE_QUERY = `
+  query ($page: Int, $perPage: Int, $isBirthday: Boolean) {
+    Page(page: $page, perPage: $perPage) {
+      staff(sort: FAVOURITES_DESC, isBirthday: $isBirthday) {
+        ${STAFF_FIELDS}
+      }
+    }
+  }
+`;
+
+/** シーズンのキャストのキャッシュ秒数（シーズン一覧と同じ 6 時間） */
+const SEASON_CAST_CACHE_TIME = 21600;
+
+/** シリーズのキャスト・お気に入り数順はほとんど変わらないので 1 日持つ */
+const STABLE_CAST_CACHE_TIME = 86400;
+
+/**
+ * 誕生日は 1 時間。日付そのものはキャッシュキー（`dateKey`）で切り替わるので、
+ * ここは「AniList 側の日付の切り替わりにどれだけ遅れて追従するか」の上限になる
+ */
+const BIRTHDAY_CACHE_TIME = 3600;
+
+/** 1 ページの上限（AniList の Page は 50 件まで） */
+const ANILIST_MAX_PER_PAGE = 50;
+
+/** GraphQL の errors を例外にする（行単位の失敗として呼び出し側で隔離させる） */
+function throwOnGraphQLErrors(
+  errors: Array<{ message: string }> | undefined,
+): void {
+  if (errors && errors.length > 0) {
+    throw new Error(
+      `AniList GraphQL error: ${errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+}
+
+/**
+ * 指定シーズンの作品を人気順に、キャスト（キャラ + 日本語の声優）付きで取得する。
+ * 1 回の問い合わせで `perPage` 作品 × `castPerPage` キャラを取る（2026 SUMMER の
+ * 50 × 50 で 430KB。Data Cache の上限 2MB に収まる。2026-10-04 実測）
+ */
+export async function getAniListSeasonCast(
+  year: number,
+  season: AniListSeason,
+  perPage = 30,
+  castPerPage = ANILIST_MAX_PER_PAGE,
+): Promise<AniListCastMedia[]> {
+  const data = await postAniListQuery<AniListCastMediaPageResponse>(
+    SEASON_CAST_QUERY,
+    { year, season, perPage, castPerPage },
+    SEASON_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.media ?? [];
+}
+
+/**
+ * シリーズ（タイトル検索語）の TV 作品を人気順に、キャスト付きで取得する。
+ * 検索は曖昧一致なので、呼び出し側で `matchesFranchiseTitle` を通すこと。
+ * `search` には `src/lib/franchises.ts` の固定の語彙だけを渡す（利用者の入力を渡さない。
+ * 1 日キャッシュするため、任意の値がそのままキャッシュキーになる）
+ */
+export async function getAniListFranchiseCast(
+  search: string,
+  castPerPage = 25,
+): Promise<AniListCastMedia[]> {
+  const data = await postAniListQuery<AniListCastMediaPageResponse>(
+    FRANCHISE_CAST_QUERY,
+    { search, perPage: ANILIST_MAX_PER_PAGE, castPerPage },
+    STABLE_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.media ?? [];
+}
+
+/**
+ * お気に入り数の多い Staff を 1 ページ分。
+ * AniList の Staff は言語・職業で絞れないため、声優以外（漫画家・監督など）や
+ * 海外の声優も混ざる。絞り込みは呼び出し側で行う
+ */
+export async function getAniListPopularStaff(
+  page = 1,
+  perPage = ANILIST_MAX_PER_PAGE,
+): Promise<AniListStaff[]> {
+  const data = await postAniListQuery<AniListStaffPageResponse>(
+    STAFF_PAGE_QUERY,
+    { page, perPage },
+    STABLE_CAST_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.staff ?? [];
+}
+
+/**
+ * 今日が誕生日の Staff（お気に入り数順に 1 ページ）。
+ *
+ * 「今日」は AniList のサーバー側の日付で決まり、引数では指定できない。
+ * `dateKey`（`YYYY-MM-DD`）はクエリでは使わず、**キャッシュキーを日ごとに変えるためだけ**に
+ * 送る（クエリで宣言していない変数は AniList が無視する。2026-10-04 実測）。
+ * 日付が変わった後に前日の結果を最大 1 日返し続けないようにするため
+ */
+export async function getAniListBirthdayStaff(
+  dateKey: string,
+): Promise<AniListStaff[]> {
+  const data = await postAniListQuery<AniListStaffPageResponse>(
+    STAFF_PAGE_QUERY,
+    { page: 1, perPage: ANILIST_MAX_PER_PAGE, isBirthday: true, dateKey },
+    BIRTHDAY_CACHE_TIME,
+  );
+  throwOnGraphQLErrors(data.errors);
+  return data.data?.Page?.staff ?? [];
 }

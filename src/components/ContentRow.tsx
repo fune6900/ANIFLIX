@@ -25,6 +25,11 @@ export interface ContentRowItem {
   genres?: string[];
   href?: string;
   isPortrait?: boolean;
+  /**
+   * TMDb 以外の写真（AniList の声優など）の完全な URL。
+   * 指定すると posterPath / backdropPath より優先する（TMDb の画像サイズを付けない）
+   */
+  imageUrl?: string | null;
   /** ホバープレビューの動画をどちらから引くか（既定 TV）。映画のカードは "movie" */
   mediaType?: PreviewMediaType;
 }
@@ -289,6 +294,13 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
     : "aspect-[2/3]";
   const desktopImg = item.backdropPath ?? item.posterPath;
   const mobileImg = item.posterPath ?? item.backdropPath;
+  const mobileSrc =
+    item.imageUrl ?? `https://image.tmdb.org/t/p/w342${mobileImg}`;
+  const desktopSrc =
+    item.imageUrl ?? `https://image.tmdb.org/t/p/w780${desktopImg}`;
+  const hasImage = Boolean(
+    item.imageUrl || item.posterPath || item.backdropPath,
+  );
 
   const thumbnail = (
     <div
@@ -305,7 +317,7 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
         <div
           className={`w-full ${aspectClass} relative overflow-hidden`}
           style={
-            !item.posterPath && !item.backdropPath
+            !hasImage
               ? {
                   background:
                     item.gradient ?? "linear-gradient(135deg,#1a1a2e,#16213e)",
@@ -313,11 +325,11 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
               : undefined
           }
         >
-          {item.posterPath || item.backdropPath ? (
+          {hasImage ? (
             <>
               {/* モバイル: 縦長ポスター */}
               <Image
-                src={`https://image.tmdb.org/t/p/w342${mobileImg}`}
+                src={mobileSrc}
                 alt={item.title}
                 fill
                 sizes="(max-width: 768px) 140px, 0px"
@@ -327,7 +339,7 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
               {/* PC: 横長バックドロップ（アニメ/映画のみ） */}
               {useLandscapeOnDesktop && (
                 <Image
-                  src={`https://image.tmdb.org/t/p/w780${desktopImg}`}
+                  src={desktopSrc}
                   alt={item.title}
                   fill
                   sizes="(max-width: 768px) 0px, (max-width: 1280px) 300px, 420px"
@@ -349,7 +361,7 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
             </div>
           )}
 
-          {(item.posterPath || item.backdropPath) && item.label && (
+          {hasImage && item.label && (
             <div className="absolute top-1 left-1">
               <span className="bg-[#E50914] text-white text-[9px] font-bold px-1 py-0.5 tracking-widest">
                 {item.label}
@@ -357,12 +369,12 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
             </div>
           )}
 
-          {(item.posterPath || item.backdropPath) && (
+          {hasImage && (
             <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
           )}
 
           {/* 声優カード: 写真の中に名前を常に出す（ホバーの無いタッチ端末でも誰か分かる） */}
-          {item.isPortrait && (item.posterPath || item.backdropPath) && (
+          {item.isPortrait && hasImage && (
             <div className="absolute inset-x-0 bottom-0 p-2 xl:p-2.5">
               <p className="text-white text-xs md:text-sm xl:text-base font-bold truncate drop-shadow-md">
                 {item.title}
@@ -371,7 +383,7 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
           )}
 
           {/* PC: 横長表示ではタイトルをオーバーレイ */}
-          {useLandscapeOnDesktop && (item.posterPath || item.backdropPath) && (
+          {useLandscapeOnDesktop && hasImage && (
             <div className="hidden md:block absolute inset-x-0 bottom-0 p-2.5">
               <p className="text-white text-sm font-bold truncate drop-shadow-md">
                 {item.title}

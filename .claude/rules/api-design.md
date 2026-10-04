@@ -168,7 +168,7 @@ const data = await fetch("https://api.themoviedb.org/3/tv/1");
 | ユーザー入力を含む discover | **0 必須**  | `discoverAnime`（`src/lib/diagnosis.ts` が使う）。任意のクエリ値がそのままキャッシュキーになるため絶対にキャッシュしない |
 | 一覧 discover            | 1800 (`DISCOVER_CACHE_TIME`) | `getAnimeByGenre` / `getAnimeByKeyword` / `getPopularAnime` / `getTrendingAnime`（`/browse/trending` とホームの「今週のトレンド」行は先頭 20 ページを並列で見る） / `getAnimeByEra` / `getAnimeBySeason` / `getAiringAnime` / `getAnimeByStudio` / `getAnimeMovies` / `getAnimeMovieByKeyword`、アニメ映画画面の `getTopRatedAnimeMovies` / `getAnimeMoviesByGenre`（除外ジャンル `without_genres` は `movieGenreIdsFor()` の対応表からだけ渡す。ジャンルの専用ページが 28 ∪ 12 などを重ならない区分に割るのに使う）/ `getAnimeMoviesByStudio` / `getNowPlayingMovies` / `getUpcomingMovies`（どちらも `region=JP`）/ `getTrendingMovies`（全世界の週間トレンドは先頭 20 ページを並列で見る）。ランダム性は `randomPage()` と `shuffle()` が担保 |
 | 新着（直近 7 日の放送）  | 86400 (`NEW_ANIME_CACHE_TIME`) | `getNewAnime` / `getLatestAnimeMovies`（今日以前に公開された映画を公開日の新しい順）。期間の日付（日本時間）が URL に入るため日付が変われば別エントリになり、1 日の中は同じ結果でよい（日替わり） |
-| 詳細・動画               | 3600 (`DETAIL_CACHE_TIME`) | `getAnimeDetail` / `getMovieDetail` / `getPersonDetail` / `getJapaneseVoiceActors` / `getAnimeSeasonEpisodes` / `getAnimeVideos` / `getMovieVideos` / `getAnimeCredits` |
+| 詳細・動画               | 3600 (`DETAIL_CACHE_TIME`) | `getAnimeDetail` / `getMovieDetail` / `getPersonDetail` / `getJapaneseVoiceActors` / `getAnimeSeasonEpisodes` / `getAnimeVideos` / `getMovieVideos` / `getAnimeCredits` / `getMovieCredits` |
 | 外部 ID / 配信情報 / 作品キーワード | 86400 | ほぼ不変。`getAnimeWatchProviders` / `getMovieWatchProviders` / `getAnimeKeywordIds` / `getMovieKeywordIds`（一覧フィルターが表示中の作品ぶん引く） |
 | キーワード ID 解決       | 86400       | TMDb 側でほぼ不変            |
 
