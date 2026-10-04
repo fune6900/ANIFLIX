@@ -49,12 +49,16 @@ src/
 │   ├── globals.css
 │   ├── anime/[id]/             アニメ詳細（動画 / OP・ED / キャスト / 年表 / 関連）
 │   ├── movie/[id]/             映画詳細
-│   ├── voice-actors/           声優一覧
+│   ├── voice-actors/           声優一覧（今期アニメの出演声優。旧 ?q= は検索結果へ redirect）
 │   ├── voice-actors/[id]/      声優詳細（出演作ページング）
-│   ├── search/                 キーワード or 詳細フィルター検索
+│   ├── search/                 ヘッダー検索の結果画面（旧 /search?q= は anime へ redirect）
+│   │   ├── anime/              アニメの検索結果
+│   │   ├── movies/             アニメ映画の検索結果
+│   │   ├── voice-actors/       声優の検索結果
+│   │   └── characters/         キャラの検索結果
 │   ├── browse/
 │   │   ├── airing/             放送中（現クール）
-│   │   ├── movies/             アニメ映画ホーム（検索条件付きなら検索画面）
+│   │   ├── movies/             アニメ映画ホーム（旧 ?q= は検索結果へ redirect）
 │   │   │   ├── latest/         最新作のすべて見る
 │   │   │   └── genre/[genreId]/ ジャンル別のすべて見る
 │   │   ├── seasons/            シーズン一覧
@@ -82,7 +86,7 @@ src/
 - **ホーム**: 現クール TOP10・今週のトレンド・新着・人気声優 + ジャンル別 / 年代別の動的セクション
 - **Hero スライダー**: 6 件クロスフェード + YouTube トレーラーモーダル
 - **ContentRow**: ホバー 800ms で YouTube プレビュー（`/api/videos` 経由、モジュールキャッシュ）
-- **検索**: Navbar ドロップダウン（アニメ / 映画 / 声優、300ms デバウンス、最近の検索、矢印キー操作）+ 検索ページ（キーワード or 詳細フィルター）
+- **検索**: ヘッダー検索に一本化。Navbar ドロップダウン（アニメ / 映画 / 声優 / キャラ、300ms デバウンス、最近の検索、矢印キー操作）→ Enter / 「すべての結果」で部門別の結果画面 `/search/{anime,movies,voice-actors,characters}?q=`（共通コンポーネント `SearchResults`）。ページ内のキーワード検索・詳細フィルター検索は持たない。未ログインで結果画面を開いた場合、ログイン後はトップへ戻す（`lib/safe-callback-url.ts`）
 - **アニメ詳細**: メタ・あらすじ・トレーラー・OP/ED・キャスト・**ヒストリー年表**（SeasonTimeline）・**エピソード一覧**（SeasonEpisodes）・関連作品
 - **ウルトラワイド対応**: 横幅の上限なし。ガターは `.site-container`、1920px 超のグリッドは `auto-fill`（`3xl` / `4xl` / `5xl` = 1920 / 2560 / 3200px）
 - **詳細ページ**: ヒーロー・動画・あらすじは `.detail-block` で中央寄せ（上限 1400〜1600px）。キャスト・出演作の一覧グリッドは幅いっぱいのまま

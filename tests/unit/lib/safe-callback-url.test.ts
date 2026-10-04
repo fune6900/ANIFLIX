@@ -15,9 +15,9 @@ describe("safeCallbackUrl", () => {
   });
 
   it("クエリ文字列を保持する", () => {
-    expect(safeCallbackUrl("http://localhost:3000/search?q=%E9%80%B2%E6%92%83")).toBe(
-      "/search?q=%E9%80%B2%E6%92%83",
-    );
+    expect(
+      safeCallbackUrl("http://localhost:3000/browse/genre/16?page=2"),
+    ).toBe("/browse/genre/16?page=2");
   });
 
   it("相対パスをそのまま通す", () => {
@@ -39,7 +39,9 @@ describe("safeCallbackUrl", () => {
   it("スキーム付きの危険な入力をトップページへ丸める", () => {
     // new URL() がスキームを剥がすと先頭スラッシュの無い pathname が残るため弾く
     expect(safeCallbackUrl("javascript:alert(1)")).toBe("/");
-    expect(safeCallbackUrl("data:text/html,<script>alert(1)</script>")).toBe("/");
+    expect(safeCallbackUrl("data:text/html,<script>alert(1)</script>")).toBe(
+      "/",
+    );
     expect(safeCallbackUrl("mailto:a@b.c")).toBe("/");
   });
 
@@ -59,5 +61,39 @@ describe("safeCallbackUrl", () => {
       expect(result.startsWith("/")).toBe(true);
       expect(result.startsWith("//")).toBe(false);
     }
+  });
+});
+
+describe("safeCallbackUrl: 検索結果画面へは戻さない（#101）", () => {
+  // 未ログインで検索結果の URL を直接開いた場合、ログイン後はトップへ戻す
+  it.each([
+    "http://localhost:3000/search/anime?q=%E9%80%B2%E6%92%83",
+    "/search/movies?q=x",
+    "/search/voice-actors?q=x&page=2",
+    "/search/characters?q=x",
+    "/search/characters",
+    "/search",
+    "/search/",
+    "/search?q=x",
+  ])("%s → /", (input) => {
+    expect(safeCallbackUrl(input)).toBe("/");
+  });
+
+  it.each(["/browse/movies?q=x", "/voice-actors?q=x"])(
+    "検索結果へ redirect する旧 URL %s も / へ倒す",
+    (input) => {
+      expect(safeCallbackUrl(input)).toBe("/");
+    },
+  );
+
+  it.each([
+    "/searching",
+    "/search-x",
+    "/browse/movies",
+    "/voice-actors",
+    "/voice-actors/123",
+    "/browse/movies/latest",
+  ])("検索結果画面ではない %s はそのまま戻す", (input) => {
+    expect(safeCallbackUrl(input)).toBe(input);
   });
 });
