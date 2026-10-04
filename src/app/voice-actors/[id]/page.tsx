@@ -5,7 +5,6 @@ import { getPersonDetail, getImageUrl } from "@/lib/tmdb";
 import VoicedCharacters from "@/components/VoicedCharacters";
 import type { TMDbPersonCreditCast } from "@/types/tmdb";
 
-// 列数（3 / 5 / 6 / 10）はどれも 30 を割り切る。最終行を欠けさせない
 const PER_PAGE = 30;
 
 interface VoiceActorDetailPageProps {
@@ -309,7 +308,7 @@ export default async function VoiceActorDetailPage({
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-10 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 md:gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 3xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 md:gap-3">
                 {pagedWorks.map((credit) => (
                   <AnimeWorkCard
                     key={`${credit.id}-${credit.character}`}

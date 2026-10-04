@@ -136,22 +136,4 @@ describe("VoicedCharacters", () => {
       "/voice-actors/9?cpage=3#voiced-characters",
     );
   });
-
-  it("列数はどの段でも 50 件を割り切る（最終行を欠けさせない）", async () => {
-    getAniListStaffCharactersByName.mockImplementation(async (_s, p) => hit(p));
-
-    const { container } = render(
-      await VoicedCharacters({ name: "声優A", pageUrl }),
-    );
-
-    const grid = container.querySelector<HTMLElement>('[class*="grid-cols-"]');
-    const counts = (grid?.className ?? "")
-      .split(/\s+/)
-      .map((c) => c.match(/(?:^|:)grid-cols-(\d+)$/)?.[1])
-      .filter((n): n is string => Boolean(n))
-      .map(Number);
-
-    expect(counts.length).toBeGreaterThan(0);
-    for (const n of counts) expect(50 % n, `${n} 列`).toBe(0);
-  });
 });

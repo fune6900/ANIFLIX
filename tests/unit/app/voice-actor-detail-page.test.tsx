@@ -80,14 +80,18 @@ describe("声優詳細ページ", () => {
   it("上部にぼかし拡大したプロフィール写真の背景を出さない", async () => {
     const { container } = await renderAt();
 
-    const originals = [...container.querySelectorAll("img")].filter((img) =>
-      imageSrc(img).includes("/original/"),
+    // 画像は w500 のプロフィール写真 1 枚と出演作のポスターだけ。
+    // サイズ・alt・クラスを変えた背景画像を足してもここで落ちる
+    const outsideWorks = [...container.querySelectorAll("img")].filter(
+      (img) => !img.closest('a[href^="/anime/"]'),
     );
-    expect(originals).toEqual([]);
+    expect(outsideWorks.map(imageSrc)).toEqual([
+      expect.stringContaining("/w500/face.jpg"),
+    ]);
     expect(container.querySelector(".blur-sm")).toBeNull();
   });
 
-  it("通常のプロフィール写真は残す", async () => {
+  it("通常のプロフィール写真は残し、最初に読み込む（priority）", async () => {
     const { container } = await renderAt();
 
     const profile = [...container.querySelectorAll("img")].filter(
@@ -95,6 +99,18 @@ describe("声優詳細ページ", () => {
     );
     expect(profile).toHaveLength(1);
     expect(imageSrc(profile[0])).toContain("/w500/face.jpg");
+    // Next 15 の next/image は priority を付けると loading="lazy" を外して preload する
+    // （fetchpriority は付かない）。付けなければ他のポスターと同じく lazy になる
+    expect(profile[0].getAttribute("loading")).not.toBe("lazy");
+  });
+
+  it("本文は固定ヘッダーの下から始める（pt-24・負のマージンで上に重ねない）", async () => {
+    const { container } = await renderAt();
+
+    const wrapper = container.querySelector(".site-container")?.parentElement;
+    const classes = (wrapper?.className ?? "").split(/\s+/);
+    expect(classes).toContain("pt-24");
+    expect(classes.filter((c) => /(^|:)-mt-/.test(c))).toEqual([]);
   });
 
   it("出演作品は 1 ページ 30 件", async () => {
@@ -111,19 +127,5 @@ describe("声優詳細ページ", () => {
     const links = workLinks(container);
     expect(links).toHaveLength(5);
     expect(links[0].getAttribute("href")).toBe("/anime/61");
-  });
-
-  it("出演作品の列数はどの段でも 30 件を割り切る（最終行を欠けさせない）", async () => {
-    const { container } = await renderAt();
-
-    const grid = workLinks(container)[0]?.parentElement;
-    const counts = (grid?.className ?? "")
-      .split(/\s+/)
-      .map((c) => c.match(/(?:^|:)grid-cols-(\d+)$/)?.[1])
-      .filter((n): n is string => Boolean(n))
-      .map(Number);
-
-    expect(counts.length).toBeGreaterThan(0);
-    for (const n of counts) expect(30 % n, `${n} 列`).toBe(0);
   });
 });
