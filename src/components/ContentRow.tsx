@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { assertApiOk } from "@/lib/api-client";
+import {
+  previewCacheKey,
+  previewVideoUrl,
+  type PreviewMediaType,
+} from "@/lib/video-preview";
 
 export interface ContentRowItem {
   id: number;
@@ -20,6 +25,8 @@ export interface ContentRowItem {
   genres?: string[];
   href?: string;
   isPortrait?: boolean;
+  /** ホバープレビューの動画をどちらから引くか（既定 TV）。映画のカードは "movie" */
+  mediaType?: PreviewMediaType;
 }
 
 interface ContentRowProps {
@@ -28,8 +35,8 @@ interface ContentRowProps {
   allHref?: string;
 }
 
-// モジュールレベルキャッシュ: animeId → YouTubeキー (null = 動画なし)
-const videoCache = new Map<number, string | null>();
+// モジュールレベルキャッシュ: "tv:id" / "movie:id" → YouTubeキー (null = 動画なし)
+const videoCache = new Map<string, string | null>();
 
 // ────── プレビューポップアップ ──────
 interface PopupProps {
@@ -224,14 +231,16 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
     // 声優カードはトレーラーなし
     if (item.isPortrait) return;
 
+    const cacheKey = previewCacheKey(item.id, item.mediaType);
+
     // キャッシュ済みならそのまま使用
-    if (videoCache.has(item.id)) {
-      setVideoKey(videoCache.get(item.id) ?? null);
+    if (videoCache.has(cacheKey)) {
+      setVideoKey(videoCache.get(cacheKey) ?? null);
       return;
     }
 
     setVideoKey(undefined); // フェッチ中
-    fetch(`/api/videos?id=${item.id}`)
+    fetch(previewVideoUrl(item.id, item.mediaType))
       .then((r) => {
         // セッション切れ（401）やエラー応答の本文を正常データとして読まない。
         // ホバープレビューは付加機能のため、失敗時は黙ってプレビューを無効化する
@@ -240,14 +249,14 @@ function AnimeCard({ item }: { item: ContentRowItem }) {
       })
       .then((data) => {
         const key = data.key ?? null;
-        videoCache.set(item.id, key);
+        videoCache.set(cacheKey, key);
         setVideoKey(key);
       })
       .catch(() => {
-        videoCache.set(item.id, null);
+        videoCache.set(cacheKey, null);
         setVideoKey(null);
       });
-  }, [item.id, item.isPortrait]);
+  }, [item.id, item.isPortrait, item.mediaType]);
 
   const handleMouseEnter = useCallback(() => {
     if (closeTimer.current) clearTimeout(closeTimer.current);

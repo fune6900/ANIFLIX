@@ -60,9 +60,9 @@ export default function MovieSearchModeTabs({
     if (v.q) sp.set("q", v.q);
     if (v.genre) sp.set("genre", v.genre);
     if (v.sort && v.sort !== "popularity.desc") sp.set("sort", v.sort);
-    if (targetMode === "filter") sp.set("mode", "filter");
-    const qs = sp.toString();
-    return qs ? `/browse/movies?${qs}` : "/browse/movies";
+    // mode は常に付ける。クエリ無しの /browse/movies はアニメ映画のホーム（#90）になる
+    sp.set("mode", targetMode);
+    return `/browse/movies?${sp.toString()}`;
   }
 
   function buildAnimeUrl(): string {

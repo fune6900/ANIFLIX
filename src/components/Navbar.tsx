@@ -48,7 +48,7 @@ export default function Navbar() {
               ホーム
             </Link>
             <Link href="/browse/movies" className="hover:text-white transition">
-              映画
+              アニメ映画
             </Link>
 
             {/* 放送中 */}
@@ -133,7 +133,7 @@ export default function Navbar() {
                   className="block px-5 py-2 text-sm text-gray-200 hover:text-white hover:underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  映画
+                  アニメ映画
                 </Link>
                 <Link
                   href="/browse/airing"

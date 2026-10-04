@@ -84,7 +84,7 @@ export default function BottomNav() {
           <span className="text-[10px]">放送中</span>
         </Link>
 
-        {/* 映画 */}
+        {/* アニメ映画 */}
         <Link
           href="/browse/movies"
           className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 transition min-w-[40px] ${isActive("/browse/movies") ? "text-white" : "text-gray-400 hover:text-white"}`}
@@ -102,7 +102,7 @@ export default function BottomNav() {
               d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
             />
           </svg>
-          <span className="text-[10px]">映画</span>
+          <span className="text-[10px] whitespace-nowrap">アニメ映画</span>
         </Link>
 
         {/* 声優 */}

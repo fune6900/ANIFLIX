@@ -74,9 +74,10 @@ export default function SearchModeTabs({
 
   function buildMoviesUrl(): string {
     const v = readLiveValues();
+    // クエリ無しの /browse/movies はアニメ映画のホーム（#90）。検索画面として開く
     return v.q
       ? `/browse/movies?q=${encodeURIComponent(v.q)}`
-      : "/browse/movies";
+      : "/browse/movies?mode=keyword";
   }
 
   const isFilter = currentMode === "filter";

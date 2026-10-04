@@ -9,7 +9,7 @@
 //
 // 使用箇所:
 //   - /search/page.tsx (キーワードモード)
-//   - /browse/movies/page.tsx (キーワードモード)
+//   - src/components/AnimeMovieSearch.tsx (/browse/movies の検索画面・キーワードモード)
 //   - /api/search/route.ts, /api/search/movies/route.ts
 //
 // ページネーション方針:

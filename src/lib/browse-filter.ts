@@ -8,6 +8,7 @@ import {
   resolveKeywordId,
 } from "@/lib/tmdb";
 import { ANIME_GENRES } from "@/lib/genres";
+import { movieGenreIdsFor } from "@/lib/movie-genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { findStreamingService, streamingServicesIn } from "@/lib/providers";
 import type { SeasonalEntry } from "@/lib/seasonal-anime";
@@ -23,17 +24,6 @@ import type {
  * - キーワード由来: 一覧レスポンスに現れないため、作品ごとのキーワード（24h キャッシュ）で判定する
  */
 export const FILTER_GENRES: readonly AnimeGenre[] = ANIME_GENRES;
-
-/**
- * TV 専用のジャンル ID を映画のジャンル ID に読み替える。
- * シーズン一覧に混ざる劇場版は TV 用の ID（10759 等）を持たない
- */
-const TV_TO_MOVIE_GENRES: Readonly<Record<number, readonly number[]>> = {
-  10759: [28, 12], // アクション・冒険 → アクション / アドベンチャー
-  10765: [878, 14], // SF・ファンタジー → SF / ファンタジー
-  10768: [10752], // 戦争・政治 → 戦争
-  10762: [10751], // キッズ → ファミリー（映画にキッズは無い）
-};
 
 /** 作品ごとの追加取得（配信情報・キーワード）を同時に引く上限（シーズン一覧は 100 件を超える） */
 const LOOKUP_CONCURRENCY = 10;
@@ -128,8 +118,8 @@ async function isStreamingOn(
 function hasTmdbGenre(target: FilterTarget, genreId: number): boolean {
   if (target.genreIds.includes(genreId)) return true;
   if (target.kind !== "movie") return false;
-  const movieIds = TV_TO_MOVIE_GENRES[genreId] ?? [];
-  return movieIds.some((id) => target.genreIds.includes(id));
+  // シーズン一覧に混ざる劇場版は TV 用の ID（10759 等）を持たない
+  return movieGenreIdsFor(genreId).some((id) => target.genreIds.includes(id));
 }
 
 /** キーワード由来ジャンルのキーワード ID（名前の解決はジャンルごとに 1 回だけ） */
