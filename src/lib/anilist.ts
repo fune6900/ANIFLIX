@@ -1013,14 +1013,17 @@ const STAFF_PAGE_QUERY = `
   }
 `;
 
-/** シーズンのキャストのキャッシュ秒数（シーズン一覧と同じ 6 時間） */
-const SEASON_CAST_CACHE_TIME = 21600;
+/**
+ * シーズンのキャストのキャッシュ秒数（1 日）。
+ * キャストの発表・追加は日単位でしか動かず、AniList の分間制限を節約する方を取る
+ */
+const SEASON_CAST_CACHE_TIME = 86400;
 
 /** シリーズのキャスト・お気に入り数順はほとんど変わらないので 1 日持つ */
 const STABLE_CAST_CACHE_TIME = 86400;
 
 /**
- * 誕生日は 1 時間。日付そのものはキャッシュキー（`dateKey`）で切り替わるので、
+ * 誕生日は 1 時間。日付そのものはキャッシュキー（クエリ末尾の日付コメント）で切り替わるので、
  * ここは「AniList 側の日付の切り替わりにどれだけ遅れて追従するか」の上限になる
  */
 const BIRTHDAY_CACHE_TIME = 3600;
@@ -1096,20 +1099,35 @@ export async function getAniListPopularStaff(
   return data.data?.Page?.staff ?? [];
 }
 
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 誕生日のクエリ。末尾に日付（`YYYY-MM-DD`）のコメントを付ける。
+ *
+ * `isBirthday` は日付を引数に取らないが、Next の Data Cache のキーは POST の body なので、
+ * コメントで日ごとに別エントリにする（AniList が末尾コメントを受け付けることは
+ * 2026-10-04 に実測確認）。日付以外の文字列はクエリに入れない
+ */
+export function birthdayStaffQuery(dateKey: string): string {
+  if (!DATE_KEY_PATTERN.test(dateKey)) {
+    throw new Error(`invalid date key: ${JSON.stringify(dateKey)}`);
+  }
+  return `${STAFF_PAGE_QUERY}\n# ${dateKey}\n`;
+}
+
 /**
  * 今日が誕生日の Staff（お気に入り数順に 1 ページ）。
  *
  * 「今日」は AniList のサーバー側の日付で決まり、引数では指定できない。
- * `dateKey`（`YYYY-MM-DD`）はクエリでは使わず、**キャッシュキーを日ごとに変えるためだけ**に
- * 送る（クエリで宣言していない変数は AniList が無視する。2026-10-04 実測）。
- * 日付が変わった後に前日の結果を最大 1 日返し続けないようにするため
+ * `dateKey`（`YYYY-MM-DD`）はキャッシュキーを日ごとに変えるためだけに使う
+ * （`birthdayStaffQuery`）。日付が変わった後に前日の結果を返し続けないようにするため
  */
 export async function getAniListBirthdayStaff(
   dateKey: string,
 ): Promise<AniListStaff[]> {
   const data = await postAniListQuery<AniListStaffPageResponse>(
-    STAFF_PAGE_QUERY,
-    { page: 1, perPage: ANILIST_MAX_PER_PAGE, isBirthday: true, dateKey },
+    birthdayStaffQuery(dateKey),
+    { page: 1, perPage: ANILIST_MAX_PER_PAGE, isBirthday: true },
     BIRTHDAY_CACHE_TIME,
   );
   throwOnGraphQLErrors(data.errors);

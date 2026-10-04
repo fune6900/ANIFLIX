@@ -13,8 +13,9 @@
 // 取得元は 1 描画につき 1 回だけ引き（`createVoiceActorSources` がメモ化する）、
 // 複数の行で使い回す。冷えたキャッシュでの 1 描画あたりの AniList 問い合わせは
 //   今期の作品一覧（fetchSeasonalAnime: 最大 8。トップ画面とキャッシュ共有）
-//   + 今期のキャスト 1 + 前クールのキャスト 1 + シリーズ 5 + お気に入り数 2 + 誕生日 1
-//   = 最大 18 回。
+//   + 今期のキャスト 1 + 前クールのキャスト 1 + シリーズ 5 + お気に入り数 1 + 誕生日 1
+//   = 最大 17 回（今期の作品一覧が温まっていれば 9 回）。
+// キャラクターページ（#104）も AniList を使うため、ここでは 1 リクエストでも削る。
 
 import {
   getAniListBirthdayStaff,
@@ -54,9 +55,6 @@ export const VOICE_ACTOR_HERO_SIZE = 6;
 
 /** 「今期人気作品の特集」の行数 */
 export const FEATURED_WORK_COUNT = 5;
-
-/** お気に入り数順の Staff を何ページ（50 件/ページ）見るか。声優はその 6 割ほど */
-export const POPULAR_STAFF_PAGES = 2;
 
 /** 「今期放送中アニメの声優」で credits を集約する作品数（旧 /voice-actors と同じ） */
 const AIRING_WORK_COUNT = 30;
@@ -202,20 +200,8 @@ function createVoiceActorSources(): VoiceActorSources {
       }
       return cached;
     },
-    popularStaff: once(async () => {
-      const pages = Array.from(
-        { length: POPULAR_STAFF_PAGES },
-        (_, i) => i + 1,
-      );
-      const settled = await Promise.allSettled(
-        pages.map((page) => getAniListPopularStaff(page)),
-      );
-      const fulfilled = settled.flatMap((r) =>
-        r.status === "fulfilled" ? [r.value] : [],
-      );
-      if (fulfilled.length === 0) throw new Error("AniList staff unavailable");
-      return fulfilled.flat();
-    }),
+    // 1 ページ（50 人、うち声優は 30 人前後）だけ。AniList の分間制限のため 2 ページ目は引かない
+    popularStaff: once(() => getAniListPopularStaff(1)),
     birthdayStaff: once(() => getAniListBirthdayStaff(today.key)),
     latestMovies: once(async () => {
       const page = await getLatestAnimeMovies(1);
@@ -439,7 +425,8 @@ async function loadFeaturedWorkRows(
       title: `📺 『${workTitle(media)}』の声優`,
       cards: castCards([media]),
     }));
-  } catch {
+  } catch (error) {
+    console.error("[voice-actor-home] featured work rows failed:", error);
     return [];
   }
 }
@@ -564,7 +551,8 @@ function debutYear(staff: AniListStaff): number | null {
  *
  * AniList の Staff は活動開始年で絞れず、お気に入り数の上位だけだと新世代・レジェンドが
  * 数人しか残らない（上位 200 人で新世代 5 人・レジェンド 8 人。2026-10-04 実測）。
- * お気に入り数の上位に、今期・前クールのキャスト（各 300〜500 人）を足して母集団を広げる
+ * 母集団の主体は今期・前クールのキャスト（各 300〜500 人）で、お気に入り数の上位
+ * （1 ページ・ランキングと共用）は人気の声優を取りこぼさないための補い
  */
 async function loadDebutPool(src: VoiceActorSources): Promise<AniListStaff[]> {
   const [popular, current, previous] = await Promise.allSettled([
@@ -683,7 +671,8 @@ async function loadHero(src: VoiceActorSources): Promise<VoiceActorHeroItem[]> {
       .slice(0, VOICE_ACTOR_HERO_SIZE);
     const leads = await Promise.all(anime.map((a) => leadVoiceActorsOf(a.id)));
     return anime.map((a, i) => ({ anime: a, leadVoiceActors: leads[i] }));
-  } catch {
+  } catch (error) {
+    console.error("[voice-actor-home] hero failed:", error);
     return [];
   }
 }

@@ -157,6 +157,11 @@ const PREVIOUS_SEASON: AniListCastMedia[] = [
   ]),
   media(102, "前作品B", [
     edge("SUPPORTING", "前脇役B", [staff(21, { years: [2018] })]),
+    // 新世代・レジェンドの境界（2026 年: 新世代は 2017 年〜、レジェンドは 〜1990 年）
+    edge("SUPPORTING", "境界2016", [staff(51, { years: [2016] })]),
+    edge("SUPPORTING", "境界2017", [staff(52, { years: [2017] })]),
+    edge("SUPPORTING", "境界1990", [staff(53, { years: [1990] })]),
+    edge("SUPPORTING", "境界1991", [staff(54, { years: [1991] })]),
   ]),
 ];
 
@@ -168,14 +173,14 @@ const POPULAR_PAGES: Record<number, AniListStaff[]> = {
     // 日本語の声優ではない
     staff(33, { favourites: 700, language: "English" }),
     staff(34, { favourites: 600, years: [1980] }),
-  ],
-  2: [
     staff(35, { favourites: 500, years: [2019] }),
     staff(36, {
       favourites: 400,
       image: "https://s4.anilist.co/file/anilistcdn/staff/large/default.jpg",
     }),
   ],
+  // 2 ページ目は引かない（AniList の分間制限。#102 レビュー）
+  2: [staff(37, { favourites: 300, years: [2020] })],
 };
 
 function franchiseMedia(base: number): AniListCastMedia[] {
@@ -200,10 +205,17 @@ const anilist = {
     async (search: string): Promise<AniListCastMedia[]> => {
       const i = ANIME_FRANCHISES.findIndex((f) => f.search === search);
       // シリーズの作品名は検索語を含む（含まない作品は除外される）
-      return franchiseMedia((i + 1) * 1000).map((m) => ({
-        ...m,
-        title: { ...m.title, native: `${search} ${m.title.native}` },
-      }));
+      const base = (i + 1) * 1000;
+      return [
+        ...franchiseMedia(base).map((m) => ({
+          ...m,
+          title: { ...m.title, native: `${search} ${m.title.native}` },
+        })),
+        // AniList の曖昧検索で混ざった別作品（タイトルに検索語を含まない）
+        media(base + 9, "無関係な作品", [
+          edge("MAIN", "無関係", [staff(base + 9)]),
+        ]),
+      ];
     },
   ),
   getAniListPopularStaff: vi.fn(
@@ -281,6 +293,8 @@ const home = await import("@/lib/voice-actor-home");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 失敗した行のログ（console.error）でテストの出力を埋めない
+  vi.spyOn(console, "error").mockImplementation(() => {});
   vi.useFakeTimers({ toFake: ["Date"] });
   // 2026 秋クール・日本時間 10/4
   vi.setSystemTime(new Date("2026-10-04T12:00:00+09:00"));
@@ -470,16 +484,61 @@ describe("loadVoiceActorHome: 各行の中身", () => {
     const { rows } = await home.loadVoiceActorHome();
     const row = rowOf(rows, "new-generation");
 
-    expect(names(row).sort()).toEqual(["声優11", "声優21", "声優35"].sort());
+    expect(names(row).sort()).toEqual(
+      ["声優11", "声優21", "声優35", "声優52"].sort(),
+    );
     expect(row.cards.every((c) => /\d{4}年/.test(c.note ?? ""))).toBe(true);
+  });
+
+  it("新世代の境界: 2017 年デビューは入り、2016 年デビューは入らない（2026 年）", async () => {
+    const names_ = names(
+      rowOf((await home.loadVoiceActorHome()).rows, "new-generation"),
+    );
+
+    expect(names_).toContain("声優52");
+    expect(names_).not.toContain("声優51");
+  });
+
+  it("レジェンドの境界: 1990 年デビューは入り、1991 年デビューは入らない", async () => {
+    const names_ = names(
+      rowOf((await home.loadVoiceActorHome()).rows, "legends"),
+    );
+
+    expect(names_).toContain("声優53");
+    expect(names_).not.toContain("声優54");
   });
 
   it("レジェンド: 活動開始が 1990 年以前の声優", async () => {
     const { rows } = await home.loadVoiceActorHome();
 
     expect(names(rowOf(rows, "legends")).sort()).toEqual(
-      ["声優13", "声優34"].sort(),
+      ["声優13", "声優34", "声優53"].sort(),
     );
+  });
+
+  it("新世代・レジェンドはお気に入り数順 Staff の 2 ページ目を使わない", async () => {
+    const { rows } = await home.loadVoiceActorHome();
+
+    expect(names(rowOf(rows, "new-generation"))).not.toContain("声優37");
+    expect(names(rowOf(rows, "ranking"))).not.toContain("声優37");
+  });
+
+  it("定番シリーズ: タイトルに検索語を含まない作品（曖昧検索の混入）の声優は入れない", async () => {
+    const { rows } = await home.loadVoiceActorHome();
+
+    expect(names(rowOf(rows, "franchise-conan"))).not.toContain("声優2009");
+    expect(names(rowOf(rows, "franchise-precure"))).not.toContain("声優5009");
+  });
+
+  it("誕生日: 返ってきた誕生日が日本の今日でなければ、見出しにその日付を出す", async () => {
+    anilist.getAniListBirthdayStaff.mockResolvedValueOnce([
+      staff(44, { birth: { year: 2000, month: 10, day: 3 } }),
+    ]);
+
+    const row = rowOf((await home.loadVoiceActorHome()).rows, "birthdays");
+
+    expect(row.title).toBe("🎂 10月3日が誕生日の声優");
+    expect(names(row)).toEqual(["声優44"]);
   });
 });
 
@@ -527,16 +586,16 @@ describe("loadVoiceActorHome: 失敗の隔離と問い合わせ回数", () => {
     );
   });
 
-  it("同じ取得元は 1 回だけ引く（AniList は 1 描画 10 回 + シーズン一覧）", async () => {
+  it("同じ取得元は 1 回だけ引く（AniList は 1 描画 9 回 + シーズン一覧）", async () => {
     await home.loadVoiceActorHome();
 
     expect(anilist.getAniListSeasonCast).toHaveBeenCalledTimes(2);
     expect(anilist.getAniListFranchiseCast).toHaveBeenCalledTimes(
       ANIME_FRANCHISES.length,
     );
-    expect(anilist.getAniListPopularStaff).toHaveBeenCalledTimes(
-      home.POPULAR_STAFF_PAGES,
-    );
+    // お気に入り数順 Staff は 1 ページだけ（AniList の分間制限。#102 レビュー）
+    expect(anilist.getAniListPopularStaff).toHaveBeenCalledTimes(1);
+    expect(anilist.getAniListPopularStaff).toHaveBeenCalledWith(1);
     expect(anilist.getAniListBirthdayStaff).toHaveBeenCalledTimes(1);
     expect(fetchSeasonalAnime).toHaveBeenCalledTimes(1);
   });
@@ -568,6 +627,18 @@ describe("loadVoiceActorCollection", () => {
     expect(await home.loadVoiceActorCollection("work-abc")).toBeNull();
     expect(await home.loadVoiceActorCollection("work-01")).toBeNull();
     expect(await home.loadVoiceActorCollection("work-1/../x")).toBeNull();
+  });
+
+  it("プロトタイプのキー（constructor / __proto__ / toString）は null", async () => {
+    for (const slug of [
+      "constructor",
+      "__proto__",
+      "toString",
+      "hasOwnProperty",
+    ]) {
+      expect(await home.loadVoiceActorCollection(slug), slug).toBeNull();
+    }
+    expect(anilist.getAniListSeasonCast).not.toHaveBeenCalled();
   });
 
   it("特集に入っていない作品 id は null。id を AniList へ渡さない", async () => {

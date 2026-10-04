@@ -106,7 +106,11 @@ vi.mock("@/lib/voice-actor-home", async (importOriginal) => {
   return {
     ...actual,
     loadVoiceActorHome: () => loadVoiceActorHome(),
-    loadVoiceActorCollection: (slug: string) => loadVoiceActorCollection(slug),
+    // 定義済みの行はテストデータを返し、それ以外は本物のホワイトリストに通す
+    // （未知の slug は取得を伴わずに null を返すので、通信は発生しない）
+    loadVoiceActorCollection: async (slug: string) =>
+      (await loadVoiceActorCollection(slug)) ??
+      actual.loadVoiceActorCollection(slug),
   };
 });
 
@@ -286,6 +290,14 @@ describe("/voice-actors/collections/[slug]", () => {
 
   it("未知の slug は 404", async () => {
     expect(await signalOf(() => renderCollection("unknown"))).toBe("not-found");
+  });
+
+  it("プロトタイプのキー（constructor / __proto__ / toString）も 404", async () => {
+    for (const slug of ["constructor", "__proto__", "toString"]) {
+      expect(await signalOf(() => renderCollection(slug)), slug).toBe(
+        "not-found",
+      );
+    }
   });
 
   it("空の行は「見つからない」旨を出す（404 にはしない）", async () => {
