@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 /**
  * ヘッダーの内容契約。
@@ -27,7 +27,6 @@ const Navbar = (await import("@/components/Navbar")).default;
 /** ヘッダーに必ず並ぶナビゲーション項目 */
 const NAV_ITEMS = [
   "ホーム",
-  "アニメ",
   "映画",
   "放送中",
   "シーズン",
@@ -37,6 +36,43 @@ const NAV_ITEMS = [
   "キャラ",
   "診断",
 ];
+
+/**
+ * ナビゲーションの遷移先と並び順。PC ナビとモバイルメニューで同じ並びにする。
+ * 文言ではなく遷移先で照合する（表示名の変更に引きずられないため）
+ */
+const NAV_HREFS = [
+  "/",
+  "/browse/movies",
+  "/browse/airing",
+  "/browse/seasons",
+  "/browse/genres",
+  "/browse/eras",
+  "/voice-actors",
+  "/search/characters",
+  "/diagnosis",
+];
+
+/** 「アニメ」= キーワード検索への近道。ナビからは外した（ISSUE #88） */
+const REMOVED_ANIME_HREF = `/search?q=${encodeURIComponent("アニメ")}`;
+
+function hrefsOf(root: Element): string[] {
+  return Array.from(root.querySelectorAll("a")).map(
+    (a) => a.getAttribute("href") ?? "",
+  );
+}
+
+function isAnimeSearchHref(href: string): boolean {
+  return href === REMOVED_ANIME_HREF || href === "/search?q=アニメ";
+}
+
+function openMobileMenu(): Element {
+  const toggle = screen.getByRole("button", { name: "ブラウズ" });
+  fireEvent.click(toggle);
+  const menu = toggle.parentElement;
+  if (!menu) throw new Error("モバイルメニューの親要素が無い");
+  return menu;
+}
 
 beforeEach(() => {
   pathname = "/";
@@ -72,6 +108,32 @@ describe("Navbar", () => {
     for (const item of NAV_ITEMS) {
       expect(screen.getAllByText(item).length, item).toBeGreaterThan(0);
     }
+  });
+
+  it("PC のナビに「アニメ」を置かず、他の項目の並びは保つ", () => {
+    render(<Navbar />);
+
+    const nav = screen.getByRole("navigation");
+    const hrefs = hrefsOf(nav);
+
+    expect(hrefs.some(isAnimeSearchHref)).toBe(false);
+    expect(hrefs).toEqual(NAV_HREFS);
+  });
+
+  it("モバイルメニューに「アニメ」を置かず、他の項目の並びは保つ", () => {
+    render(<Navbar />);
+
+    const hrefs = hrefsOf(openMobileMenu());
+
+    expect(hrefs.some(isAnimeSearchHref)).toBe(false);
+    expect(hrefs).toEqual(NAV_HREFS);
+  });
+
+  it("ヘッダーのどこにも「アニメ」のリンクを出さない", () => {
+    render(<Navbar />);
+    openMobileMenu();
+
+    expect(screen.queryAllByRole("link", { name: "アニメ" })).toHaveLength(0);
   });
 
   it("認証画面ではヘッダーごと表示しない", () => {
