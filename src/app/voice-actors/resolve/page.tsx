@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { isJapaneseVoiceActor, searchPerson } from "@/lib/tmdb";
+import { searchResultsHref } from "@/lib/search-results";
 
 interface PageProps {
   searchParams: Promise<{ name?: string; aniListId?: string }>;
@@ -37,5 +38,5 @@ export default async function VoiceActorResolvePage({
     redirect(`/voice-actors/${personId}`);
   }
 
-  redirect(`/voice-actors?q=${encodeURIComponent(name)}`);
+  redirect(searchResultsHref("voice-actors", name));
 }

@@ -1,28 +1,19 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import HeroSection from "@/components/HeroSection";
 import type { HeroItem } from "@/components/HeroSection";
 import ContentRow from "@/components/ContentRow";
-import AnimeMovieSearch, {
-  isAnimeMovieSearchRequest,
-} from "@/components/AnimeMovieSearch";
-import type { AnimeMovieSearchParams } from "@/components/AnimeMovieSearch";
 import { getMovieVideos } from "@/lib/tmdb";
 import { loadAnimeMovieHome } from "@/lib/movie-home-rows";
-import {
-  MOVIE_LATEST_LIST_HREF,
-  movieGenreListHref,
-} from "@/lib/movie-list";
+import { MOVIE_LATEST_LIST_HREF, movieGenreListHref } from "@/lib/movie-list";
 import {
   toMovieCardItem,
   toUpcomingMovieCardItem,
 } from "@/lib/movie-card-item";
+import { sanitizeSearchQuery, searchResultsHref } from "@/lib/search-results";
 
 interface MoviesPageProps {
-  searchParams: Promise<AnimeMovieSearchParams>;
+  searchParams: Promise<{ q?: string | string[] }>;
 }
-
-/** 検索画面（キーワード未入力）への入口 */
-const SEARCH_HREF = "/browse/movies?mode=keyword";
 
 interface SectionTitleProps {
   title: string;
@@ -48,14 +39,10 @@ function SectionTitle({ title }: SectionTitleProps) {
 export const dynamic = "force-dynamic";
 
 export default async function MoviesPage({ searchParams }: MoviesPageProps) {
-  const params = await searchParams;
-
-  // 検索系クエリがあれば従来の検索画面（キーワード / 詳細フィルター）
-  if (isAnimeMovieSearchRequest(params)) {
-    // フックを持たない async の Server Component なので関数として呼んで待つ
-    // （ページの描画結果をそのまま返し、テストからも同じ形で描ける）
-    return AnimeMovieSearch({ params });
-  }
+  // 旧検索画面の URL（`?q=`）はアニメ映画の検索結果へ送る（#101）。
+  // 旧検索画面の mode / genre / sort / page は捨ててホームを出す
+  const query = sanitizeSearchQuery((await searchParams).q);
+  if (query) redirect(searchResultsHref("movies", query));
 
   const home = await loadAnimeMovieHome();
 
@@ -84,15 +71,6 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
       <div
         className={`relative z-10 pb-20 ${heroItems.length > 0 ? "-mt-16 md:-mt-24" : "pt-24"}`}
       >
-        <div className="site-container flex justify-end mb-2">
-          <Link
-            href={SEARCH_HREF}
-            className="text-[#54b9c5] text-xs md:text-sm font-semibold hover:text-white transition"
-          >
-            🔍 アニメ映画を検索
-          </Link>
-        </div>
-
         {home.latest.length > 0 && (
           <ContentRow
             title="🆕 最新作"

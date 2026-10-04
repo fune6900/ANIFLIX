@@ -8,9 +8,8 @@
 //      → AniList で fuzzy 検索し、ヒットした作品の native / synonyms で TMDb を再検索
 //
 // 使用箇所:
-//   - /search/page.tsx (キーワードモード)
-//   - src/components/AnimeMovieSearch.tsx (/browse/movies の検索画面・キーワードモード)
-//   - /api/search/route.ts, /api/search/movies/route.ts
+//   - src/app/search/anime/page.tsx / src/app/search/movies/page.tsx（ヘッダー検索の結果画面）
+//   - /api/search/route.ts, /api/search/movies/route.ts（ヘッダー検索のドロップダウン）
 //
 // ページネーション方針:
 //   - TMDb 原文検索の total_pages を「主結果」のものとして使う

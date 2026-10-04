@@ -7,8 +7,12 @@ import type { TMDbAnime, TMDbMovie, TMDbPerson } from "@/types/tmdb";
 import type { CharacterSearchResult } from "@/types/anilist";
 import { getImageUrl } from "@/lib/tmdb";
 import { assertApiOk } from "@/lib/api-client";
+import {
+  headerSearchResultsHref,
+  type HeaderSearchMode,
+} from "@/lib/search-results";
 
-type SearchMode = "anime" | "movie" | "voice-actor" | "character";
+type SearchMode = HeaderSearchMode;
 
 const RECENT_KEY = "aniflex-recent-searches";
 const MAX_RECENT = 5;
@@ -43,21 +47,6 @@ function addRecentSearch(query: string, mode: SearchMode) {
 
 interface SearchDropdownProps {
   onClose: () => void;
-}
-
-/** モード別の「すべての結果を見る」遷移先パスを返す */
-function buildAllResultsHref(mode: SearchMode, q: string): string {
-  const enc = encodeURIComponent(q);
-  switch (mode) {
-    case "anime":
-      return `/search?q=${enc}`;
-    case "movie":
-      return `/browse/movies?q=${enc}`;
-    case "voice-actor":
-      return `/voice-actors?q=${enc}`;
-    case "character":
-      return `/search/characters?q=${enc}`;
-  }
 }
 
 /** キャラ結果カードのクリック遷移先: キャラ詳細ページ */
@@ -276,7 +265,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
     }
 
     addRecentSearch(q, mode);
-    router.push(buildAllResultsHref(mode, q));
+    router.push(headerSearchResultsHref(mode, q));
     onClose();
   };
 
@@ -744,7 +733,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
                   onClick={() => {
                     const q = query.trim();
                     addRecentSearch(q, mode);
-                    router.push(buildAllResultsHref(mode, q));
+                    router.push(headerSearchResultsHref(mode, q));
                     onClose();
                   }}
                   className="w-full px-4 py-3 text-center text-[#54b9c5] text-sm hover:bg-[#2a2a2a] transition border-t border-gray-700"
@@ -761,7 +750,7 @@ export default function SearchDropdown({ onClose }: SearchDropdownProps) {
               onClick={() => {
                 const q = query.trim();
                 addRecentSearch(q, mode);
-                router.push(buildAllResultsHref(mode, q));
+                router.push(headerSearchResultsHref(mode, q));
                 onClose();
               }}
               className="w-full px-4 py-6 text-center text-[#54b9c5] text-sm hover:bg-[#2a2a2a] transition"

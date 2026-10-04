@@ -207,13 +207,25 @@ describe("signInWithTurnstileAction", () => {
     it("ログイン成功のフラッシュを遷移先に載せる", async () => {
       // OAuth の往復を跨いで通知を届ける唯一の経路
       await signInWithTurnstileAction(
-        "/search?q=naruto",
+        "/browse/genre/16?page=2",
         LOGIN_INITIAL_STATE,
         formWithToken("token-abc"),
       );
 
       expect(signIn).toHaveBeenCalledWith("google", {
-        redirectTo: "/search?q=naruto&flash=signed-in",
+        redirectTo: "/browse/genre/16?page=2&flash=signed-in",
+      });
+    });
+
+    it("検索結果画面からのログインはトップへ戻す（#101）", async () => {
+      await signInWithTurnstileAction(
+        "/search/anime?q=naruto",
+        LOGIN_INITIAL_STATE,
+        formWithToken("token-abc"),
+      );
+
+      expect(signIn).toHaveBeenCalledWith("google", {
+        redirectTo: "/?flash=signed-in",
       });
     });
 

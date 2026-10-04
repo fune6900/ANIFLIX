@@ -16,7 +16,6 @@ import type {
   TMDbTVKeywordsResponse,
   TMDbMovieKeywordsResponse,
 } from "@/types/tmdb";
-import { movieGenreIdsFor } from "@/lib/movie-genres";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -259,43 +258,6 @@ export async function discoverAnime(
   }
 
   return fetchTMDb<TMDbSearchResponse<TMDbAnime>>("/discover/tv", query, 0);
-}
-
-/** 映画版 discover 用パラメータ */
-export interface DiscoverMovieParams {
-  genreId?: number;
-  /** YYYY-MM-DD */
-  dateFrom?: string;
-  dateTo?: string;
-  sortBy?: string;
-  page?: number;
-}
-
-/** 詳細条件で日本のアニメ映画を検索 */
-export async function discoverAnimeMovie(
-  params: DiscoverMovieParams,
-): Promise<TMDbSearchResponse<TMDbMovie>> {
-  const query: Record<string, string> = {
-    with_genres: String(ANIMATION_GENRE_ID),
-    with_origin_country: "JP",
-    sort_by: params.sortBy ?? "popularity.desc",
-    page: String(params.page ?? 1),
-  };
-
-  if (params.genreId) {
-    // TV 専用のジャンル（10759 等）は映画に無く、そのままだと 0 件になる。
-    // 読み替え先が複数あっても with_genres では OR にできないため先頭（主たる側）で絞る
-    const [movieGenreId] = movieGenreIdsFor(params.genreId);
-    query.with_genres = `${ANIMATION_GENRE_ID},${movieGenreId}`;
-  }
-  if (params.dateFrom) {
-    query["primary_release_date.gte"] = params.dateFrom;
-  }
-  if (params.dateTo) {
-    query["primary_release_date.lte"] = params.dateTo;
-  }
-
-  return fetchTMDb<TMDbSearchResponse<TMDbMovie>>("/discover/movie", query, 0);
 }
 
 // アニメ検索（サーバーサイド用）
