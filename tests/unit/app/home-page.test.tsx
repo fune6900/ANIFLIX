@@ -294,8 +294,8 @@ describe("ホーム: 制作会社セクション（#118）", () => {
         a.getAttribute("href")?.startsWith("/browse/studio/") &&
         !/すべて見る/.test(a.textContent ?? ""),
     );
+    expect(ANIME_STUDIOS.length).toBeGreaterThan(0);
     expect(pills).toHaveLength(ANIME_STUDIOS.length);
-    expect(ANIME_STUDIOS).toHaveLength(26);
 
     for (const s of ANIME_STUDIOS) {
       const pill = pills.find(
@@ -309,6 +309,25 @@ describe("ホーム: 制作会社セクション（#118）", () => {
       }
       expect(isAfter(pill!, studio), s.name).toBe(true);
       expect(isAfter(genre, pill!), s.name).toBe(true);
+    }
+  });
+
+  it("ピルの社名は 1 行に収める（長い社名で h-24 から説明文を押し出さない。#117 と同じ）", () => {
+    for (const s of ANIME_STUDIOS) {
+      const pill = links().find(
+        (a) =>
+          a.getAttribute("href") === `/browse/studio/${s.id}` &&
+          !/すべて見る/.test(a.textContent ?? ""),
+      );
+      const name = [...(pill?.querySelectorAll("p") ?? [])].find(
+        (p) => p.textContent === s.name,
+      );
+
+      expect(name, s.name).toBeDefined();
+      for (const cls of ["text-sm", "md:text-base", "leading-tight", "line-clamp-1"]) {
+        expect(name!.classList.contains(cls), `${s.name} ${cls}`).toBe(true);
+      }
+      expect(name!.classList.contains("line-clamp-2"), s.name).toBe(false);
     }
   });
 

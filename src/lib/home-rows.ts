@@ -37,10 +37,24 @@ const SEASON_CANDIDATE_LIMIT = 50;
 export const HOME_ERA_ROW_COUNT = 3;
 
 /**
- * 制作会社行の数。ピル列（全社）とは別に、表示ごとにランダムな数社だけ行にする。
- * 1 社 = TMDb 2 往復（1800 秒キャッシュ）なので、増やすと往復が線形に増える
+ * 制作会社行の数。ピル列（全社）とは別に、表示ごとにランダムな数社だけ行にする
  */
 export const HOME_STUDIO_ROW_COUNT = 3;
+
+/**
+ * 制作会社行に出す最低件数。日本の TV アニメが数本しか無い会社
+ * （スタジオジブリ 1 件・コミックス・ウェーブ・フィルム 8 件。2026-10 実測）は
+ * 行にすると寂しいので飛ばし、次の候補で埋める。
+ * これ以上・30 件未満の会社はあるだけ並べる（行が 30 件に満たないことがある）
+ */
+export const HOME_STUDIO_MIN_ITEMS = 10;
+
+/**
+ * 制作会社行の候補を何社まで取りに行くか。HOME_STUDIO_ROW_COUNT 社ずつの束で
+ * 並列に取り、3 行そろった束で止める。最悪でも 9 社 = TMDb 18 往復
+ * （通常は最初の束で足りて 6 往復。どれも 1800 秒キャッシュ）
+ */
+export const HOME_STUDIO_MAX_CANDIDATES = 9;
 
 /**
  * 連続 2 ページの開始ページの上限。
@@ -70,11 +84,12 @@ export function pickHomeEras(count = HOME_ERA_ROW_COUNT): AnimeEra[] {
 }
 
 /**
- * 表示ごとにランダムな制作会社を count 社（重複なし）。
- * 年代と違い「直近」のような自然な順が無いため、毎回入れ替えて全社に出番を作る
+ * 制作会社行の候補順。全社を表示ごとにランダムに並べる（重複なし）。
+ * 年代と違い「直近」のような自然な順が無いため、毎回入れ替えて全社に出番を作る。
+ * 先頭から fetchStudioRows が件数の足りる会社を拾う
  */
-export function pickHomeStudios(count = HOME_STUDIO_ROW_COUNT): AnimeStudio[] {
-  return shuffle(ANIME_STUDIOS).slice(0, count);
+export function pickHomeStudios(): AnimeStudio[] {
+  return shuffle(ANIME_STUDIOS);
 }
 
 /**
@@ -83,8 +98,9 @@ export function pickHomeStudios(count = HOME_STUDIO_ROW_COUNT): AnimeStudio[] {
  */
 async function fetchTwoPages(
   fetchPage: (page: number) => Promise<TMDbSearchResponse<TMDbAnime>>,
+  maxStartPage = MAX_START_PAGE,
 ): Promise<TMDbAnime[]> {
-  const start = randomPage(MAX_START_PAGE);
+  const start = randomPage(maxStartPage);
   const settled = await Promise.allSettled([
     fetchPage(start),
     fetchPage(start + 1),
@@ -118,9 +134,49 @@ export function fetchEraRow(decade: number): Promise<TMDbAnime[]> {
   return fetchTwoPages((page) => getAnimeByEra(decade, page));
 }
 
-/** 制作会社 1 社分の行 */
+/**
+ * 制作会社 1 社分の行。作品の少ない会社が多く（数十件で尽きる）、
+ * 2 ページ目から始めると空振りするため、開始ページは常に 1
+ */
 export function fetchStudioRow(studio: AnimeStudio): Promise<TMDbAnime[]> {
-  return fetchTwoPages((page) => getAnimeByStudio(studio.id, page));
+  return fetchTwoPages((page) => getAnimeByStudio(studio.id, page), 1);
+}
+
+export interface HomeStudioRow {
+  studio: AnimeStudio;
+  items: TMDbAnime[];
+}
+
+/**
+ * 候補順に制作会社を見て、HOME_STUDIO_MIN_ITEMS 件以上ある最初の
+ * HOME_STUDIO_ROW_COUNT 社の行を返す。
+ * HOME_STUDIO_ROW_COUNT 社ずつの束で並列に取り、そろった束で止める。
+ * 取るのは先頭 HOME_STUDIO_MAX_CANDIDATES 社まで（TMDb の往復を有限に保つ）。
+ * fetchStudioRow は失敗を [] に丸めるので、落ちた会社も「薄い会社」として飛ばす
+ */
+export async function fetchStudioRows(
+  candidates: AnimeStudio[],
+): Promise<HomeStudioRow[]> {
+  const pool = candidates.slice(0, HOME_STUDIO_MAX_CANDIDATES);
+  const rows: HomeStudioRow[] = [];
+  for (
+    let i = 0;
+    i < pool.length && rows.length < HOME_STUDIO_ROW_COUNT;
+    i += HOME_STUDIO_ROW_COUNT
+  ) {
+    const batch = pool.slice(i, i + HOME_STUDIO_ROW_COUNT);
+    const fetched = await Promise.all(
+      batch.map(async (studio) => ({
+        studio,
+        items: await fetchStudioRow(studio),
+      })),
+    );
+    for (const row of fetched) {
+      if (rows.length >= HOME_STUDIO_ROW_COUNT) break;
+      if (row.items.length >= HOME_STUDIO_MIN_ITEMS) rows.push(row);
+    }
+  }
+  return rows;
 }
 
 /**

@@ -33,9 +33,12 @@ const {
   HOME_SEASON_ROW_COUNT,
   HOME_ERA_ROW_COUNT,
   HOME_STUDIO_ROW_COUNT,
-  pickHomeEras,
+  HOME_STUDIO_MIN_ITEMS,
+  HOME_STUDIO_MAX_CANDIDATES,
   pickHomeStudios,
+  pickHomeEras,
   fetchStudioRow,
+  fetchStudioRows,
   fetchGenreRow,
   fetchEraRow,
   fetchSeasonRow,
@@ -124,37 +127,24 @@ describe("pickHomeEras", () => {
 });
 
 describe("pickHomeStudios", () => {
-  it("既定で 3 社（HOME_STUDIO_ROW_COUNT）を返す", () => {
-    expect(HOME_STUDIO_ROW_COUNT).toBe(3);
-    expect(pickHomeStudios()).toHaveLength(3);
-  });
-
-  it("同じ制作会社を重複して選ばない", () => {
+  it("全制作会社を重複なしの候補順で返す", () => {
     for (const r of [0, 0.3, 0.5, 0.7, 0.99]) {
       vi.spyOn(Math, "random").mockReturnValue(r);
       const ids = pickHomeStudios().map((s) => s.id);
-      expect(new Set(ids).size, `random=${r}`).toBe(3);
+
+      expect(ids, `random=${r}`).toHaveLength(ANIME_STUDIOS.length);
+      expect(new Set(ids).size, `random=${r}`).toBe(ANIME_STUDIOS.length);
     }
   });
 
-  it("ANIME_STUDIOS の中から選ぶ", () => {
-    const known = new Set(ANIME_STUDIOS.map((s) => s.id));
-
-    for (const s of pickHomeStudios()) {
-      expect(known.has(s.id)).toBe(true);
-    }
-  });
-
-  it("乱数によって選ばれる会社が変わる（先頭 3 社固定ではない）", () => {
+  it("乱数によって候補順が変わる（定義順固定ではない）", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
     const a = pickHomeStudios().map((s) => s.id);
-    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
     const b = pickHomeStudios().map((s) => s.id);
 
     expect(a).not.toEqual(b);
-    // どちらの乱数でも、定義順の先頭 3 社そのままにはならない
-    const head = ANIME_STUDIOS.slice(0, 3).map((s) => s.id);
-    expect(a).not.toEqual(head);
+    expect(a).not.toEqual(ANIME_STUDIOS.map((s) => s.id));
   });
 
   it("元の ANIME_STUDIOS の並びを壊さない", () => {
@@ -185,6 +175,27 @@ describe("fetchStudioRow", () => {
     expect(items).toHaveLength(30);
   });
 
+  it("開始ページは乱数に関係なく 1（作品の少ない会社は 2 ページ目以降が空）", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    getAnimeByStudio.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+
+    await fetchStudioRow(STUDIO);
+
+    const pages = getAnimeByStudio.mock.calls.map((c) => c[1]).sort();
+    expect(pages).toEqual([1, 2]);
+  });
+
+  it("作品が 30 件に満たない会社はあるだけ返す", async () => {
+    // 1 ページ目 14 件・2 ページ目は空（ufotable / サイエンスSARU 相当）
+    getAnimeByStudio.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(p === 1 ? page(1, 14) : page(100, 0)),
+    );
+
+    await expect(fetchStudioRow(STUDIO)).resolves.toHaveLength(14);
+  });
+
   it("片方のページが落ちても残りで返す", async () => {
     getAnimeByStudio
       .mockResolvedValueOnce(page(1))
@@ -197,6 +208,109 @@ describe("fetchStudioRow", () => {
     getAnimeByStudio.mockRejectedValue(new Error("TMDb down"));
 
     await expect(fetchStudioRow(STUDIO)).resolves.toEqual([]);
+  });
+});
+
+describe("fetchStudioRows", () => {
+  /** id ごとの作品数（1 ページ目に最大 20 件、残りを 2 ページ目に） */
+  function mockStudioSizes(sizes: Map<number, number | "fail">) {
+    getAnimeByStudio.mockImplementation((id: number, p: number) => {
+      const size = sizes.get(id) ?? 30;
+      if (size === "fail") return Promise.reject(new Error("TMDb down"));
+      const onPage = p === 1 ? Math.min(20, size) : Math.max(0, size - 20);
+      return Promise.resolve(page(id * 1000 + p * 100, p > 2 ? 0 : onPage));
+    });
+  }
+
+  function fetchedIds(): number[] {
+    return [...new Set(getAnimeByStudio.mock.calls.map((c) => c[0] as number))];
+  }
+
+  const S = ANIME_STUDIOS;
+
+  it("定数: 3 行・最低 10 件・候補は最大 9 社", () => {
+    expect(HOME_STUDIO_ROW_COUNT).toBe(3);
+    expect(HOME_STUDIO_MIN_ITEMS).toBe(10);
+    expect(HOME_STUDIO_MAX_CANDIDATES).toBe(9);
+  });
+
+  it("十分な件数の会社だけなら先頭 3 社だけを取る（TMDb 6 往復）", async () => {
+    mockStudioSizes(new Map());
+
+    const rows = await fetchStudioRows(S.slice(0, 10));
+
+    expect(rows.map((r) => r.studio.id)).toEqual(S.slice(0, 3).map((s) => s.id));
+    expect(rows.every((r) => r.items.length === 30)).toBe(true);
+    expect(getAnimeByStudio).toHaveBeenCalledTimes(6);
+  });
+
+  it("作品の少ない会社（1 件・8 件・0 件）と失敗した会社を飛ばして 3 行にする", async () => {
+    mockStudioSizes(
+      new Map<number, number | "fail">([
+        [S[0].id, 1],
+        [S[1].id, 8],
+        [S[2].id, 0],
+        [S[3].id, 14],
+        [S[4].id, "fail"],
+        [S[5].id, 30],
+        [S[6].id, 10],
+        [S[7].id, 30],
+      ]),
+    );
+
+    const rows = await fetchStudioRows(S.slice(0, 10));
+
+    expect(rows.map((r) => r.studio.id)).toEqual([
+      S[3].id,
+      S[5].id,
+      S[6].id,
+    ]);
+    expect(rows.map((r) => r.items.length)).toEqual([14, 30, 10]);
+    // 3 社ずつの束で取り、3 行そろった束（3 束目）で止める。S[9] 以降は叩かない
+    expect(fetchedIds()).toEqual(S.slice(0, 9).map((s) => s.id));
+    expect(getAnimeByStudio).toHaveBeenCalledTimes(18);
+  });
+
+  it("各会社の取得は 1・2 ページ目から（乱数に関係なく）", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    mockStudioSizes(new Map([[S[0].id, 8]]));
+
+    await fetchStudioRows(S.slice(0, 10));
+
+    const pages = [...new Set(getAnimeByStudio.mock.calls.map((c) => c[1]))];
+    expect(pages.sort()).toEqual([1, 2]);
+  });
+
+  it("候補が全部薄くても最大 9 社（TMDb 18 往復）で打ち切り、行を出さない", async () => {
+    mockStudioSizes(new Map(S.map((s) => [s.id, 1] as [number, number])));
+
+    const rows = await fetchStudioRows(S);
+
+    expect(rows).toEqual([]);
+    expect(fetchedIds()).toHaveLength(9);
+    expect(getAnimeByStudio).toHaveBeenCalledTimes(18);
+  });
+
+  it("同時に投げるのは 3 社（6 往復）まで", async () => {
+    const resolvers: Array<() => void> = [];
+    getAnimeByStudio.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve(page(1, 1)));
+        }),
+    );
+
+    const pending = fetchStudioRows(S);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(6));
+    await Promise.resolve();
+    expect(getAnimeByStudio).toHaveBeenCalledTimes(6);
+
+    // 束が終わるまで次の束は始まらない
+    for (let done = 0; done < 18; done++) {
+      await vi.waitFor(() => expect(resolvers.length).toBeGreaterThan(done));
+      resolvers[done]();
+    }
+    await expect(pending).resolves.toEqual([]);
   });
 });
 

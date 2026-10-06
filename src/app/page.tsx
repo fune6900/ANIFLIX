@@ -23,7 +23,7 @@ import {
   fetchEraRow,
   fetchGenreRow,
   fetchSeasonRows,
-  fetchStudioRow,
+  fetchStudioRows,
   pickHomeEras,
   pickHomeStudios,
   shuffle,
@@ -62,7 +62,7 @@ function toCastCardItem(c: AggregatedCast): ContentRowItem {
   };
 }
 
-/** ピル（シーズン・年代・ジャンル共通）のサイズ */
+/** ピル（シーズン・年代・制作会社・ジャンル共通）のサイズ */
 const PILL_CLASS =
   "flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br group";
 
@@ -110,7 +110,6 @@ export default async function Home() {
   const rowSeasons = getRecentSeasons(HOME_SEASON_ROW_COUNT);
   const currentSeason = rowSeasons[0];
   const rowEras = pickHomeEras();
-  const rowStudios = pickHomeStudios();
 
   // 既存4列 + 全ジャンル を並列フェッチ
   // トレンドは /browse/trending と同じ週間トレンド（先頭 20 ページを見て日本のアニメに絞る）
@@ -141,7 +140,8 @@ export default async function Home() {
     // 行と一覧で取得元が違うと、行で見た作品が一覧に無い。20 ページ分の TMDb キャッシュは一覧と共有
     loadBrowseCategory("trending", 1, WIDE_PAGE_SIZE),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
-    Promise.all(rowStudios.map((s) => fetchStudioRow(s))),
+    // 表示ごとにランダムな順で全社を見て、件数の足りる 3 社を行にする（最大 TMDb 18 往復）
+    fetchStudioRows(pickHomeStudios()),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
 
@@ -210,14 +210,18 @@ export default async function Home() {
     ...pastSeasonRows.map((row) => row.map(toCardItem)),
   ];
 
-  // 年代行（rowEras と同順）・制作会社行（rowStudios と同順）・ジャンル行（ANIME_GENRES と同順）
+  // 年代行（rowEras と同順）・ジャンル行（ANIME_GENRES と同順）
   const eraItems: ContentRowItem[][] =
     eraRows.status === "fulfilled"
       ? eraRows.value.map((row) => row.map(toCardItem))
       : [];
-  const studioItems: ContentRowItem[][] =
+  // 制作会社行は件数の足りた会社だけが来る（0〜3 行）
+  const studioItems =
     studioRows.status === "fulfilled"
-      ? studioRows.value.map((row) => row.map(toCardItem))
+      ? studioRows.value.map(({ studio, items }) => ({
+          studio,
+          items: items.map(toCardItem),
+        }))
       : [];
   const genreItems: ContentRowItem[][] =
     genreRows.status === "fulfilled"
@@ -357,7 +361,7 @@ export default async function Home() {
               <div className="relative p-3 h-full flex flex-col justify-between">
                 <span className="text-2xl">{studio.emoji}</span>
                 <div>
-                  <p className="text-white font-black text-base leading-tight line-clamp-2">
+                  <p className="text-white font-black text-sm md:text-base leading-tight line-clamp-1">
                     {studio.name}
                   </p>
                   <p className="text-gray-300 text-[10px] mt-0.5 line-clamp-1">
@@ -368,18 +372,14 @@ export default async function Home() {
             </Link>
           ))}
         </div>
-        {rowStudios.map((studio, i) => {
-          const items = studioItems[i] ?? [];
-          if (items.length === 0) return null;
-          return (
-            <ContentRow
-              key={studio.id}
-              title={`${studio.emoji} ${studio.name}`}
-              items={items}
-              allHref={`/browse/studio/${studio.id}`}
-            />
-          );
-        })}
+        {studioItems.map(({ studio, items }) => (
+          <ContentRow
+            key={studio.id}
+            title={`${studio.emoji} ${studio.name}`}
+            items={items}
+            allHref={`/browse/studio/${studio.id}`}
+          />
+        ))}
 
         {/* ジャンル別セクション */}
         <SectionHeader title="ジャンルで探す" href="/browse/genres" />
