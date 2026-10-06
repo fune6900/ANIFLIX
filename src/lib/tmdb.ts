@@ -899,6 +899,7 @@ export async function getAnimeByStudio(
     {
       with_companies: String(companyId),
       with_genres: String(ANIMATION_GENRE_ID),
+      with_origin_country: "JP",
       sort_by: "popularity.desc",
       page: String(page),
     },

@@ -2,6 +2,7 @@ import Link from "next/link";
 import MediaTypeTabs from "@/components/MediaTypeTabs";
 import ListSortTabs from "@/components/ListSortTabs";
 import BrowseListBody from "@/components/BrowseListBody";
+import { gradientStart } from "@/lib/gradient";
 import { ANIME_ERAS } from "@/lib/eras";
 import type { AnimeEra } from "@/lib/eras";
 import { eraListHref } from "@/lib/era-list";
@@ -56,7 +57,7 @@ export default function EraListView({
   return (
     <div className="min-h-screen bg-[#141414]">
       <div
-        className={`relative bg-gradient-to-b ${era.color} to-[#141414] pt-24 pb-14 overflow-hidden`}
+        className={`relative bg-gradient-to-b ${gradientStart(era.color)} to-[#141414] pt-24 pb-14 overflow-hidden`}
       >
         {/* 大きな年代テキスト（装飾） */}
         <div className="absolute right-4 md:right-16 top-1/2 -translate-y-1/2 text-white/5 font-black text-[120px] md:text-[180px] leading-none select-none pointer-events-none">
