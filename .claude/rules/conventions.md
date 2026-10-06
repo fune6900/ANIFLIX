@@ -63,6 +63,7 @@ src/
     search/voice-actors/page.tsx
     search/characters/page.tsx
     browse/                     カテゴリ別ブラウズ
+      studios/page.tsx          制作会社ホーム（Hero + 全社のピル + 各社 1 行）
       movies/latest/            アニメ映画の最新作（「すべて見る」の専用ページ）
       movies/genre/[genreId]/   アニメ映画のジャンル別（「すべて見る」の専用ページ）
       movies/era/[decade]/      アニメ映画の年代別（era/[decade]/ とタブで切り替え）
@@ -75,6 +76,7 @@ src/
                                 / safe-callback-url / turnstile / turnstile-messages / login-action）
                                 + 声優ホームの行（voice-actor-home）・キャラホームの行（character-home）
                                 / 両ホームの共通部分（featured-rows）・定番シリーズ定義（franchises）
+                                + 制作会社ホームの行（studio-home）
   types/                        TMDb / AniList / Turnstile / 声優・キャラホーム（portrait-card）の型定義
 ```
 
