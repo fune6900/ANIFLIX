@@ -78,14 +78,19 @@ export default function Navbar() {
               年代
             </Link>
 
+            {/* 制作会社 → 専用ページへ */}
+            <Link
+              href="/browse/studios"
+              className="hover:text-white transition"
+            >
+              制作会社
+            </Link>
+
             <Link href="/voice-actors" className="hover:text-white transition">
               声優
             </Link>
 
-            <Link
-              href="/characters"
-              className="hover:text-white transition"
-            >
+            <Link href="/characters" className="hover:text-white transition">
               キャラ
             </Link>
 
@@ -163,6 +168,13 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   年代
+                </Link>
+                <Link
+                  href="/browse/studios"
+                  className="block px-5 py-2 text-sm text-gray-200 hover:text-white hover:underline"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  制作会社
                 </Link>
 
                 <Link
