@@ -47,6 +47,8 @@ function page(start: number) {
 
 // true にすると制作会社の取得が全部落ちる（行だけ消え、ホームは落ちないことの確認用）
 let studioFails = false;
+// ここに入れた制作会社は 1 件しか返さない（作品の少ない会社の再現）
+let thinStudioIds = new Set<number>();
 
 vi.mock("@/lib/tmdb", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/tmdb")>();
@@ -60,10 +62,15 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
     getAnimeByKeyword: (_ids: number[], p: number) =>
       Promise.resolve(page(p * 100)),
     getAnimeByEra: (_d: number, p: number) => Promise.resolve(page(p * 100)),
-    getAnimeByStudio: (_id: number, p: number) =>
+    getAnimeByStudio: (id: number, p: number) =>
       studioFails
         ? Promise.reject(new Error("TMDb down"))
-        : Promise.resolve(page(p * 100)),
+        : thinStudioIds.has(id)
+          ? Promise.resolve({
+              ...page(p * 100),
+              results: p === 1 ? [anime(id)] : [],
+            })
+          : Promise.resolve(page(p * 100)),
   };
 });
 
@@ -384,6 +391,39 @@ describe("ホーム: 制作会社の取得失敗", () => {
     expect(
       countLinks(rowFor(`/browse/genre/${ANIME_GENRES[0].id}`), "/anime/"),
     ).toBe(30);
+  });
+});
+
+describe("ホーム: 制作会社の行は件数の足りる会社で埋める", () => {
+  // Math.random を固定すると、ホーム内の shuffle（候補順を含む）が決定的になる
+  let order: typeof ANIME_STUDIOS = [];
+
+  beforeAll(async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { shuffle } = await import("@/lib/home-rows");
+    order = shuffle(ANIME_STUDIOS);
+    // 候補順の先頭 2 社を薄くする。補充しない・shuffle しない配線ではここで崩れる
+    thinStudioIds = new Set([order[0].id, order[1].id]);
+
+    const { container } = render(await Home());
+    homeDom = container.cloneNode(true) as HTMLElement; // cloneNode の戻り値は Node 型
+    cleanup();
+  }, RENDER_TIMEOUT_MS);
+
+  afterAll(() => {
+    thinStudioIds = new Set();
+    vi.restoreAllMocks();
+  });
+
+  it("候補順の薄い会社を飛ばし、次の候補で 3 行にする", () => {
+    const hrefs = studioRowHrefs();
+
+    expect(hrefs).toEqual(
+      order.slice(2, 5).map((s) => `/browse/studio/${s.id}`),
+    );
+    for (const thin of thinStudioIds) {
+      expect(hrefs).not.toContain(`/browse/studio/${thin}`);
+    }
   });
 });
 
