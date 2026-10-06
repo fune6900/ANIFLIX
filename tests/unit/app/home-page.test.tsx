@@ -10,6 +10,7 @@ import {
 import { render, cleanup } from "@testing-library/react";
 import type { TMDbAnime } from "@/types/tmdb";
 import { ANIME_GENRES } from "@/lib/genres";
+import { ANIME_STUDIOS } from "@/lib/studios";
 
 /**
  * ホームの「探す」3 セクション（シーズン / 年代 / ジャンル）の契約（#75）。
@@ -44,6 +45,11 @@ function page(start: number) {
   };
 }
 
+// true にすると制作会社の取得が全部落ちる（行だけ消え、ホームは落ちないことの確認用）
+let studioFails = false;
+// ここに入れた制作会社は 1 件しか返さない（作品の少ない会社の再現）
+let thinStudioIds = new Set<number>();
+
 vi.mock("@/lib/tmdb", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/tmdb")>();
   return {
@@ -56,6 +62,15 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
     getAnimeByKeyword: (_ids: number[], p: number) =>
       Promise.resolve(page(p * 100)),
     getAnimeByEra: (_d: number, p: number) => Promise.resolve(page(p * 100)),
+    getAnimeByStudio: (id: number, p: number) =>
+      studioFails
+        ? Promise.reject(new Error("TMDb down"))
+        : thinStudioIds.has(id)
+          ? Promise.resolve({
+              ...page(p * 100),
+              results: p === 1 ? [anime(id)] : [],
+            })
+          : Promise.resolve(page(p * 100)),
   };
 });
 
@@ -222,6 +237,193 @@ describe("ホーム: 探すセクション", () => {
     expect(countLinks(heading?.parentElement ?? null, "/voice-actors/")).toBe(
       20,
     );
+  });
+});
+
+/** 見出し（SectionHeader の h2）を本文で探す */
+function sectionHeading(title: string): HTMLElement | null {
+  return (
+    [...homeDom.querySelectorAll<HTMLElement>("h2")].find(
+      (h) => h.textContent === title,
+    ) ?? null
+  );
+}
+
+/** a が b より文書順で後ろにある */
+function isAfter(a: Node, b: Node): boolean {
+  return Boolean(b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+/** 制作会社の行（「すべて見る」が /browse/studio/ を指す h2）の遷移先 */
+function studioRowHrefs(): string[] {
+  return hrefsOf(/すべて見る/).filter((h) => h.startsWith("/browse/studio/"));
+}
+
+describe("ホーム: 制作会社セクション（#118）", () => {
+  beforeAll(async () => {
+    studioFails = false;
+    const { container } = render(await Home());
+    homeDom = container.cloneNode(true) as HTMLElement; // cloneNode の戻り値は Node 型
+    cleanup();
+  }, RENDER_TIMEOUT_MS);
+
+  it("年代セクションとジャンルセクションの間に置く", () => {
+    const era = sectionHeading("年代で探す");
+    const studio = sectionHeading("制作会社で探す");
+    const genre = sectionHeading("ジャンルで探す");
+
+    expect(era).not.toBeNull();
+    expect(studio).not.toBeNull();
+    expect(genre).not.toBeNull();
+    expect(isAfter(studio!, era!)).toBe(true);
+    expect(isAfter(genre!, studio!)).toBe(true);
+
+    // 年代の行は制作会社の見出しより前に終わっている
+    const lastEraRow = rowFor("/browse/era/2000");
+    expect(lastEraRow).not.toBeNull();
+    expect(isAfter(studio!, lastEraRow!)).toBe(true);
+  });
+
+  it("見出しの「一覧へ →」は /browse/studios", () => {
+    const header = sectionHeading("制作会社で探す")?.parentElement;
+    const more = header?.querySelector("a[href]");
+
+    expect(more?.getAttribute("href")).toBe("/browse/studios");
+    expect(more?.textContent).toMatch(/一覧へ/);
+  });
+
+  it("全制作会社のピルが定義の色で並び、各社の専用ページへ飛ぶ", () => {
+    const studio = sectionHeading("制作会社で探す")!;
+    const genre = sectionHeading("ジャンルで探す")!;
+
+    const pills = links().filter(
+      (a) =>
+        a.getAttribute("href")?.startsWith("/browse/studio/") &&
+        !/すべて見る/.test(a.textContent ?? ""),
+    );
+    expect(ANIME_STUDIOS.length).toBeGreaterThan(0);
+    expect(pills).toHaveLength(ANIME_STUDIOS.length);
+
+    for (const s of ANIME_STUDIOS) {
+      const pill = pills.find(
+        (a) => a.getAttribute("href") === `/browse/studio/${s.id}`,
+      );
+
+      expect(pill, s.name).toBeDefined();
+      expect(pill!.textContent, s.name).toContain(s.name);
+      for (const cls of s.color.split(/\s+/)) {
+        expect(pill!.classList.contains(cls), `${s.name} ${cls}`).toBe(true);
+      }
+      expect(isAfter(pill!, studio), s.name).toBe(true);
+      expect(isAfter(genre, pill!), s.name).toBe(true);
+    }
+  });
+
+  it("ピルの社名は 1 行に収める（長い社名で h-24 から説明文を押し出さない。#117 と同じ）", () => {
+    for (const s of ANIME_STUDIOS) {
+      const pill = links().find(
+        (a) =>
+          a.getAttribute("href") === `/browse/studio/${s.id}` &&
+          !/すべて見る/.test(a.textContent ?? ""),
+      );
+      const name = [...(pill?.querySelectorAll("p") ?? [])].find(
+        (p) => p.textContent === s.name,
+      );
+
+      expect(name, s.name).toBeDefined();
+      for (const cls of ["text-sm", "md:text-base", "leading-tight", "line-clamp-1"]) {
+        expect(name!.classList.contains(cls), `${s.name} ${cls}`).toBe(true);
+      }
+      expect(name!.classList.contains("line-clamp-2"), s.name).toBe(false);
+    }
+  });
+
+  it("ランダムな 3 社の行があり、重複しない", () => {
+    const hrefs = studioRowHrefs();
+
+    expect(hrefs).toHaveLength(3);
+    expect(new Set(hrefs).size).toBe(3);
+    const known = new Set(ANIME_STUDIOS.map((s) => `/browse/studio/${s.id}`));
+    expect(hrefs.every((h) => known.has(h))).toBe(true);
+  });
+
+  it("各行は「絵文字 社名」の見出しで 30 件並び、制作会社の見出しとジャンルの見出しの間にある", () => {
+    const studio = sectionHeading("制作会社で探す")!;
+    const genre = sectionHeading("ジャンルで探す")!;
+    // 行が 1 つも無いと下のループが空回りして素通りする
+    expect(studioRowHrefs()).toHaveLength(3);
+
+    for (const href of studioRowHrefs()) {
+      const s = ANIME_STUDIOS.find((x) => `/browse/studio/${x.id}` === href)!;
+      const row = rowFor(href);
+
+      expect(row, href).not.toBeNull();
+      expect(row!.querySelector("h2")?.textContent).toContain(
+        `${s.emoji} ${s.name}`,
+      );
+      expect(countLinks(row, "/anime/"), href).toBe(30);
+      expect(isAfter(row!, studio), href).toBe(true);
+      expect(isAfter(genre, row!), href).toBe(true);
+    }
+  });
+});
+
+describe("ホーム: 制作会社の取得失敗", () => {
+  beforeAll(async () => {
+    studioFails = true;
+    const { container } = render(await Home());
+    homeDom = container.cloneNode(true) as HTMLElement; // cloneNode の戻り値は Node 型
+    cleanup();
+  }, RENDER_TIMEOUT_MS);
+
+  afterAll(() => {
+    studioFails = false;
+  });
+
+  it("制作会社の行だけが消え、ピルと他のセクションは残る", () => {
+    expect(studioRowHrefs()).toEqual([]);
+
+    const pills = links().filter((a) =>
+      a.getAttribute("href")?.startsWith("/browse/studio/"),
+    );
+    expect(pills).toHaveLength(ANIME_STUDIOS.length);
+    expect(countLinks(rowFor("/browse/era/2020"), "/anime/")).toBe(30);
+    expect(
+      countLinks(rowFor(`/browse/genre/${ANIME_GENRES[0].id}`), "/anime/"),
+    ).toBe(30);
+  });
+});
+
+describe("ホーム: 制作会社の行は件数の足りる会社で埋める", () => {
+  // Math.random を固定すると、ホーム内の shuffle（候補順を含む）が決定的になる
+  let order: typeof ANIME_STUDIOS = [];
+
+  beforeAll(async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { shuffle } = await import("@/lib/home-rows");
+    order = shuffle(ANIME_STUDIOS);
+    // 候補順の先頭 2 社を薄くする。補充しない・shuffle しない配線ではここで崩れる
+    thinStudioIds = new Set([order[0].id, order[1].id]);
+
+    const { container } = render(await Home());
+    homeDom = container.cloneNode(true) as HTMLElement; // cloneNode の戻り値は Node 型
+    cleanup();
+  }, RENDER_TIMEOUT_MS);
+
+  afterAll(() => {
+    thinStudioIds = new Set();
+    vi.restoreAllMocks();
+  });
+
+  it("候補順の薄い会社を飛ばし、次の候補で 3 行にする", () => {
+    const hrefs = studioRowHrefs();
+
+    expect(hrefs).toEqual(
+      order.slice(2, 5).map((s) => `/browse/studio/${s.id}`),
+    );
+    for (const thin of thinStudioIds) {
+      expect(hrefs).not.toContain(`/browse/studio/${thin}`);
+    }
   });
 });
 

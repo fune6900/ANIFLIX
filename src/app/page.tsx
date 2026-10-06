@@ -15,6 +15,7 @@ import {
 import { ANIME_GENRES } from "@/lib/genres";
 import { WIDE_PAGE_SIZE, loadBrowseCategory } from "@/lib/browse-category";
 import { ANIME_ERAS } from "@/lib/eras";
+import { ANIME_STUDIOS } from "@/lib/studios";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
 import {
   HOME_ROW_SIZE,
@@ -22,7 +23,9 @@ import {
   fetchEraRow,
   fetchGenreRow,
   fetchSeasonRows,
+  fetchStudioRows,
   pickHomeEras,
+  pickHomeStudios,
   shuffle,
 } from "@/lib/home-rows";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -59,7 +62,7 @@ function toCastCardItem(c: AggregatedCast): ContentRowItem {
   };
 }
 
-/** ピル（シーズン・年代・ジャンル共通）のサイズ */
+/** ピル（シーズン・年代・制作会社・ジャンル共通）のサイズ */
 const PILL_CLASS =
   "flex-shrink-0 relative overflow-hidden rounded-lg w-36 md:w-44 xl:w-52 2xl:w-60 4xl:w-72 5xl:w-80 h-24 md:h-28 xl:h-32 2xl:h-36 4xl:h-40 5xl:h-44 bg-gradient-to-br group";
 
@@ -119,13 +122,14 @@ export default async function Home() {
   // fetchSeasonRows は各シーズンの失敗を [] に丸めるので reject しない
   const pastSeasonRowsPromise = fetchSeasonRows(rowSeasons.slice(1));
 
-  // 年代・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
+  // 年代・制作会社・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
   // 現クールの行は TOP10 と同じ取得結果を使い回し、AniList への往復を 1 回減らす
   const [
     currentSeasonResult,
     newData,
     trendingData,
     eraRows,
+    studioRows,
     genreRows,
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
@@ -136,6 +140,8 @@ export default async function Home() {
     // 行と一覧で取得元が違うと、行で見た作品が一覧に無い。20 ページ分の TMDb キャッシュは一覧と共有
     loadBrowseCategory("trending", 1, WIDE_PAGE_SIZE),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
+    // 表示ごとにランダムな順で全社を見て、件数の足りる 3 社を行にする（最大 TMDb 18 往復）
+    fetchStudioRows(pickHomeStudios()),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
 
@@ -208,6 +214,14 @@ export default async function Home() {
   const eraItems: ContentRowItem[][] =
     eraRows.status === "fulfilled"
       ? eraRows.value.map((row) => row.map(toCardItem))
+      : [];
+  // 制作会社行は件数の足りた会社だけが来る（0〜3 行）
+  const studioItems =
+    studioRows.status === "fulfilled"
+      ? studioRows.value.map(({ studio, items }) => ({
+          studio,
+          items: items.map(toCardItem),
+        }))
       : [];
   const genreItems: ContentRowItem[][] =
     genreRows.status === "fulfilled"
@@ -330,6 +344,42 @@ export default async function Home() {
             />
           );
         })}
+
+        {/* 制作会社別セクション */}
+        <SectionHeader title="制作会社で探す" href="/browse/studios" />
+        <div
+          className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {ANIME_STUDIOS.map((studio) => (
+            <Link
+              key={studio.id}
+              href={`/browse/studio/${studio.id}`}
+              className={`${PILL_CLASS} ${studio.color}`}
+            >
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+              <div className="relative p-3 h-full flex flex-col justify-between">
+                <span className="text-2xl">{studio.emoji}</span>
+                <div>
+                  <p className="text-white font-black text-sm md:text-base leading-tight line-clamp-1">
+                    {studio.name}
+                  </p>
+                  <p className="text-gray-300 text-[10px] mt-0.5 line-clamp-1">
+                    {studio.description}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+        {studioItems.map(({ studio, items }) => (
+          <ContentRow
+            key={studio.id}
+            title={`${studio.emoji} ${studio.name}`}
+            items={items}
+            allHref={`/browse/studio/${studio.id}`}
+          />
+        ))}
 
         {/* ジャンル別セクション */}
         <SectionHeader title="ジャンルで探す" href="/browse/genres" />
