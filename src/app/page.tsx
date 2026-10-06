@@ -15,6 +15,7 @@ import {
 import { ANIME_GENRES } from "@/lib/genres";
 import { WIDE_PAGE_SIZE, loadBrowseCategory } from "@/lib/browse-category";
 import { ANIME_ERAS } from "@/lib/eras";
+import { ANIME_STUDIOS } from "@/lib/studios";
 import { getRecentSeasons, SEASON_COLORS } from "@/lib/seasons";
 import {
   HOME_ROW_SIZE,
@@ -22,7 +23,9 @@ import {
   fetchEraRow,
   fetchGenreRow,
   fetchSeasonRows,
+  fetchStudioRow,
   pickHomeEras,
+  pickHomeStudios,
   shuffle,
 } from "@/lib/home-rows";
 import type { TMDbAnime } from "@/types/tmdb";
@@ -107,6 +110,7 @@ export default async function Home() {
   const rowSeasons = getRecentSeasons(HOME_SEASON_ROW_COUNT);
   const currentSeason = rowSeasons[0];
   const rowEras = pickHomeEras();
+  const rowStudios = pickHomeStudios();
 
   // 既存4列 + 全ジャンル を並列フェッチ
   // トレンドは /browse/trending と同じ週間トレンド（先頭 20 ページを見て日本のアニメに絞る）
@@ -119,13 +123,14 @@ export default async function Home() {
   // fetchSeasonRows は各シーズンの失敗を [] に丸めるので reject しない
   const pastSeasonRowsPromise = fetchSeasonRows(rowSeasons.slice(1));
 
-  // 年代・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
+  // 年代・制作会社・ジャンルの行は 1 段目で並列に取る（各 fetch*Row は失敗しても [] を返す）。
   // 現クールの行は TOP10 と同じ取得結果を使い回し、AniList への往復を 1 回減らす
   const [
     currentSeasonResult,
     newData,
     trendingData,
     eraRows,
+    studioRows,
     genreRows,
   ] = await Promise.allSettled([
     fetchSeasonalAnime(currentSeason.year, currentSeason.season, { limit: 50 }),
@@ -136,6 +141,7 @@ export default async function Home() {
     // 行と一覧で取得元が違うと、行で見た作品が一覧に無い。20 ページ分の TMDb キャッシュは一覧と共有
     loadBrowseCategory("trending", 1, WIDE_PAGE_SIZE),
     Promise.all(rowEras.map((e) => fetchEraRow(e.decade))),
+    Promise.all(rowStudios.map((s) => fetchStudioRow(s))),
     Promise.all(ANIME_GENRES.map((g) => fetchGenreRow(g))),
   ]);
 
@@ -204,10 +210,14 @@ export default async function Home() {
     ...pastSeasonRows.map((row) => row.map(toCardItem)),
   ];
 
-  // 年代行（rowEras と同順）・ジャンル行（ANIME_GENRES と同順）
+  // 年代行（rowEras と同順）・制作会社行（rowStudios と同順）・ジャンル行（ANIME_GENRES と同順）
   const eraItems: ContentRowItem[][] =
     eraRows.status === "fulfilled"
       ? eraRows.value.map((row) => row.map(toCardItem))
+      : [];
+  const studioItems: ContentRowItem[][] =
+    studioRows.status === "fulfilled"
+      ? studioRows.value.map((row) => row.map(toCardItem))
       : [];
   const genreItems: ContentRowItem[][] =
     genreRows.status === "fulfilled"
@@ -327,6 +337,46 @@ export default async function Home() {
               title={`${era.emoji} ${era.label}`}
               items={items}
               allHref={`/browse/era/${era.decade}`}
+            />
+          );
+        })}
+
+        {/* 制作会社別セクション */}
+        <SectionHeader title="制作会社で探す" href="/browse/studios" />
+        <div
+          className="site-container flex gap-3 xl:gap-4 mb-8 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {ANIME_STUDIOS.map((studio) => (
+            <Link
+              key={studio.id}
+              href={`/browse/studio/${studio.id}`}
+              className={`${PILL_CLASS} ${studio.color}`}
+            >
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+              <div className="relative p-3 h-full flex flex-col justify-between">
+                <span className="text-2xl">{studio.emoji}</span>
+                <div>
+                  <p className="text-white font-black text-base leading-tight line-clamp-2">
+                    {studio.name}
+                  </p>
+                  <p className="text-gray-300 text-[10px] mt-0.5 line-clamp-1">
+                    {studio.description}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+        {rowStudios.map((studio, i) => {
+          const items = studioItems[i] ?? [];
+          if (items.length === 0) return null;
+          return (
+            <ContentRow
+              key={studio.id}
+              title={`${studio.emoji} ${studio.name}`}
+              items={items}
+              allHref={`/browse/studio/${studio.id}`}
             />
           );
         })}

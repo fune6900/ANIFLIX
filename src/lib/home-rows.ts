@@ -1,11 +1,18 @@
-// ホームの「シーズン / 年代 / ジャンルで探す」の行を組み立てる
+// ホームの「シーズン / 年代 / 制作会社 / ジャンルで探す」の行を組み立てる
 
-import { getAnimeByEra, getAnimeByGenre, getAnimeByKeyword } from "@/lib/tmdb";
+import {
+  getAnimeByEra,
+  getAnimeByGenre,
+  getAnimeByKeyword,
+  getAnimeByStudio,
+} from "@/lib/tmdb";
 import { fetchSeasonalAnime } from "@/lib/seasonal-anime";
 import { ANIME_ERAS } from "@/lib/eras";
 import type { AnimeEra } from "@/lib/eras";
 import { genreKeywordIds } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
+import { ANIME_STUDIOS } from "@/lib/studios";
+import type { AnimeStudio } from "@/lib/studios";
 import type { SeasonSlug } from "@/lib/seasons";
 import type { TMDbAnime, TMDbSearchResponse } from "@/types/tmdb";
 
@@ -28,6 +35,12 @@ const SEASON_CANDIDATE_LIMIT = 50;
 
 /** 年代行の数。ピル列（全年代）とは別に、直近の年代だけ行にする */
 export const HOME_ERA_ROW_COUNT = 3;
+
+/**
+ * 制作会社行の数。ピル列（全社）とは別に、表示ごとにランダムな数社だけ行にする。
+ * 1 社 = TMDb 2 往復（1800 秒キャッシュ）なので、増やすと往復が線形に増える
+ */
+export const HOME_STUDIO_ROW_COUNT = 3;
 
 /**
  * 連続 2 ページの開始ページの上限。
@@ -54,6 +67,14 @@ export function randomPage(max = 3): number {
 /** 直近の年代を新しい順に count 件 */
 export function pickHomeEras(count = HOME_ERA_ROW_COUNT): AnimeEra[] {
   return [...ANIME_ERAS].sort((a, b) => b.decade - a.decade).slice(0, count);
+}
+
+/**
+ * 表示ごとにランダムな制作会社を count 社（重複なし）。
+ * 年代と違い「直近」のような自然な順が無いため、毎回入れ替えて全社に出番を作る
+ */
+export function pickHomeStudios(count = HOME_STUDIO_ROW_COUNT): AnimeStudio[] {
+  return shuffle(ANIME_STUDIOS).slice(0, count);
 }
 
 /**
@@ -95,6 +116,11 @@ export function fetchGenreRow(genre: AnimeGenre): Promise<TMDbAnime[]> {
 /** 年代 1 件分の行 */
 export function fetchEraRow(decade: number): Promise<TMDbAnime[]> {
   return fetchTwoPages((page) => getAnimeByEra(decade, page));
+}
+
+/** 制作会社 1 社分の行 */
+export function fetchStudioRow(studio: AnimeStudio): Promise<TMDbAnime[]> {
+  return fetchTwoPages((page) => getAnimeByStudio(studio.id, page));
 }
 
 /**

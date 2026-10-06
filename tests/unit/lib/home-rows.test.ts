@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { TMDbAnime } from "@/types/tmdb";
 import type { AnimeGenre } from "@/lib/genres";
 import { ANIME_ERAS } from "@/lib/eras";
+import { ANIME_STUDIOS } from "@/lib/studios";
 
 /**
  * ホームの「シーズン / 年代 / ジャンルで探す」の行を組み立てる。
@@ -13,12 +14,14 @@ import { ANIME_ERAS } from "@/lib/eras";
 const getAnimeByGenre = vi.fn();
 const getAnimeByKeyword = vi.fn();
 const getAnimeByEra = vi.fn();
+const getAnimeByStudio = vi.fn();
 const fetchSeasonalAnime = vi.fn();
 
 vi.mock("@/lib/tmdb", () => ({
   getAnimeByGenre: (...a: unknown[]) => getAnimeByGenre(...a),
   getAnimeByKeyword: (...a: unknown[]) => getAnimeByKeyword(...a),
   getAnimeByEra: (...a: unknown[]) => getAnimeByEra(...a),
+  getAnimeByStudio: (...a: unknown[]) => getAnimeByStudio(...a),
 }));
 
 vi.mock("@/lib/seasonal-anime", () => ({
@@ -29,7 +32,10 @@ const {
   HOME_ROW_SIZE,
   HOME_SEASON_ROW_COUNT,
   HOME_ERA_ROW_COUNT,
+  HOME_STUDIO_ROW_COUNT,
   pickHomeEras,
+  pickHomeStudios,
+  fetchStudioRow,
   fetchGenreRow,
   fetchEraRow,
   fetchSeasonRow,
@@ -89,6 +95,7 @@ afterEach(() => {
   getAnimeByGenre.mockReset();
   getAnimeByKeyword.mockReset();
   getAnimeByEra.mockReset();
+  getAnimeByStudio.mockReset();
   fetchSeasonalAnime.mockReset();
 });
 
@@ -113,6 +120,83 @@ describe("pickHomeEras", () => {
     pickHomeEras(3);
 
     expect(ANIME_ERAS.map((e) => e.decade)).toEqual(before);
+  });
+});
+
+describe("pickHomeStudios", () => {
+  it("既定で 3 社（HOME_STUDIO_ROW_COUNT）を返す", () => {
+    expect(HOME_STUDIO_ROW_COUNT).toBe(3);
+    expect(pickHomeStudios()).toHaveLength(3);
+  });
+
+  it("同じ制作会社を重複して選ばない", () => {
+    for (const r of [0, 0.3, 0.5, 0.7, 0.99]) {
+      vi.spyOn(Math, "random").mockReturnValue(r);
+      const ids = pickHomeStudios().map((s) => s.id);
+      expect(new Set(ids).size, `random=${r}`).toBe(3);
+    }
+  });
+
+  it("ANIME_STUDIOS の中から選ぶ", () => {
+    const known = new Set(ANIME_STUDIOS.map((s) => s.id));
+
+    for (const s of pickHomeStudios()) {
+      expect(known.has(s.id)).toBe(true);
+    }
+  });
+
+  it("乱数によって選ばれる会社が変わる（先頭 3 社固定ではない）", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const a = pickHomeStudios().map((s) => s.id);
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const b = pickHomeStudios().map((s) => s.id);
+
+    expect(a).not.toEqual(b);
+    // どちらの乱数でも、定義順の先頭 3 社そのままにはならない
+    const head = ANIME_STUDIOS.slice(0, 3).map((s) => s.id);
+    expect(a).not.toEqual(head);
+  });
+
+  it("元の ANIME_STUDIOS の並びを壊さない", () => {
+    const before = ANIME_STUDIOS.map((s) => s.id);
+
+    pickHomeStudios();
+
+    expect(ANIME_STUDIOS.map((s) => s.id)).toEqual(before);
+  });
+});
+
+describe("fetchStudioRow", () => {
+  const STUDIO = ANIME_STUDIOS[0];
+
+  it("その制作会社を連続 2 ページ取り、30 件に揃える", async () => {
+    getAnimeByStudio.mockImplementation((_id: number, p: number) =>
+      Promise.resolve(page(p * 100)),
+    );
+
+    const items = await fetchStudioRow(STUDIO);
+
+    expect(getAnimeByStudio).toHaveBeenCalledTimes(2);
+    expect(
+      getAnimeByStudio.mock.calls.every((c) => c[0] === STUDIO.id),
+    ).toBe(true);
+    const pages = getAnimeByStudio.mock.calls.map((c) => c[1]).sort();
+    expect(pages).toEqual([1, 2]);
+    expect(items).toHaveLength(30);
+  });
+
+  it("片方のページが落ちても残りで返す", async () => {
+    getAnimeByStudio
+      .mockResolvedValueOnce(page(1))
+      .mockRejectedValueOnce(new Error("TMDb down"));
+
+    await expect(fetchStudioRow(STUDIO)).resolves.toHaveLength(20);
+  });
+
+  it("失敗したら空配列", async () => {
+    getAnimeByStudio.mockRejectedValue(new Error("TMDb down"));
+
+    await expect(fetchStudioRow(STUDIO)).resolves.toEqual([]);
   });
 });
 
