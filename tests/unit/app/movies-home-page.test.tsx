@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import type { TMDbMovie } from "@/types/tmdb";
 import { ANIME_GENRES } from "@/lib/genres";
@@ -51,9 +51,12 @@ const HOME: AnimeMovieHome = {
   })),
 };
 
+/** 描画に使うホーム。スタジオ行の出し分けを見るテストだけ差し替える */
+let currentHome: AnimeMovieHome = HOME;
+
 vi.mock("@/lib/movie-home-rows", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/movie-home-rows")>();
-  return { ...actual, loadAnimeMovieHome: async () => HOME };
+  return { ...actual, loadAnimeMovieHome: async () => currentHome };
 });
 
 vi.mock("@/lib/tmdb", async (importOriginal) => {
@@ -232,4 +235,49 @@ describe("アニメ映画画面: 検索画面は持たない（#101）", () => {
       expect(dom.textContent).not.toContain("アニメ映画を検索");
     },
   );
+});
+
+describe("アニメ映画画面: スタジオ別の行（#116）", () => {
+  afterEach(() => {
+    currentHome = HOME;
+  });
+
+  it("作品が 0 件のスタジオは行を出さず、残りは定義の順に出す", async () => {
+    // 偶数番目だけ作品がある
+    currentHome = {
+      ...HOME,
+      studios: HOME.studios.map((row, i) =>
+        i % 2 === 0 ? row : { ...row, movies: [] },
+      ),
+    };
+    const dom = await renderPage();
+    const all = headings(dom);
+
+    const shown = ANIME_STUDIOS.filter((_, i) => i % 2 === 0);
+    const hidden = ANIME_STUDIOS.filter((_, i) => i % 2 === 1);
+    for (const s of hidden) {
+      expect(indexOfRow(all, s.name), s.name).toBe(-1);
+    }
+    const positions = shown.map((s) => indexOfRow(all, s.name));
+    for (const [i, p] of positions.entries()) {
+      expect(p, shown[i].name).toBeGreaterThanOrEqual(0);
+    }
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    // 区切り見出しは h2 ではなく p
+    expect(dom.textContent).toContain("スタジオ別");
+  });
+
+  it("全スタジオが 0 件なら「スタジオ別」の見出しも出さない", async () => {
+    currentHome = {
+      ...HOME,
+      studios: HOME.studios.map((row) => ({ ...row, movies: [] })),
+    };
+    const dom = await renderPage();
+    const all = headings(dom);
+
+    expect(dom.textContent).not.toContain("スタジオ別");
+    for (const s of ANIME_STUDIOS) {
+      expect(indexOfRow(all, s.name), s.name).toBe(-1);
+    }
+  });
 });
