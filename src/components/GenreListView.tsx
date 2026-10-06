@@ -2,6 +2,7 @@ import Link from "next/link";
 import MediaTypeTabs from "@/components/MediaTypeTabs";
 import ListSortTabs from "@/components/ListSortTabs";
 import BrowseListBody from "@/components/BrowseListBody";
+import { gradientStart } from "@/lib/gradient";
 import { ANIME_GENRES } from "@/lib/genres";
 import type { AnimeGenre } from "@/lib/genres";
 import { genreListHref } from "@/lib/genre-list";
@@ -50,7 +51,7 @@ export default function GenreListView({
   return (
     <div className="min-h-screen bg-[#141414]">
       <div
-        className={`relative bg-gradient-to-b ${genre.color} to-[#141414] pt-24 pb-12`}
+        className={`relative bg-gradient-to-b ${gradientStart(genre.color)} to-[#141414] pt-24 pb-12`}
       >
         <div
           className="absolute inset-0 opacity-10 pointer-events-none"

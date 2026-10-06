@@ -6,8 +6,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
  */
 
 let fetchMock: ReturnType<typeof vi.fn>;
+let savedToken: string | undefined;
 
 beforeEach(() => {
+  savedToken = process.env.TMDB_ACCESS_TOKEN;
   process.env.TMDB_ACCESS_TOKEN = "test-token";
   fetchMock = vi.fn(async () =>
     Response.json({ results: [], page: 1, total_pages: 0, total_results: 0 }),
@@ -16,6 +18,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // 他のテストファイルへトークンを漏らさない（未設定だった場合は消す）
+  if (savedToken === undefined) delete process.env.TMDB_ACCESS_TOKEN;
+  else process.env.TMDB_ACCESS_TOKEN = savedToken;
   vi.unstubAllGlobals();
   vi.resetModules();
 });
