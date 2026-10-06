@@ -14,9 +14,18 @@ import type { TMDbAnime } from "@/types/tmdb";
 /** 1 行の件数。26 社ぶん並ぶので TMDb 1 ページ（20 件）に留める */
 export const STUDIO_ROW_SIZE = 20;
 
+/**
+ * 行を出す最低件数。これ未満の社は行を空にする（ピルは残り、一覧ページへは辿れる）。
+ * TMDb で日本の TV アニメとして登録された作品が極端に少ない社がある
+ * （例: スタジオジブリは劇場作品が中心で、2026-10 時点で 1 件のみ＝
+ * 「Coleção Studio Ghibli」）。1〜数枚の行は横スクロールの行として成り立たず、
+ * 社の代表作とも限らないので、カルーセルの候補からも外す
+ */
+export const STUDIO_ROW_MIN_WORKS = 5;
+
 export interface StudioRow {
   studio: AnimeStudio;
-  /** 人気順。取得に失敗した社は空 */
+  /** 人気順。取得に失敗した社・作品が `STUDIO_ROW_MIN_WORKS` 未満の社は空 */
   anime: TMDbAnime[];
 }
 
@@ -30,6 +39,7 @@ export interface StudioHome {
 /** 1 社分の行（人気順の 1 ページ目） */
 async function fetchStudioRow(studio: AnimeStudio): Promise<TMDbAnime[]> {
   const res = await getAnimeByStudio(studio.id, 1);
+  if (res.results.length < STUDIO_ROW_MIN_WORKS) return [];
   return res.results.slice(0, STUDIO_ROW_SIZE);
 }
 

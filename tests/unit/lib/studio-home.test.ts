@@ -72,7 +72,8 @@ vi.mock("@/lib/tmdb", async (importOriginal) => {
   return { ...actual, getAnimeByStudio };
 });
 
-const { loadStudioHome, STUDIO_ROW_SIZE } = await import("@/lib/studio-home");
+const { loadStudioHome, STUDIO_ROW_SIZE, STUDIO_ROW_MIN_WORKS } =
+  await import("@/lib/studio-home");
 
 beforeEach(() => {
   getAnimeByStudio.mockReset();
@@ -162,6 +163,56 @@ describe("loadStudioHome: 行", () => {
   });
 });
 
+describe("loadStudioHome: 作品の少ない社", () => {
+  it("下限は 5 件", () => {
+    expect(STUDIO_ROW_MIN_WORKS).toBe(5);
+  });
+
+  it.each([1, 2, 3, 4])(
+    "%i 件しかない社は行を空にし、カルーセルにも使わない",
+    async (n) => {
+      const sparse = ANIME_STUDIOS[0].id;
+      getAnimeByStudio.mockImplementation(async (companyId: number) =>
+        companyId === sparse
+          ? response(worksOf(0, n))
+          : response(worksOf(studioIndexOf(companyId))),
+      );
+
+      const home = await loadStudioHome();
+
+      expect(home.rows[0].anime).toEqual([]);
+      expect(home.rows.slice(1).every((r) => r.anime.length === 20)).toBe(true);
+      expect(home.hero.some((a) => ownerOf(a.id) === 0)).toBe(false);
+    },
+  );
+
+  it("ちょうど 5 件の社は行を出す", async () => {
+    const sparse = ANIME_STUDIOS[0].id;
+    getAnimeByStudio.mockImplementation(async (companyId: number) =>
+      companyId === sparse
+        ? response(worksOf(0, 5))
+        : response(worksOf(studioIndexOf(companyId))),
+    );
+
+    const home = await loadStudioHome();
+
+    expect(home.rows[0].anime.map((a) => a.id)).toEqual(
+      worksOf(0, 5).map((a) => a.id),
+    );
+  });
+
+  it("作品の少ない社しか無ければカルーセルは空", async () => {
+    getAnimeByStudio.mockImplementation(async (companyId: number) =>
+      response(worksOf(studioIndexOf(companyId), 4)),
+    );
+
+    const home = await loadStudioHome();
+
+    expect(home.hero).toEqual([]);
+    expect(home.rows.every((r) => r.anime.length === 0)).toBe(true);
+  });
+});
+
 describe("loadStudioHome: カルーセル", () => {
   it("6 件。背景画像とあらすじのある作品だけ", async () => {
     // どの社も先頭 2 件はカルーセルに使えない
@@ -204,12 +255,17 @@ describe("loadStudioHome: カルーセル", () => {
   });
 
   it("共同制作で複数社に同じ作品があっても 1 回だけ出す", async () => {
-    // 全社が同じ作品 1 件だけを返す
-    getAnimeByStudio.mockResolvedValue(response([anime(9999)]));
+    // 全社が同じ作品を一番人気に持ち、残りは各社の作品
+    getAnimeByStudio.mockImplementation(async (companyId: number) =>
+      response([anime(9999), ...worksOf(studioIndexOf(companyId), 19)]),
+    );
 
     const home = await loadStudioHome();
+    const ids = home.hero.map((a) => a.id);
 
-    expect(home.hero.map((a) => a.id)).toEqual([9999]);
+    expect(ids.filter((id) => id === 9999)).toHaveLength(1);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(FEATURED_HERO_SIZE);
   });
 
   it("候補のある社が 6 社に満たなければ、各社の 2 番手以降で埋める", async () => {

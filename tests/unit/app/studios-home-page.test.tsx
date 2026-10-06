@@ -165,8 +165,9 @@ describe("制作会社ホーム", { timeout: 30_000 }, () => {
 
   it("行のカードは TV アニメの詳細ページへ飛び、20 件並ぶ", async () => {
     const dom = await renderPage();
-    const row = rowOf(dom, ANIME_STUDIOS[0].name) ?? dom;
-    const hrefs = [...row.querySelectorAll("a[href]")]
+    const row = rowOf(dom, ANIME_STUDIOS[0].name);
+    expect(row).not.toBeNull();
+    const hrefs = [...(row?.querySelectorAll("a[href]") ?? [])]
       .map((a) => a.getAttribute("href") ?? "")
       .filter((h) => h.startsWith("/anime/"));
 
