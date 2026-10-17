@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": "TMDb /discover/tv (with_genres=16, with_origin_country=JP, sort_by=popularity.desc, vote_count.gte=100)",
+  "items": [
+    {
+      "id": 30984,
+      "title": "BLEACH",
+      "backdropPath": "/o0NsbcIvsllg6CJX0FBFY8wWbsn.jpg"
+    },
+    {
+      "id": 46260,
+      "title": "ナルト",
+      "backdropPath": "/5F0HVEgkgP99fEWDjPyikGt9jQi.jpg"
+    },
+    {
+      "id": 46298,
+      "title": "HUNTER×HUNTER",
+      "backdropPath": "/bFKKyCI89Xq98Gul8cGox8K3sZa.jpg"
+    },
+    {
+      "id": 209867,
+      "title": "葬送のフリーレン",
+      "backdropPath": "/rBOnrVlck7BIlGeWVlzYiZeg4l2.jpg"
+    },
+    {
+      "id": 57706,
+      "title": "らんま1/2",
+      "backdropPath": "/dI2O0d5Dkk8tpuTvCkUKQw3LNMv.jpg"
+    },
+    {
+      "id": 902,
+      "title": "遊☆戯☆王デュエルモンスターズ",
+      "backdropPath": "/gJYZBM200Flldo6im3EEdXslR1j.jpg"
+    }
+  ]
+}

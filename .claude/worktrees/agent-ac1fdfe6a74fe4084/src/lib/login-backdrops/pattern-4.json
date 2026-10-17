@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-22",
+  "source": "TMDb /discover/tv (with_genres=16, with_origin_country=JP, sort_by=popularity.desc, vote_count.gte=100)",
+  "items": [
+    {
+      "id": 60572,
+      "title": "ポケットモンスター",
+      "backdropPath": "/yYpQV25I7XB6S0POJOScPjxYWV5.jpg"
+    },
+    {
+      "id": 12971,
+      "title": "ドラゴンボールゼット",
+      "backdropPath": "/ydf1CeiBLfdxiyNTpskM0802TKl.jpg"
+    },
+    {
+      "id": 120089,
+      "title": "SPY×FAMILY",
+      "backdropPath": "/lysUnU6V0VfcthDbviuVlIqgHOR.jpg"
+    },
+    {
+      "id": 57911,
+      "title": "ドラえもん",
+      "backdropPath": "/6oVBODwFvbDJczBFlf4J930jKZg.jpg"
+    },
+    {
+      "id": 220542,
+      "title": "薬屋のひとりごと",
+      "backdropPath": "/gffVOVZ2Y9cmVIZ26Gt9ByMGCYH.jpg"
+    },
+    {
+      "id": 13916,
+      "title": "DEATH NOTE",
+      "backdropPath": "/z8IPicmEKXUO4I2UDdMEqw7RqOE.jpg"
+    }
+  ]
+}
