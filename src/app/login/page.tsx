@@ -21,9 +21,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   // （Server Action 側でも念のため safeCallbackUrl を通し直している）
   const loginAction = signInWithTurnstileAction.bind(null, redirectTo);
 
-  // Turnstile のサイトキーはビルド時にクライアントバンドルへ埋め込まれる。
+  // Turnstile のサイトキーはサーバーで実行時に読み、props でクライアントへ渡す
+  // （NEXT_PUBLIC_ を付けないのでビルド時の焼き込みは不要）。
   // 未設定ならウィジェットを出さず、サーバー側の検証スキップと挙動を揃える
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
+  const siteKey = process.env.TURNSTILE_SITE_KEY ?? null;
 
   // 背景パターンはサーバー側で抽選する。
   // クライアントで抽選するとハイドレーション不一致になる

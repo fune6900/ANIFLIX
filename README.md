@@ -141,7 +141,7 @@ AUTH_GOOGLE_SECRET=
 OAuth フローへ到達する前に自動化された送信を落とします。
 
 ```env
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 ```
 
@@ -165,12 +165,10 @@ TURNSTILE_SECRET_KEY=
 | 開発（`NODE_ENV != production`） | ウィジェットを表示せず、検証をスキップしてログインできる          |
 | 本番                             | 検証を必ず失敗させる（設定漏れで bot 対策が無言で消えるのを防ぐ） |
 
-> **`NEXT_PUBLIC_TURNSTILE_SITE_KEY` はビルド時にバンドルへ埋め込まれます。**
-> 実行時に環境変数を足しても反映されないため、環境ごとにビルドし直してください。
-> Docker では `docker build --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=...` で渡します。
+> **`TURNSTILE_SITE_KEY` はログイン画面がサーバーで実行時に読みます。**
+> ビルド時の埋め込みは無いため、値を変えても再ビルドは不要です。
+> Docker では `docker run -e TURNSTILE_SITE_KEY=...` のように実行時に渡します。
 > Vercel では Production / Preview の両方に登録してください。
-> CI（`.github/workflows/ci.yml`）のビルドは検証専用のため未設定のままで構いませんが、
-> CI の成果物をそのままデプロイする運用に変える場合は `env:` への追加が必須です。
 
 **動作確認用の公式テストキー**
 
