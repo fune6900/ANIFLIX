@@ -124,7 +124,7 @@ TMDB_ACCESS_TOKEN=...
 ログイン画面の Turnstile は以下を**セットで**設定する（片方だけだとログイン不能）:
 
 ```env
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
+TURNSTILE_SITE_KEY=...
 TURNSTILE_SECRET_KEY=...
 # 本番では必須（未設定だと本番のログインが全員失敗）。ログイン画面を開くホストを全部。
 # ワイルドカード不可。実行時に読むので再ビルド不要。Vercel プレビューはデプロイ URL を自動で足す
@@ -135,8 +135,8 @@ siteverify の応答の `action`（`"login"`）と `hostname`（上の許可リ�
 許可リストは Host ヘッダーや `AUTH_URL` から推測しない（Host は bot が自由に書ける）。
 
 未設定時、開発環境では検証をスキップし、本番では必ず検証失敗にする（fail-closed）。
-`NEXT_PUBLIC_TURNSTILE_SITE_KEY` は**ビルド時**にバンドルへ焼き込まれるため、
-実行時に足しても反映されない。
+`TURNSTILE_SITE_KEY` はログイン画面（Server Component）が実行時に読み、props で
+クライアントへ渡す。`NEXT_PUBLIC_` は付けない（Vercel のデプロイで弾かれる）。
 
 ## 🔄 開発フロー
 
